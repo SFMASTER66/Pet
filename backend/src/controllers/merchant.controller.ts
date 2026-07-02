@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 import { MerchantService } from '../services/merchant.service';
+import { LoggedRequest } from '../middlewares/activity-log.middleware';
 
 const merchantService = new MerchantService();
 
@@ -30,7 +31,7 @@ export const getStaffDirectory = async (req: AuthenticatedRequest, res: Response
   }
 };
 
-export const createStaffProfile = async (req: AuthenticatedRequest, res: Response) => {
+export const createStaffProfile = async (req: LoggedRequest, res: Response) => {
   try {
     const { name, email, password } = req.body;
     const adminUser = req.user; 
@@ -50,7 +51,11 @@ export const createStaffProfile = async (req: AuthenticatedRequest, res: Respons
       merchantId: adminUser.merchantId
     });
 
-    return res.status(201).json({ success: true, message: 'Staff profile created successfully.', data: newStaff });
+    return res.status(201).json({ 
+      success: true, 
+      message: 'Staff profile created successfully.', 
+      data: newStaff 
+    });
   } catch (error: any) {
     return res.status(400).json({ success: false, message: error.message });
   }
