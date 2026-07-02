@@ -1,0 +1,38 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Launch Backend",
+      "runtimeArgs": [
+        "-r",
+        "ts-node/register"
+      ],
+      "args": [
+        "${workspaceFolder}/backend/src/app.ts"
+      ],
+      "cwd": "${workspaceFolder}/backend",
+      "protocol": "inspector",
+      "internalConsoleOptions": "openOnSessionStart"
+    },
+    {
+      "name": "Launch Flutter Frontend",
+      "request": "launch",
+      "type": "dart",
+      // 🟢 Fixed: Pointing explicitly into pet_hub_frontend folder
+      "program": "${workspaceFolder}/pet_hub_frontend/lib/main.dart",
+      "cwd": "${workspaceFolder}/pet_hub_frontend",
+      "args": [
+        "--web-browser-flag=--disable-web-security",
+        "--web-browser-flag=--user-data-dir=/tmp/chrome_dev_test"
+      ]
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Launch Both (Full Stack)",
+      "configurations": ["Launch Backend", "Launch Flutter Frontend"]
+    }
+  ]
+}

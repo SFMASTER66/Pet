@@ -1,0 +1,233 @@
+// Datasource and Generator Configuration
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ==========================================
+// 💡 NATIVE POSTGRESQL ENUMS DEFINITIONS
+// ==========================================
+
+enum PetStatus {
+  ACTIVE
+  LOST
+  ANGEL
+}
+
+enum UserRole {
+  MERCHANT_ADMIN
+  MERCHANT_STAFF
+  CUSTOMER
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  UNKNOWN
+}
+
+enum AppointmentStatus {
+  PENDING
+  PAID
+  COMPLETED
+  CANCELLED
+}
+
+enum WeightTier {
+  XS    // <= 3.5 KG
+  S     // 3.5 - 7 KG
+  M     // 7.1 - 15 KG
+  L     // 15.1 - 23 KG
+  XL    // 23.1 - 30 KG
+  XXL   // 30.1 - 40 KG
+  ALL
+}
+
+enum CoatType {
+  SHORT          // Short Hair Dog
+  LONG_CURLY     // Long/Curly Hair Dog
+  DOUBLE_A       // Double-Coated Group A
+  DOUBLE_B       // Double-Coated Group B
+  NONE
+}
+
+// ==========================================
+// 🏗️ MODELS UTILISING THE ENUMS
+// ==========================================
+
+// 1. Species Table (Platform Global Lookup -> Auto-Increment)
+model Species {
+  id                 Int                    @id @default(autoincrement())
+  name               String                 @unique // e.g., 'Dog', 'Cat'
+  baseTimeMultiplier Float                  @default(1.0)
+  pets               Pet[]
+  matrices           ServicePricingMatrix[]
+}
+
+// 2. Pet Table (Tenant Data -> Secure UUID)
+model Pet {
+  id              String    @id @default(uuid())
+  ownerId         String
+  speciesId       Int
+  merchantId      String
+  breed           String    // e.g., 'Golden Retriever', 'Teddy'
+  name            String
+  microchipNumber String?   @unique // Mandatory Australian microchip registration number
+  status          PetStatus @default(ACTIVE)
+
+  gender          Gender    @default(UNKNOWN)
+  isDesexed       Boolean   @default(false)
+  dob             DateTime?
+  behaviorTags    String[]       
+  behaviorNotes   String?   @db.Text         
+
+  // 🔗 Relation Mappings
+  species      Species     @relation(fields: [speciesId], references: [id])
+  appointments Appointment[]
+  owner        User        @relation(fields: [ownerId], references: [id])
+  merchant     Merchant    @relation(fields: [merchantId], references: [id])
+
+  // 🏎️ Composite Indexes for High-Frequency Queries
+  @@index([merchantId, name, status])
+  @@index([merchantId, ownerId])
+}
+
+// 3. Appointment Table (Tenant Business Data -> Secure UUID)
+model Appointment {
+  id              String            @id @default(uuid())
+  petId           String
+  groomerId       String
+  merchantId      String            
+  startTime       DateTime          
+  endTime         DateTime
+  status          AppointmentStatus @default(PENDING)
+
+  serviceItemId   Int               
+  priceAud        Float             
+  durationMinutes Int 
+
+  // 🔗 Relation Mappings
+  pet         Pet         @relation(fields: [petId], references: [id])
+  merchant    Merchant    @relation(fields: [merchantId], references: [id])
+  groomer     Employee    @relation(fields: [groomerId], references: [id])
+  serviceItem ServiceItem @relation(fields: [serviceItemId], references: [id]) 
+
+  @@index([merchantId, startTime])
+}
+
+// 4. Base Service Item Table (Platform Global Lookup -> Auto-Increment)
+model ServiceItem {
+  id           Int                    @id @default(autoincrement())
+  slug         String                 @unique // e.g., 'FULL_GROOM', 'TEETH_CLEANING'
+  name         String                 // e.g., 'Full Grooming', 'Ultrasonic Teeth Cleaning'
+  matrices     ServicePricingMatrix[]
+  appointments Appointment[] 
+}
+
+// 5. Service Pricing Matrix (Internal Core Rule Table -> Auto-Increment)
+model ServicePricingMatrix {
+  id              Int         @id @default(autoincrement())
+  merchantId      String      
+  serviceItemId   Int
+  speciesId       Int 
+  weightTier      WeightTier 
+  coatType        CoatType 
+  durationMinutes Int 
+  priceAud        Float 
+  
+  // 🔗 Relation Mappings
+  merchant        Merchant    @relation(fields: [merchantId], references: [id])
+  serviceItem     ServiceItem @relation(fields: [serviceItemId], references: [id])
+  species         Species     @relation(fields: [speciesId], references: [id])
+
+  @@unique([merchantId, serviceItemId, speciesId, weightTier, coatType])
+}
+
+// 6. User Table (B2C Customers PII Data -> Secure UUID)
+model User {
+  id           String   @id @default(uuid())
+  merchantId   String   
+  email        String   @unique
+  phoneNumber  String?  @unique // Australian mobile format: +614xxxxxxxx
+  passwordHash String
+  name         String
+  avatarUrl    String?
+  role         UserRole @default(CUSTOMER)
+  countryCode  String   @default("AU")
+  createdAt    DateTime @default(now())
+
+  pets         Pet[]
+  merchant     Merchant @relation(fields: [merchantId], references: [id])
+
+  @@index([merchantId, createdAt])
+  @@index([merchantId, name])
+}
+
+// 7. Merchant Table (B2B Tenant Core -> Secure UUID)
+model Merchant {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  passwordHash    String
+  businessName    String   // e.g., 'Sydney Paws Grooming'
+  abn             String?  // Australian Business Number (ABN)
+  stripeAccountId String?  @unique // Stripe Connect Account Identifier (acct_xxx)
+  logoIcon        String?
+  primaryColor    BigInt   @default(4279203182)
+  tags            String[] @default([])
+  createdAt       DateTime @default(now())
+
+  employees       Employee[]
+  appointments    Appointment[]
+  branding        MerchantBranding?
+  uiText          MerchantUiText?
+  services        MerchantService[]
+  pricingMatrices ServicePricingMatrix[] 
+  
+  users           User[]   
+  pets            Pet[]    
+}
+
+// 8. Employee / Groomer Table (Tenant Staff -> Secure UUID)
+model Employee {
+  id         String  @id @default(uuid())
+  merchantId String
+  name       String 
+  avatarUrl  String?
+
+  merchant     Merchant      @relation(fields: [merchantId], references: [id])
+  appointments Appointment[]
+}
+
+// 9. Tenant Branding (Optimized: Shared Primary Key 1:1 Relation)
+model MerchantBranding {
+  merchantId   String @id // 👈 Look here: Acts as both PK and FK, eliminating redundant IDs
+  logoUrl      String
+  primaryColor String 
+  businessTags Json 
+
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+}
+
+// 10. Tenant Custom Frontend UI Text (Optimized: Shared Primary Key 1:1 Relation)
+model MerchantUiText {
+  merchantId String @id // 👈 Look here: Acts as both PK and FK, eliminating redundant IDs
+  uiDictionary Json 
+
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+}
+
+// 11. Merchant Custom Service Exceptions (Tenant Overrides -> Secure UUID)
+model MerchantService {
+  id              String  @id @default(uuid())
+  merchantId      String
+  name            String 
+  description     String?
+  priceAud        Float
+  durationMinutes Int
+  isActive        Boolean @default(true)
+
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+}

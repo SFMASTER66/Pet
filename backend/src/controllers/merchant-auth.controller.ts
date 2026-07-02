@@ -1,0 +1,49 @@
+import { Request, Response } from 'express';
+import { MerchantAuthService } from '../services/merchant-auth.service';
+import { UserRole } from '@prisma/client';
+
+export const registerMerchantWorkspace = async (req: Request, res: Response) => {
+  try {
+    const { email, password, businessName, adminName, logoIcon, primaryColor, tags } = req.body;
+
+    if (!email || !password || !businessName || !adminName) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing mandatory fields: email, password, businessName, and adminName are required.'
+      });
+    }
+
+    const registrationPayload = await MerchantAuthService.registerMerchant({
+      email,
+      passwordRaw: password,
+      businessName,
+      adminName,
+      logoIcon,
+      primaryColor: primaryColor ? parseInt(primaryColor, 10) : undefined,
+      tags,
+      role: UserRole.MERCHANT_ADMIN 
+    });
+
+    return res.status(201).json(registrationPayload);
+  } catch (error: any) {
+    return res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+export const loginMerchantWorkspace = async (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and password fields are required.'
+      });
+    }
+
+    const loginPayload = await MerchantAuthService.loginMerchant(email, password);
+    return res.status(200).json(loginPayload);
+  } catch (error: any) {
+    return res.status(401).json({ success: false, message: error.message });
+  }
+};
