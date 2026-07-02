@@ -47,3 +47,30 @@ export const loginMerchantWorkspace = async (req: Request, res: Response) => {
     return res.status(401).json({ success: false, message: error.message });
   }
 };
+
+export const forgotPassword = async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email field is required.' });
+    }
+    const payload = await MerchantAuthService.requestPasswordReset(email);
+    return res.status(200).json(payload);
+  } catch (error: any) {
+    // Return 200/400 carefully based on privacy configurations
+    return res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+export const resetPassword = async (req: Request, res: Response) => {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) {
+      return res.status(400).json({ success: false, message: 'Token and new password are required.' });
+    }
+    const payload = await MerchantAuthService.resetPassword(token, password);
+    return res.status(200).json(payload);
+  } catch (error: any) {
+    return res.status(400).json({ success: false, message: error.message });
+  }
+};

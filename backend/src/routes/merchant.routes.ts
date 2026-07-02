@@ -1,5 +1,10 @@
 import { Router } from 'express';
-import { registerMerchantWorkspace, loginMerchantWorkspace  } from '../controllers/merchant-auth.controller';
+import { 
+  registerMerchantWorkspace, 
+  loginMerchantWorkspace, 
+  forgotPassword, 
+  resetPassword 
+} from '../controllers/merchant-auth.controller';
 import { requireAdmin } from '../middlewares/auth.middleware';
 import { 
   createStaffProfile, 
@@ -12,6 +17,9 @@ const router = Router();
 
 router.post('/register', registerMerchantWorkspace);
 router.post('/login', loginMerchantWorkspace);
+router.post('/forgot-password', forgotPassword);
+router.post('/reset-password', resetPassword);
+
 router.get('/:merchantId/dashboard', getMerchantDashboard);
 
 // Protected Staff Management API Operations

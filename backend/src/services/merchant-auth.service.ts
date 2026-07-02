@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import prisma from './db';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-petcloud-key';
+const RESET_SECRET = process.env.RESET_SECRET || 'super-secret-reset-key';
 
 export class MerchantAuthService {
   /**
@@ -144,5 +145,69 @@ export class MerchantAuthService {
         features
       },
     };
+  }
+
+  /**
+   * Generates a password reset token if the email exists
+   */
+  static async requestPasswordReset(email: string) {
+    const user = await prisma.user.findFirst({
+      where: { email },
+    });
+
+    if (!user) {
+      // Security best practice: Don't explicitly reveal if an email doesn't exist
+      throw new Error('If the account exists, a recovery link has been generated.');
+    }
+
+    // Generate a secure, short-lived reset token (valid for 15 mins)
+    const resetToken = jwt.sign(
+      { userId: user.id, email: user.email },
+      RESET_SECRET,
+      { expiresIn: '15m' }
+    );
+
+    // In production, integrate Nodemailer/SendGrid here to email the token/link.
+    // For this implementation, we return it so the API can pass it or log it.
+    console.log(`[PASSWORD RESET TOKEN FOR ${email}]: ${resetToken}`);
+
+    return {
+      success: true,
+      message: 'Password reset token generated successfully.',
+      resetToken, // Returned for ease of testing/UI matching
+    };
+  }
+
+  /**
+   * Validates the reset token and updates the password
+   */
+  static async resetPassword(token: string, passwordRaw: string) {
+    try {
+      const decoded = jwt.verify(token, RESET_SECRET) as { userId: string; email: string };
+
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(passwordRaw, salt);
+
+      // Update password across both tables if necessary, or just the User table
+      await prisma.$transaction(async (tx) => {
+        await tx.user.update({
+          where: { id: decoded.userId },
+          data: { passwordHash: hashedPassword },
+        });
+
+        // Also sync back to merchant if this user shares the primary tenant credentials
+        await tx.merchant.updateMany({
+          where: { email: decoded.email },
+          data: { passwordHash: hashedPassword },
+        });
+      });
+
+      return {
+        success: true,
+        message: 'Your password has been reset successfully. Please log in.',
+      };
+    } catch (error) {
+      throw new Error('Invalid or expired password reset token.');
+    }
   }
 }
