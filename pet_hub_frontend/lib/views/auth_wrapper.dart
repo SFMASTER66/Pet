@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io' show Platform;
+import 'package:go_router/go_router.dart';
 
 class MerchantAuthWrapper extends StatelessWidget {
   final bool isRegisterMode; 
@@ -20,8 +21,13 @@ class MerchantAuthWrapper extends StatelessWidget {
       initialRegisterMode: isRegisterMode, 
       onAuthSuccess: (responseData) async {
         final String token = responseData['token'] ?? '';
+        
+        // 🛠️ Robust parser: Checks root-level role, nested user role, and defaults to ADMIN if registering
         final String role = responseData['role'] ?? 
-            (responseData['user'] != null ? responseData['user']['role'] : 'MERCHANT_STAFF');
+            (responseData['user'] != null 
+                ? responseData['user']['role'] 
+                : (isRegisterMode ? 'MERCHANT_ADMIN' : 'MERCHANT_STAFF'));
+                
         final configPayload = responseData['config'] ?? responseData;
         
         await onUpdateAuth(token, role, configPayload);
@@ -314,8 +320,12 @@ class _MerchantRegisterLoginPageState extends State<MerchantRegisterLoginPage> {
                 Center(
                   child: TextButton(
                     onPressed: () {
-                      // FIXED: Toggle mode context instead of executing submission
-                      setState(() => _isLoginMode = !_isLoginMode);
+                      // Navigate through GoRouter instead of manually switching local state
+                      if (_isLoginMode) {
+                        context.go('/api/v1/register');
+                      } else {
+                        context.go('/api/v1/login');
+                      }
                     },
                     child: Text(_isLoginMode ? "Don't have an account? Register Tenant" : 'Already registered? Log In Directly'),
                   ),

@@ -19,8 +19,13 @@ final GoRouter _router = GoRouter(
     final bool loggingIn = state.matchedLocation == '/api/v1/login' || 
                            state.matchedLocation == '/api/v1/register';
 
-    jwtToken = prefs.getString('jwt_token');
-    isAdmin = prefs.getBool('is_admin') ?? false; // 👈 Revive role profile from storage cache
+    // 🛠️ FIX: Only read from storage cache if runtime memory variables are empty
+  // This prevents overwriting the freshly assigned 'true' state with stale storage values during redirect transitions
+  jwtToken ??= prefs.getString('jwt_token');
+  if (prefs.containsKey('is_admin') && jwtToken != null) {
+    // If memory says true, preserve it; otherwise fallback to cache
+    isAdmin = isAdmin || (prefs.getBool('is_admin') ?? false); 
+  }
     
     if (jwtToken == null) {
       if (loggingIn) return null;
@@ -89,7 +94,7 @@ Future<void> _handleAuthUpdate(String token, String role, Map<String, dynamic> c
   isAdmin = (role == 'MERCHANT_ADMIN');
   globalMerchantConfig = MerchantConfig.fromMap(configPayload);
 
-  // Synchronize dynamic elements into structural device safe preference caches
+  // 🛠️ Synchronize elements completely before triggering router mutations
   await prefs.setString('jwt_token', token);
   await prefs.setBool('is_admin', isAdmin);
   await prefs.setString('cached_config', jsonEncode(configPayload));
@@ -100,6 +105,7 @@ Future<void> _handleAuthUpdate(String token, String role, Map<String, dynamic> c
       .trim()
       .replaceAll(RegExp(r'\s+'), '-');
 
+  // Trigger routing after the updates above are securely finalized
   _router.go('/api/v1/$businessSlug/dashboard');
 }
 

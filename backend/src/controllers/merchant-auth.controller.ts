@@ -19,7 +19,7 @@ export const registerMerchantWorkspace = async (req: Request, res: Response) => 
       businessName,
       adminName,
       logoIcon,
-      primaryColor: primaryColor ? parseInt(primaryColor, 10) : undefined,
+      primaryColor: primaryColor !== undefined ? String(primaryColor) : undefined,
       tags,
       role: UserRole.MERCHANT_ADMIN 
     });

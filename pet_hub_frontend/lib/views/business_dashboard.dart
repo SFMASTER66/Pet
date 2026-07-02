@@ -46,6 +46,16 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
   Map<String, dynamic>? selectedAppointmentDetail;
 
   @override
+  void didUpdateWidget(covariant UnifiedMerchantDashboard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Re-verify and rebuild tab lengths if permission rules updated dynamically
+    if (widget.isAdmin != oldWidget.isAdmin) {
+      _drawerTabController.dispose();
+      _drawerTabController = TabController(length: widget.isAdmin ? 2 : 1, vsync: this);
+    }
+  }
+
+  @override
   void initState() {
     super.initState();
     // 🛠️ DYNAMIC STRUCTURAL TAB COUNT: Staff members only have 1 tab (UI Dictionary), Admins have 2.

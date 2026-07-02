@@ -45,12 +45,13 @@ export class MerchantService {
       orderBy: { startTime: 'desc' }
     });
 
-    let totalRevenue = 0;
+    let totalRevenueCents = 0; // 🪙 Track revenue in cents safely during iteration
     const clientMap = new Map<string, ClientContact>();
 
     const appointmentsList = appointments.map(app => {
-      const price = app.priceAud || 0;
-      totalRevenue += price;
+      // 🛡️ FIX: Changed 'priceAud' to 'priceCentsAud' from your optimized schema
+      const priceCents = app.priceCentsAud || 0;
+      totalRevenueCents += priceCents;
 
       if (app.pet?.owner) {
         clientMap.set(app.pet.owner.id, {
@@ -71,13 +72,13 @@ export class MerchantService {
         clientPhone: app.pet?.owner?.phoneNumber || 'No Phone',
         clientEmail: app.pet?.owner?.email || '',
         serviceName: app.serviceItem?.name || 'Unknown Service',
-        price: price
+        price: priceCents / 100 // 🔀 Convert cents to dollars for frontend display matching interface
       };
     });
 
     return {
       summary: {
-        totalRevenueAud: totalRevenue,
+        totalRevenueAud: totalRevenueCents / 100, // 🔀 Convert total aggregated cents to dollars
         totalOrders: appointments.length,
         activeClients: clientMap.size,
       },

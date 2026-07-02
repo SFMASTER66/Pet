@@ -15,7 +15,7 @@ export class MerchantAuthService {
     businessName: string;
     adminName: string; 
     logoIcon?: string;
-    primaryColor?: number;
+    primaryColor?: string;
     tags?: string[];
     role: UserRole; 
   }) {
@@ -39,7 +39,7 @@ export class MerchantAuthService {
           passwordHash: hashedPassword,
           businessName: data.businessName,
           logoIcon: data.logoIcon || '',
-          primaryColor: data.primaryColor ?? 0xFF0F766E,
+          primaryColor: data.primaryColor ?? "0xFF0F766E",
           tags: data.tags || [],
         },
       });
@@ -54,13 +54,16 @@ export class MerchantAuthService {
         },
       });
 
-      return { merchant, adminUser };
+      return { 
+        user: adminUser, // Changed key from adminUser to user
+        config: merchant // Providing a clean config mapping
+      };
     },{
       timeout: 30000 
     });
 
     const token = jwt.sign(
-      { userId: result.adminUser.id, merchantId: result.merchant.id, role: result.adminUser.role },
+      { userId: result.user.id, merchantId: result.config.id, role: result.user.role },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -69,12 +72,13 @@ export class MerchantAuthService {
       success: true,
       message: 'Merchant tenant workspace initialized successfully.',
       token,
+      role: result.user.role, // 🛠️ FIX: Explicitly include the role here!
       config: {
-        businessName: result.merchant.businessName,
-        logoIcon: result.merchant.logoIcon,
-        primaryColor: result.merchant.primaryColor,
-        tags: result.merchant.tags,
-        features: ['dashboard', 'bookings', 'settings', 'staff', 'billing'] // Admins get all features
+        businessName: result.config.businessName,
+        logoIcon: result.config.logoIcon,
+        primaryColor: result.config.primaryColor,
+        tags: result.config.tags,
+        features: ['dashboard', 'bookings', 'settings', 'staff', 'billing']
       },
     };
   }
