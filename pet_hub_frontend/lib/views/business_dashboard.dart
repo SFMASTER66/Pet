@@ -32,37 +32,28 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
   final _btnEditController = TextEditingController();
   final _txtRevenueController = TextEditingController();
 
-  CalendarFormat _calendarFormat = CalendarFormat.week;
+  // 🗓️ Permanent Full Month View Configuration for Left Side Panel
+  final CalendarFormat _calendarFormat = CalendarFormat.month;
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay = DateTime.now();
 
-  late TabController _drawerTabController;
-
-  // Mock appointments matching database links
-  List<Map<String, dynamic>> mockAppointments = [
-    {
-      'id': 'app-1', 
-      'time': '09:00 - 10:30', 
-      'petName': 'Max', 
-      'breed': 'Golden Retriever', 
-      'ownerName': 'Alex Zhang', 
-      'service': 'Signature Full Style Grooming', 
-      'price': 120.0, 
-      'status': 'CONFIRMED'
-    },
-    {
-      'id': 'app-2', 
-      'time': '11:00 - 11:30', 
-      'petName': 'Cookie', 
-      'breed': 'Ragdoll Cat', 
-      'ownerName': 'Emma Li', 
-      'service': 'Ultrasonic Deep Teeth Cleaning', 
-      'price': 50.0, 
-      'status': 'CONFIRMED'
-    }
+  // 🔄 Right Side Panel Schedule View Modes Selector Switch State
+  String _activeScheduleView = 'Daily List View'; 
+  final List<String> _scheduleViewOptions = [
+    'Daily List View', 
+    'Daily Timeline Grid', 
+    'One Week Grid Summary'
   ];
 
-  // 🗂️ Unified Live Catalog State (Shared down into Customer Portal)
+  // 👁️ Toggle Variable for Hiding / Showing the Service Matrix Component
+  bool _isServiceMatrixVisible = true;
+
+  late TabController _drawerTabController;
+
+  // 🐾 Expanded Appointment Schema holding overlapping/simultaneous bookings
+  late List<Map<String, dynamic>> mockAppointments;
+
+  // 🗂️ Unified Live Catalog State
   final List<Map<String, dynamic>> liveServiceMatrices = [
     {
       'id': 1,
@@ -79,7 +70,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
       'id': 2,
       'title': 'Ultrasonic Deep Teeth Cleaning',
       'slug': 'TEETH_CLEANING',
-      'description': 'Advanced calculus removal safely without general sedation techniques. Refreshes oral breath cycles.',
+      'description': 'Advanced calculus removal safely without general sedation techniques.',
       'species': 'Cat',
       'weightTier': 'FLAT_RATE',
       'durationMinutes': 30,
@@ -104,6 +95,100 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     super.initState();
     _drawerTabController = TabController(length: widget.isAdmin ? 2 : 1, vsync: this);
     _syncControllers();
+    
+    // Configured rich overlapping timeslots to test both Multi-Week and Day Timeline configurations safely
+    mockAppointments = [
+      {
+        'id': 'app-1', 
+        'time': '09:00 - 10:30', 
+        'weekdayIndex': 1, // Monday
+        'petName': 'Max', 
+        'breed': 'Golden Retriever', 
+        'ownerName': 'Alex Zhang', 
+        'ownerEmail': 'alex.zhang@example.com',
+        'ownerPhone': '+61 412 345 678',
+        'pastMerchantVisitsCount': 4, 
+        'service': 'Signature Full Style Grooming', 
+        'price': 120.0, 
+        'status': 'CONFIRMED',
+        'isCheckedIn': true,
+        'isDepositPaid': true,
+        'isReadyForPickup': false,
+        'staffTags': ['High Energy', 'Loyal Customer'],
+      },
+      {
+        'id': 'app-1-simultaneous', 
+        'time': '09:00 - 10:30', 
+        'weekdayIndex': 1, // Monday
+        'petName': 'Bella', 
+        'breed': 'Poodle', 
+        'ownerName': 'Marcus Aurelius', 
+        'ownerEmail': 'marcus@philosophy.io',
+        'ownerPhone': '+61 411 222 333',
+        'pastMerchantVisitsCount': 8, 
+        'service': 'Signature Full Style Grooming', 
+        'price': 120.0, 
+        'status': 'CONFIRMED',
+        'isCheckedIn': false,
+        'isDepositPaid': true,
+        'isReadyForPickup': false,
+        'staffTags': ['Bites when brushed'],
+      },
+      {
+        'id': 'app-2', 
+        'time': '11:00 - 11:30', 
+        'weekdayIndex': 3, // Wednesday
+        'petName': 'Cookie', 
+        'breed': 'Chihuahua', 
+        'ownerName': 'Emma Li', 
+        'ownerEmail': 'emma.li@outlook.com',
+        'ownerPhone': '+61 498 765 432',
+        'pastMerchantVisitsCount': 2,
+        'service': 'Ultrasonic Deep Teeth Cleaning', 
+        'price': 50.0, 
+        'status': 'CONFIRMED',
+        'isCheckedIn': false,
+        'isDepositPaid': false,
+        'isReadyForPickup': false,
+        'staffTags': ['Anxious'],
+      },
+      {
+        'id': 'app-3', 
+        'time': '14:00 - 15:00', 
+        'weekdayIndex': 5, // Friday
+        'petName': 'Rocky', 
+        'breed': 'French Bulldog', 
+        'ownerName': 'Sam Wilson', 
+        'ownerEmail': 'sam.w@example.com',
+        'ownerPhone': '+61 423 999 888',
+        'pastMerchantVisitsCount': 1,
+        'service': 'Hydrotherapy Mineral Treatment Bath', 
+        'price': 65.0, 
+        'status': 'CONFIRMED',
+        'isCheckedIn': false,
+        'isDepositPaid': true,
+        'isReadyForPickup': true,
+        'staffTags': ['Skin Sensitive'],
+      },
+      {
+        'id': 'app-3-parallel', 
+        'time': '14:00 - 15:00', 
+        'weekdayIndex': 5, // Friday
+        'petName': 'Luna', 
+        'breed': 'Ragdoll Cat', 
+        'ownerName': 'Chloe Bennet', 
+        'ownerEmail': 'chloe@marvel.org',
+        'ownerPhone': '+61 455 666 777',
+        'pastMerchantVisitsCount': 3, 
+        'service': 'Ultrasonic Deep Teeth Cleaning', 
+        'price': 50.0, 
+        'status': 'CONFIRMED',
+        'isCheckedIn': true,
+        'isDepositPaid': true,
+        'isReadyForPickup': true,
+        'staffTags': ['Sheds Heavily'],
+      }
+    ];
   }
 
   @override
@@ -171,17 +256,11 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
           children: [
             Container(
               padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: themeColor.withAlpha(25),
-                borderRadius: BorderRadius.circular(8),
-              ),
+              decoration: BoxDecoration(color: themeColor.withAlpha(25), borderRadius: BorderRadius.circular(8)),
               child: Text(widget.config.logoIcon, style: const TextStyle(fontSize: 20)),
             ),
             const SizedBox(width: 12),
-            Text(
-              widget.config.businessName, 
-              style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A), fontSize: 18)
-            ),
+            Text(widget.config.businessName, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A), fontSize: 18)),
           ],
         ),
         actions: [
@@ -196,10 +275,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
             onPressed: () => Navigator.push(
               context, 
               MaterialPageRoute(
-                builder: (_) => CustomerPortalPage(
-                  config: widget.config,
-                  activeServices: liveServiceMatrices, // Sync state array reference directly down
-                )
+                builder: (_) => CustomerPortalPage(config: widget.config, activeServices: liveServiceMatrices)
               )
             ),
           ),
@@ -241,10 +317,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
             },
           ),
           const VerticalDivider(width: 24, indent: 12, endIndent: 12),
-          IconButton(
-            icon: const Icon(Icons.logout_rounded, color: Colors.redAccent), 
-            onPressed: widget.onLogout
-          ),
+          IconButton(icon: const Icon(Icons.logout_rounded, color: Colors.redAccent), onPressed: widget.onLogout),
           const SizedBox(width: 16),
         ],
       ),
@@ -252,6 +325,30 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
       body: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 🗓️ LEFT SIDE BAR: Master Calendar Full Month Mode Panel 
+          Expanded(
+            flex: 3,
+            child: Container(
+              height: double.infinity,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(right: BorderSide(color: Color(0xFFE2E8F0))),
+              ),
+              padding: const EdgeInsets.all(20),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Master Monthly Overview', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                    const SizedBox(height: 14),
+                    _buildCalendarCard(themeColor),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          
+          // 💻 RIGHT PANEL: Controls, Multi-View Schedules, and Bottom Services Matrix Configurator
           Expanded(
             flex: 7,
             child: SingleChildScrollView(
@@ -259,42 +356,59 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildMetricHeaderSection(),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(child: _buildMetricHeaderSection()),
+                      const SizedBox(width: 16),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFCBD5E1))),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _activeScheduleView,
+                            icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF475569)),
+                            style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
+                            items: _scheduleViewOptions.map((String val) {
+                              return DropdownMenuItem<String>(value: val, child: Text(val));
+                            }).toList(),
+                            onChanged: (newVal) => setState(() => _activeScheduleView = newVal!),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 24),
                   _buildBrandIdentitySection(themeColor),
                   const SizedBox(height: 24),
-                  _buildServiceCatalogSection(themeColor), 
+                  
+                  // 1️⃣ UPPER SECTION: Routing Engine rendering Daily List vs Daily Timeline vs Weekly Grid dynamically
+                  _buildActiveScheduleSection(themeColor),
+                  
                   const SizedBox(height: 24),
-                  _buildAppointmentListCard(themeColor),
+
+                  // 2️⃣ LOWER SECTION: Toggleable Service Matrix Configurator (Relocated under schedules)
+                  _buildToggleableServiceCatalogSection(themeColor), 
                 ],
               ),
             ),
           ),
-          Expanded(
-            flex: 3,
-            child: Container(
-              height: double.infinity,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(left: BorderSide(color: Color(0xFFE2E8F0))),
-              ),
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Operational Outlook', 
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))
-                  ),
-                  const SizedBox(height: 16),
-                  _buildCalendarCard(themeColor),
-                ],
-              ),
-            ),
-          )
         ],
       ),
     );
+  }
+
+  Widget _buildActiveScheduleSection(Color themeColor) {
+    switch (_activeScheduleView) {
+      case 'Daily List View':
+        return _buildDailyAppointmentListCard(themeColor);
+      case 'Daily Timeline Grid':
+        return _buildDailyTimelineGrid(themeColor);
+      case 'One Week Grid Summary':
+        return _buildWeeklyScheduleGrid(themeColor);
+      default:
+        return _buildDailyAppointmentListCard(themeColor);
+    }
   }
 
   Widget _buildMetricHeaderSection() {
@@ -312,12 +426,8 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
   Widget _buildMetricCard(String title, String val, IconData icon, Color col) {
     return Expanded(
       child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-        ),
-        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
+        padding: const EdgeInsets.all(16),
         child: Row(
           children: [
             Container(
@@ -325,13 +435,13 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
               decoration: BoxDecoration(color: col.withAlpha(20), borderRadius: BorderRadius.circular(10)),
               child: Icon(icon, color: col, size: 24),
             ),
-            const SizedBox(width: 20),
+            const SizedBox(width: 16),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(color: Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w500)),
+                Text(title, style: const TextStyle(color: Color(0xFF64748B), fontSize: 12, fontWeight: FontWeight.w500)),
                 const SizedBox(height: 4),
-                Text(val, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                Text(val, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
               ],
             )
           ],
@@ -342,11 +452,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
 
   Widget _buildBrandIdentitySection(Color col) {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
       padding: const EdgeInsets.all(16),
       child: Row(
         children: [
@@ -367,234 +473,96 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     );
   }
 
-  Widget _buildServiceCatalogSection(Color col) {
+  Widget _buildToggleableServiceCatalogSection(Color col) {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Service Matrix Configurator', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                    const SizedBox(height: 4),
-                    Text('Manage custom tiered business configurations and rules overrides.', style: TextStyle(color: Colors.grey.shade600, fontSize: 12))
-                  ],
-                ),
-                // 🛑 Access Rules Guard: Visible/Accessible only to Admin roles
-                if (widget.isAdmin)
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.add_business_outlined, size: 16),
-                    label: const Text('Add Service Entry'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F172A),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))
-                    ),
-                    onPressed: _showAddServiceMatrixDialog,
-                  )
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          Table(
-            columnWidths: const {
-              0: FlexColumnWidth(3),
-              1: FlexColumnWidth(2),
-              2: FlexColumnWidth(1.5),
-              3: FlexColumnWidth(1.5),
-              4: FlexColumnWidth(1.5),
-            },
-            children: [
-              TableRow(
-                decoration: BoxDecoration(color: Colors.grey.shade50),
-                children: const [
-                  Padding(padding: EdgeInsets.all(12), child: Text('Service Identifier / Code', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569)))),
-                  Padding(padding: EdgeInsets.all(12), child: Text('Target Tier Set', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569)))),
-                  Padding(padding: EdgeInsets.all(12), child: Text('Duration', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569)))),
-                  Padding(padding: EdgeInsets.all(12), child: Text('Book Price', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569)))),
-                  Padding(padding: EdgeInsets.all(12), child: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569)))),
-                ]
-              ),
-              ...liveServiceMatrices.map((matrix) {
-                final displayTitle = matrix['title'];
-                final String ruleSet = '${matrix['species'] ?? 'All'} • ${matrix['weightTier'] ?? 'Flat Price'}';
-                final displayPrice = (matrix['priceCentsAud'] / 100).toStringAsFixed(2);
-                
-                return TableRow(
-                  decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9)))),
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(12), 
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(displayTitle, style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF1E293B))),
-                          Text('Code Slug: ${matrix['slug']}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                        ],
-                      )
-                    ),
-                    Padding(padding: const EdgeInsets.all(12), child: Text(ruleSet, style: const TextStyle(fontSize: 13))),
-                    Padding(padding: const EdgeInsets.all(12), child: Text('${matrix['durationMinutes']} mins', style: const TextStyle(fontSize: 13))),
-                    Padding(padding: const EdgeInsets.all(12), child: Text('\$$displayPrice AUD', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.green))),
-                    Padding(
-                      padding: const EdgeInsets.all(4.0),
-                      child: widget.isAdmin 
-                          ? IconButton(
-                              icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
-                              onPressed: () => _confirmActionGuard(
-                                title: 'Purge Service Definition',
-                                body: 'Are you sure you want to completely erase "$displayTitle" from the marketplace array? Customers will instantly lose checkout capabilities.',
-                                onConfirm: () {
-                                  setState(() => liveServiceMatrices.removeWhere((item) => item['id'] == matrix['id']));
-                                  _showSnackBar('🗑️ Service record dropped from live configurations.');
-                                }
-                              ),
-                            )
-                          : const Padding(
-                              padding: EdgeInsets.all(12.0),
-                              child: Text('Read-Only', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                            ),
-                    )
-                  ]
-                );
-              }),
-            ],
-          )
-        ],
-      ),
-    );
-  }
-
-  void _showAddServiceMatrixDialog() {
-    final nameCtrl = TextEditingController();
-    final slugCtrl = TextEditingController();
-    final descCtrl = TextEditingController();
-    final durationCtrl = TextEditingController();
-    final priceCentsCtrl = TextEditingController();
-    String selectSpecies = 'Dog';
-    String selectWeight = 'MEDIUM';
-
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) => AlertDialog(
-          title: const Text('Provision New Corporate Pricing Matrix Entry', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          content: SizedBox(
-            width: 500,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+          InkWell(
+            onTap: () => setState(() => _isServiceMatrixVisible = !_isServiceMatrixVisible),
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Global Service Item Name', border: OutlineInputBorder())),
-                  const SizedBox(height: 12),
-                  TextField(controller: slugCtrl, decoration: const InputDecoration(labelText: 'System Code Slug (e.g., TEETH_CLEAN)', border: OutlineInputBorder())),
-                  const SizedBox(height: 12),
-                  TextField(controller: descCtrl, decoration: const InputDecoration(labelText: 'Client Description', border: OutlineInputBorder())),
-                  const SizedBox(height: 12),
                   Row(
                     children: [
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          value: selectSpecies,
-                          decoration: const InputDecoration(labelText: 'Species Restriction Rule', border: OutlineInputBorder()),
-                          items: const [
-                            DropdownMenuItem(value: 'Dog', child: Text('Dog profiles')),
-                            DropdownMenuItem(value: 'Cat', child: Text('Cat profiles')),
-                          ],
-                          onChanged: (v) => setModalState(() => selectSpecies = v!),
-                        ),
+                      Icon(
+                        _isServiceMatrixVisible ? Icons.keyboard_arrow_down_rounded : Icons.keyboard_arrow_right_rounded,
+                        color: const Color(0xFF475569),
+                        size: 24,
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          value: selectWeight,
-                          decoration: const InputDecoration(labelText: 'Weight Matrix Tier', border: OutlineInputBorder()),
-                          items: const [
-                            DropdownMenuItem(value: 'SMALL', child: Text('Small Tier')),
-                            DropdownMenuItem(value: 'MEDIUM', child: Text('Medium Tier')),
-                            DropdownMenuItem(value: 'LARGE', child: Text('Large Tier')),
-                            DropdownMenuItem(value: 'FLAT_RATE', child: Text('Flat Price')),
-                          ],
-                          onChanged: (v) => setModalState(() => selectWeight = v!),
-                        ),
+                      const SizedBox(width: 8),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Service Matrix Configurator', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                          const SizedBox(height: 4),
+                          Text('Manage custom tiered business offerings. Click header to expand/collapse.', style: TextStyle(color: Colors.grey.shade600, fontSize: 12))
+                        ],
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(child: TextField(controller: durationCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Duration (Minutes)', border: OutlineInputBorder()))),
-                      const SizedBox(width: 12),
-                      Expanded(child: TextField(controller: priceCentsCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Base Price (Cents AUD)', border: OutlineInputBorder()))),
-                    ],
-                  )
+                  if (widget.isAdmin && _isServiceMatrixVisible)
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.add_business_outlined, size: 16),
+                      label: const Text('Add Entry'),
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F172A), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))),
+                      onPressed: _showAddServiceMatrixDialog,
+                    )
                 ],
               ),
             ),
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel Request')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
-              onPressed: () {
-                if (nameCtrl.text.isEmpty || slugCtrl.text.isEmpty || priceCentsCtrl.text.isEmpty) return;
-                setState(() {
-                  liveServiceMatrices.add({
-                    'id': DateTime.now().millisecondsSinceEpoch,
-                    'title': nameCtrl.text,
-                    'slug': slugCtrl.text.toUpperCase(),
-                    'description': descCtrl.text.isEmpty ? 'Premium automated cluster service plan.' : descCtrl.text,
-                    'species': selectSpecies,
-                    'weightTier': selectWeight,
-                    'durationMinutes': int.tryParse(durationCtrl.text) ?? 45,
-                    'priceCentsAud': int.tryParse(priceCentsCtrl.text) ?? 7500,
-                    'icon': Icons.star_border_outlined
-                  });
-                });
-                Navigator.pop(context);
-                _showSnackBar('🚀 Successfully mapped entry into operational cluster pricing matrix!');
-              }, 
-              child: const Text('Push Live Config')
+          if (_isServiceMatrixVisible) ...[
+            const Divider(height: 1),
+            Table(
+              columnWidths: const {0: FlexColumnWidth(3), 1: FlexColumnWidth(2), 2: FlexColumnWidth(1.5), 3: FlexColumnWidth(1.5), 4: FlexColumnWidth(1.5)},
+              children: [
+                TableRow(
+                  decoration: BoxDecoration(color: Colors.grey.shade50),
+                  children: const [
+                    Padding(padding: EdgeInsets.all(12), child: Text('Service Identifier', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569)))),
+                    Padding(padding: EdgeInsets.all(12), child: Text('Target Tier', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569)))),
+                    Padding(padding: EdgeInsets.all(12), child: Text('Duration', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569)))),
+                    Padding(padding: EdgeInsets.all(12), child: Text('Price', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569)))),
+                    Padding(padding: EdgeInsets.all(12), child: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569)))),
+                  ]
+                ),
+                ...liveServiceMatrices.map((matrix) {
+                  final displayTitle = matrix['title'];
+                  final String ruleSet = '${matrix['species'] ?? 'All'} • ${matrix['weightTier'] ?? 'Flat Price'}';
+                  return TableRow(
+                    decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9)))),
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(12), 
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(displayTitle, style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF1E293B))), Text('Code: ${matrix['slug']}', style: const TextStyle(fontSize: 11, color: Colors.grey))])
+                      ),
+                      Padding(padding: const EdgeInsets.all(12), child: Text(ruleSet, style: const TextStyle(fontSize: 13))),
+                      Padding(padding: const EdgeInsets.all(12), child: Text('${matrix['durationMinutes']} mins', style: const TextStyle(fontSize: 13))),
+                      Padding(padding: const EdgeInsets.all(12), child: Text('\$${(matrix['priceCentsAud'] / 100).toStringAsFixed(2)} AUD', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.green))),
+                      Padding(
+                        padding: const EdgeInsets.all(4.0),
+                        child: widget.isAdmin 
+                            ? IconButton(
+                                icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
+                                onPressed: () => _confirmActionGuard(
+                                  title: 'Purge Service Definition',
+                                  body: 'Are you sure you want to completely erase "$displayTitle"?',
+                                  onConfirm: () => setState(() => liveServiceMatrices.removeWhere((item) => item['id'] == matrix['id']))
+                                ),
+                              )
+                            : const Padding(padding: EdgeInsets.all(12.0), child: Text('Read-Only', style: TextStyle(color: Colors.grey, fontSize: 12))),
+                      )
+                    ]
+                  );
+                }),
+              ],
             )
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ✨ FAIL-SAFE PROTECTION SYSTEM: Explicit Double Confirmation Guard
-  void _confirmActionGuard({required String title, required String body, required VoidCallback onConfirm}) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Row(
-          children: [
-            const Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
-            const SizedBox(width: 10),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: Text(body, style: const TextStyle(fontSize: 14)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Abort Workflow')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
-            onPressed: () {
-              Navigator.pop(ctx);
-              onConfirm();
-            },
-            child: const Text('Confirm Execution'),
-          )
+          ]
         ],
       ),
     );
@@ -602,101 +570,513 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
 
   Widget _buildCalendarCard(Color col) {
     return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
+      decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
       child: TableCalendar(
         firstDay: DateTime.utc(2026, 1, 1), 
         lastDay: DateTime.utc(2030, 12, 31), 
         focusedDay: _focusedDay,
         calendarFormat: _calendarFormat, 
         selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-        onFormatChanged: (f) => setState(() => _calendarFormat = f),
         onDaySelected: (sd, fd) => setState(() { _selectedDay = sd; _focusedDay = fd; }),
-        headerStyle: const HeaderStyle(formatButtonVisible: false, titleCentered: true),
+        headerStyle: const HeaderStyle(formatButtonVisible: false, titleCentered: true, leftChevronIcon: Icon(Icons.chevron_left, size: 20), rightChevronIcon: Icon(Icons.chevron_right, size: 20)),
         calendarStyle: CalendarStyle(
           selectedDecoration: BoxDecoration(color: col, shape: BoxShape.circle),
           todayDecoration: BoxDecoration(color: col.withAlpha(70), shape: BoxShape.circle),
+          outsideDaysVisible: false,
         ),
       ),
     );
   }
 
-  Widget _buildAppointmentListCard(Color col) {
+  // 📋 OPERATION VIEW A: Daily High-Density List Layout Manifest View
+  Widget _buildDailyAppointmentListCard(Color col) {
+    final targetWeekday = _selectedDay?.weekday ?? DateTime.now().weekday;
+    final dailyFilteredApps = mockAppointments.where((app) => app['weekdayIndex'] == targetWeekday).toList();
+
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.all(20.0),
-            child: Text('Live Manifest Operations', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+          Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Text('Live Manifest Operations (Daily List View Breakdown)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A).withAlpha(230))),
           ),
           const Divider(height: 1),
-          ListView.separated(
+          dailyFilteredApps.isEmpty
+              ? const Padding(padding: EdgeInsets.all(32), child: Center(child: Text('No bookings recorded for this calendar day target.', style: TextStyle(color: Colors.grey))))
+              : ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: dailyFilteredApps.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (ctx, i) {
+                    final app = dailyFilteredApps[i];
+                    final bool isCancelled = app['status'] == 'CANCELLED';
+
+                    return InkWell(
+                      onTap: isCancelled ? null : () => _showUpdateBookingOptionsDialog(app),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              backgroundColor: isCancelled ? Colors.grey.shade100 : col.withAlpha(20),
+                              child: Icon(Icons.pets, color: isCancelled ? Colors.grey : col, size: 18),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        '${app['petName']} (${app['breed']})',
+                                        style: TextStyle(fontWeight: FontWeight.bold, color: isCancelled ? Colors.grey : const Color(0xFF1E293B), decoration: isCancelled ? TextDecoration.lineThrough : null),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(4)),
+                                        child: Text('Merchant Bookings: ${app['pastMerchantVisitsCount']}', style: TextStyle(fontSize: 10, color: Colors.blue.shade700, fontWeight: FontWeight.w600)),
+                                      )
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text('Service: ${app['service']} • TimeSlot: ${app['time']}', style: const TextStyle(fontSize: 13, color: Color(0xFF475569))),
+                                  Text('Owner Profile: ${app['ownerName']} | ${app['ownerEmail']} | ${app['ownerPhone']}', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 6,
+                                    runSpacing: 4,
+                                    children: [
+                                      _buildStatusBadge(app['isCheckedIn'] ? 'Checked In' : 'Not Checked In', app['isCheckedIn'] ? Colors.green : Colors.amber),
+                                      _buildStatusBadge(app['isDepositPaid'] ? 'Deposit Paid' : 'No Deposit', app['isDepositPaid'] ? Colors.blue : Colors.deepOrange),
+                                      _buildStatusBadge(app['isReadyForPickup'] ? 'Ready For Pickup' : 'Processing', app['isReadyForPickup'] ? Colors.purple : Colors.blueGrey),
+                                      ...(app['staffTags'] as List<String>).map((tag) => _buildStatusBadge('#$tag', Colors.grey, isTag: true)),
+                                    ],
+                                  )
+                                ],
+                              ),
+                            ),
+                            if (!isCancelled)
+                              IconButton(
+                                icon: const Icon(Icons.cancel_outlined, color: Colors.redAccent, size: 20),
+                                onPressed: () => _confirmActionGuard(
+                                  title: 'Revoke Booking',
+                                  body: 'Are you sure you want to cancel ${app['petName']}\'s booking?',
+                                  onConfirm: () => setState(() => app['status'] = 'CANCELLED')
+                                ),
+                              )
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ],
+      ),
+    );
+  }
+
+  // 🕒 NEW OPERATION VIEW B: Daily Calendar Timeline view broken down hour by hour
+  Widget _buildDailyTimelineGrid(Color col) {
+    final targetWeekday = _selectedDay?.weekday ?? DateTime.now().weekday;
+    final dailyFilteredApps = mockAppointments.where((app) => app['weekdayIndex'] == targetWeekday).toList();
+
+    // Definitions for business operating timeline blocks
+    final List<String> operationalHoursSlots = [
+      '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00'
+    ];
+
+    return Container(
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Daily Calendar Timeline Grid', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A).withAlpha(230))),
+                const SizedBox(height: 4),
+                const Text('Hour-by-hour operational distribution board for the currently selected master day block.', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          ListView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: mockAppointments.length,
-            separatorBuilder: (_, _) => const Divider(height: 1),
-            itemBuilder: (ctx, i) {
-              final app = mockAppointments[i];
-              final bool isCancelled = app['status'] == 'CANCELLED';
+            itemCount: operationalHoursSlots.length,
+            itemBuilder: (context, hourIdx) {
+              final currentHourLabel = operationalHoursSlots[hourIdx];
 
-              return ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                leading: CircleAvatar(
-                  backgroundColor: isCancelled ? Colors.grey.shade100 : col.withAlpha(20),
-                  child: Icon(Icons.calendar_today, color: isCancelled ? Colors.grey : col, size: 18),
-                ),
-                title: Text(
-                  '${app['petName']} (${app['breed']})',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold, 
-                    color: isCancelled ? Colors.grey : const Color(0xFF1E293B),
-                    decoration: isCancelled ? TextDecoration.lineThrough : null
-                  ),
-                ),
-                subtitle: Padding(
-                  padding: const EdgeInsets.only(top: 4.0),
-                  child: Text(
-                    '${app['ownerName']} • ${app['service']} • \$${app['price']} AUD',
-                    style: TextStyle(color: isCancelled ? Colors.grey : const Color(0xFF64748B), fontSize: 13),
-                  ),
-                ),
-                trailing: isCancelled 
-                    ? Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(4)),
-                        child: const Text('Voided', style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.w500)),
-                      )
-                    : Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.edit_outlined, color: Color(0xFF0284C7), size: 20),
-                            tooltip: widget.config.getTxt('btn_edit', 'Reschedule Slot'),
-                            onPressed: () => _showEditDialog(app),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
-                            tooltip: widget.config.getTxt('btn_cancel', 'Revoke Appointment'),
-                            onPressed: () => _confirmActionGuard(
-                              title: 'Revoke Appointment Booking',
-                              body: 'Are you absolutely sure you want to flag the scheduled app record for "${app['petName']}" as CANCELLED? This change cannot be automatically reversed.',
-                              onConfirm: () => setState(() => app['status'] = 'CANCELLED')
-                            ),
-                          ),
-                        ],
+              // Identifies specific items falling inside this particular hour window
+              final slotBookings = dailyFilteredApps.where((app) {
+                final String timeStr = app['time'] as String;
+                return timeStr.startsWith(currentHourLabel.substring(0, 2));
+              }).toList();
+
+              return Container(
+                decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9)))),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Time Label Block Column
+                    Container(
+                      width: 85,
+                      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 14),
+                      color: const Color(0xFFF8FAFC),
+                      child: Text(
+                        currentHourLabel,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569)),
                       ),
+                    ),
+                    const VerticalDivider(width: 1),
+                    // Stacked parallel layout channel area matching appointments
+                    Expanded(
+                      child: slotBookings.isEmpty
+                          ? Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+                              child: Text('No operational allocations active', style: TextStyle(color: Colors.grey.shade400, fontSize: 12, fontStyle: FontStyle.italic)),
+                            )
+                          : Padding(
+                              padding: const EdgeInsets.all(10.0),
+                              child: Wrap(
+                                spacing: 10,
+                                runSpacing: 10,
+                                children: slotBookings.map((singleApp) {
+                                  final bool isAppCancelled = singleApp['status'] == 'CANCELLED';
+
+                                  return InkWell(
+                                    onTap: isAppCancelled ? null : () => _showUpdateBookingOptionsDialog(singleApp),
+                                    child: Container(
+                                      width: 260,
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: isAppCancelled ? Colors.grey.shade100 : col.withAlpha(15),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: isAppCancelled ? Colors.grey.shade300 : col.withAlpha(50)),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  '🐾 ${singleApp['petName']} (${singleApp['breed']})',
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: isAppCancelled ? Colors.grey : const Color(0xFF0F172A), decoration: isAppCancelled ? TextDecoration.lineThrough : null),
+                                                ),
+                                              ),
+                                              Text('\$${singleApp['price']}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green)),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text('Slot: ${singleApp['time']}', style: const TextStyle(fontSize: 11, color: Color(0xFF475569))),
+                                          Text(singleApp['service'], maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
+                                          const Divider(height: 12),
+                                          Row(
+                                            children: [
+                                              Icon(Icons.check_circle, size: 11, color: singleApp['isCheckedIn'] ? Colors.green : Colors.grey),
+                                              const SizedBox(width: 4),
+                                              Icon(Icons.monetization_on, size: 11, color: singleApp['isDepositPaid'] ? Colors.blue : Colors.orange),
+                                              const SizedBox(width: 4),
+                                              Icon(Icons.shopping_bag, size: 11, color: singleApp['isReadyForPickup'] ? Colors.purple : Colors.grey),
+                                            ],
+                                          )
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
               );
             },
+          )
+        ],
+      ),
+    );
+  }
+
+  // 📅 OPERATION VIEW C: Complete Comprehensive Weekly Schedule Board Matrix Planner Grid
+  Widget _buildWeeklyScheduleGrid(Color col) {
+    final List<String> weekDaysLabels = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          child: Text('Weekly Micro-Planning Schedule Overview', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A).withAlpha(220))),
+        ),
+        const SizedBox(height: 12),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 7, 
+            crossAxisSpacing: 8, 
+            mainAxisSpacing: 8,
+            childAspectRatio: 0.42, 
           ),
+          itemCount: 7,
+          itemBuilder: (context, dayIndex) {
+            final weekdayTarget = dayIndex + 1;
+            final matchingApps = mockAppointments.where((app) => app['weekdayIndex'] == weekdayTarget).toList();
+
+            return Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: const BorderRadius.only(topLeft: Radius.circular(10), topRight: Radius.circular(10)),
+                      border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+                    ),
+                    child: Text(
+                      weekDaysLabels[dayIndex],
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF334155)),
+                    ),
+                  ),
+                  Expanded(
+                    child: matchingApps.isEmpty
+                        ? const Center(child: Text('No Entries', style: TextStyle(color: Colors.grey, fontSize: 11)))
+                        : ListView.builder(
+                            padding: const EdgeInsets.all(6),
+                            itemCount: matchingApps.length,
+                            itemBuilder: (context, appIdx) {
+                              final singleApp = matchingApps[appIdx];
+                              final bool isAppCancelled = singleApp['status'] == 'CANCELLED';
+
+                              return InkWell(
+                                onTap: isAppCancelled ? null : () => _showUpdateBookingOptionsDialog(singleApp),
+                                child: Container(
+                                  margin: const EdgeInsets.only(bottom: 6),
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: isAppCancelled ? Colors.grey.shade100 : col.withAlpha(15),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: isAppCancelled ? Colors.grey.shade300 : col.withAlpha(50)),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '🐾 ${singleApp['petName']}',
+                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: isAppCancelled ? Colors.grey : const Color(0xFF0F172A), decoration: isAppCancelled ? TextDecoration.lineThrough : null),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(singleApp['time'], style: const TextStyle(fontSize: 9, color: Color(0xFF475569), fontWeight: FontWeight.w600)),
+                                      Text(singleApp['service'], maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 9, color: Colors.grey.shade600)),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          Icon(Icons.check_circle, size: 10, color: singleApp['isCheckedIn'] ? Colors.green : Colors.grey),
+                                          const SizedBox(width: 3),
+                                          Icon(Icons.monetization_on, size: 10, color: singleApp['isDepositPaid'] ? Colors.blue : Colors.orange),
+                                          const SizedBox(width: 3),
+                                          Icon(Icons.shopping_bag, size: 10, color: singleApp['isReadyForPickup'] ? Colors.purple : Colors.grey),
+                                        ],
+                                      )
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatusBadge(String text, Color col, {bool isTag = false}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(color: col.withAlpha(24), borderRadius: BorderRadius.circular(4), border: Border.all(color: col.withAlpha(90), width: 0.5)),
+      child: Text(text, style: TextStyle(color: col.darken(), fontSize: 10, fontWeight: isTag ? FontWeight.normal : FontWeight.bold)),
+    );
+  }
+
+  void _showUpdateBookingOptionsDialog(Map<String, dynamic> app) {
+    final tagController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return AlertDialog(
+            title: Row(
+              children: [
+                const Icon(Icons.edit_calendar_outlined, color: Colors.indigo),
+                const SizedBox(width: 8),
+                Text('Update Dispatch: ${app['petName']}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              ],
+            ),
+            content: SizedBox(
+              width: 450,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SwitchListTile(
+                      title: const Text('Check-In Status', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                      subtitle: Text(app['isCheckedIn'] ? 'Arrived at facilities' : 'Pending arrival'),
+                      value: app['isCheckedIn'],
+                      activeColor: Colors.green,
+                      onChanged: (val) {
+                        setState(() => app['isCheckedIn'] = val);
+                        setModalState(() {});
+                      },
+                    ),
+                    const Divider(),
+                    SwitchListTile(
+                      title: const Text('Deposit Balance Status', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                      subtitle: Text(app['isDepositPaid'] ? 'Payment cleared' : 'Outstanding allocation'),
+                      value: app['isDepositPaid'],
+                      activeColor: Colors.blue,
+                      onChanged: (val) {
+                        setState(() => app['isDepositPaid'] = val);
+                        setModalState(() {});
+                      },
+                    ),
+                    const Divider(),
+                    SwitchListTile(
+                      title: const Text('Ready for Collection', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                      subtitle: Text(app['isReadyForPickup'] ? 'Ready to pick up' : 'In Service Pipeline'),
+                      value: app['isReadyForPickup'],
+                      activeColor: Colors.purple,
+                      onChanged: (val) {
+                        setState(() => app['isReadyForPickup'] = val);
+                        setModalState(() {});
+                      },
+                    ),
+                    const Divider(),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 16),
+                      child: Align(alignment: Alignment.centerLeft, child: Text('Internal Staff Tags (Hidden from customer)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF475569)))),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Wrap(
+                          spacing: 6,
+                          children: (app['staffTags'] as List<String>).map((t) => Chip(
+                            label: Text(t, style: const TextStyle(fontSize: 11)),
+                            onDeleted: () {
+                              setState(() => (app['staffTags'] as List<String>).remove(t));
+                              setModalState(() {});
+                            },
+                          )).toList(),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
+                      child: Row(
+                        children: [
+                          Expanded(child: TextField(controller: tagController, decoration: const InputDecoration(hintText: 'Add internal metadata flag', contentPadding: EdgeInsets.symmetric(horizontal: 12), border: OutlineInputBorder()))),
+                          const SizedBox(width: 8),
+                          ElevatedButton(
+                            onPressed: () {
+                              if (tagController.text.trim().isNotEmpty) {
+                                setState(() => (app['staffTags'] as List<String>).add(tagController.text.trim()));
+                                tagController.clear();
+                                setModalState(() {});
+                              }
+                            },
+                            child: const Text('Add'),
+                          )
+                        ],
+                      ),
+                    )
+                  ],
+                ),
+              ),
+            ),
+            actions: [ElevatedButton(onPressed: () => Navigator.pop(context), child: const Text('Save Changes'))],
+          );
+        }
+      ),
+    );
+  }
+
+  void _showAddServiceMatrixDialog() {
+    final nameCtrl = TextEditingController();
+    final slugCtrl = TextEditingController();
+    final priceCentsCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Provision Pricing Entry', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Service Item Name', border: OutlineInputBorder())),
+            const SizedBox(height: 12),
+            TextField(controller: slugCtrl, decoration: const InputDecoration(labelText: 'System Slug', border: OutlineInputBorder())),
+            const SizedBox(height: 12),
+            TextField(controller: priceCentsCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Base Price (Cents AUD)', border: OutlineInputBorder())),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              if (nameCtrl.text.isEmpty || priceCentsCtrl.text.isEmpty) return;
+              setState(() {
+                liveServiceMatrices.add({
+                  'id': DateTime.now().millisecondsSinceEpoch,
+                  'title': nameCtrl.text,
+                  'slug': slugCtrl.text.toUpperCase(),
+                  'species': 'Dog',
+                  'weightTier': 'FLAT_RATE',
+                  'durationMinutes': 45,
+                  'priceCentsAud': int.tryParse(priceCentsCtrl.text) ?? 7500,
+                });
+              });
+              Navigator.pop(context);
+            }, 
+            child: const Text('Push')
+          )
+        ],
+      ),
+    );
+  }
+
+  void _confirmActionGuard({required String title, required String body, required VoidCallback onConfirm}) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+        content: Text(body),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Abort')),
+          ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white), onPressed: () { Navigator.pop(ctx); onConfirm(); }, child: const Text('Confirm')),
         ],
       ),
     );
@@ -711,7 +1091,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
             Padding(
               padding: const EdgeInsets.all(24.0),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween, // 💡 Fixed: Corrected alignment assignment syntax
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text('Enterprise Console', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
                   IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context))
@@ -723,10 +1103,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
               labelColor: themeColor,
               unselectedLabelColor: const Color(0xFF64748B),
               indicatorColor: themeColor,
-              tabs: [
-                const Tab(text: 'UI Dictionary'),
-                if (widget.isAdmin) const Tab(text: 'Staff Matrix'),
-              ],
+              tabs: [const Tab(text: 'UI Dictionary'), if (widget.isAdmin) const Tab(text: 'Staff Matrix')],
             ),
             const Divider(height: 1),
             Expanded(
@@ -734,14 +1111,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                 controller: _drawerTabController,
                 children: [
                   _buildUiDictionaryTab(),
-                  if (widget.isAdmin)
-                    Container(
-                      color: const Color(0xFFF8FAFC),
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.all(24.0),
-                        child: ManageTeamPanel(config: widget.config, authToken: widget.authToken),
-                      ),
-                    ),
+                  if (widget.isAdmin) Container(color: const Color(0xFFF8FAFC), child: SingleChildScrollView(padding: const EdgeInsets.all(24.0), child: ManageTeamPanel(config: widget.config, authToken: widget.authToken))),
                 ],
               ),
             ),
@@ -756,7 +1126,6 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
       padding: const EdgeInsets.all(24),
       color: Colors.white,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildInputField('Booking Action Matrix Key (btn_book)', _btnBookController),
           _buildInputField('Cancellation Dynamic Matrix Key (btn_cancel)', _btnCancelController),
@@ -767,14 +1136,9 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
             width: double.infinity,
             height: 48,
             child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0F172A), 
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                elevation: 0,
-              ),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F172A), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
               onPressed: _saveUiTextConfigToDatabase,
-              child: const Text('Commit & Cascade Modifications', style: TextStyle(fontWeight: FontWeight.bold)),
+              child: const Text('Commit modifications', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           )
         ],
@@ -785,21 +1149,11 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
   Widget _buildInputField(String lbl, TextEditingController ctrl) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start, 
-        children: [
-          Text(lbl, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF334155))),
-          const SizedBox(height: 8),
-          TextField(
-            controller: ctrl, 
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFCBD5E1))),
-              focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF64748B), width: 1.5)),
-              contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12)
-            )
-          )
-        ],
-      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(lbl, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF334155))),
+        const SizedBox(height: 8),
+        TextField(controller: ctrl, decoration: const InputDecoration(border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12)))
+      ]),
     );
   }
 
@@ -808,27 +1162,22 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
       context: context,
       builder: (_) => AlertDialog(
         title: Text(widget.config.getTxt('btn_book', 'Manual Booking')),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min, 
-          children: [TextField(decoration: InputDecoration(labelText: 'Pet Identity Manifest Tag'))]
-        ),
+        content: const Column(mainAxisSize: MainAxisSize.min, children: [TextField(decoration: InputDecoration(labelText: 'Pet Identity Manifest Tag'))]),
         actions: [ElevatedButton(onPressed: () => Navigator.pop(context), child: const Text('Execute Dispatch'))],
-      ),
-    );
-  }
-
-  void _showEditDialog(Map<String, dynamic> app) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Re-route Client ${app['petName']}'),
-        content: Text(widget.config.getTxt('btn_edit', 'Proceed execution alterations to timeline slots')),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Dismiss'))],
       ),
     );
   }
 
   void _showSnackBar(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating));
+  }
+}
+
+extension ColorDarken on Color {
+  Color darken([double amount = .3]) {
+    assert(amount >= 0 && amount <= 1);
+    final hsl = HSLColor.fromColor(this);
+    final hslDark = hsl.withLightness((hsl.lightness - amount).clamp(0.0, 1.0));
+    return hslDark.toColor();
   }
 }
