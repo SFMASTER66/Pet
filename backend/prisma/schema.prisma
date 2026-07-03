@@ -129,6 +129,11 @@ model Appointment {
   // 🎁 Loyalty Reward Audit
   isLoyaltyWaived Boolean            @default(false) // True if this was the free reward groom
 
+  isCheckedIn     Boolean  @default(false)
+  depositPaid     Boolean  @default(false)
+  isReadyToPickup Boolean  @default(false)
+  internalTags    String[] // PostgreSQL string array for admin/staff tags
+
   // 🏎️ Optimized Covering Index for multi-tenant schedule querying
   @@index([merchantId, startTime, groomerId])
 }
