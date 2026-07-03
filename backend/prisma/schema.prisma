@@ -116,15 +116,21 @@ model Appointment {
   startTime       DateTime          
   endTime         DateTime
   status          AppointmentStatus @default(PENDING)
-  serviceItemId   Int               
+  
+  // 🔄 Swapped serviceItemId for servicePricingMatrixId
+  servicePricingMatrixId Int               
+  
   priceCentsAud   Int               // 🪙 Optimized: Stored as Int cents to prevent float rounding errors
   durationMinutes Int 
 
-  pet             Pet                @relation(fields: [petId], references: [id])
-  merchant        Merchant           @relation(fields: [merchantId], references: [id])
-  groomer         Employee           @relation(fields: [groomerId], references: [id])
-  serviceItem     ServiceItem        @relation(fields: [serviceItemId], references: [id]) 
-  addOns          AppointmentAddOn[]
+  pet                  Pet                  @relation(fields: [petId], references: [id])
+  merchant             Merchant             @relation(fields: [merchantId], references: [id])
+  groomer              Employee             @relation(fields: [groomerId], references: [id])
+  
+  // 🔄 Updated relation to point to the pricing matrix
+  servicePricingMatrix ServicePricingMatrix @relation(fields: [servicePricingMatrixId], references: [id]) 
+  
+  addOns               AppointmentAddOn[]
 
   // 🎁 Loyalty Reward Audit
   isLoyaltyWaived Boolean            @default(false) // True if this was the free reward groom
@@ -138,36 +144,29 @@ model Appointment {
   @@index([merchantId, startTime, groomerId])
 }
 
-model ServiceItem {
-  id           Int                    @id @default(autoincrement())
-  slug         String                 @unique // e.g., 'FULL_GROOM', 'TEETH_CLEANING'
-  name         String                 
-  matrices     ServicePricingMatrix[]
-  appointments Appointment[] 
-}
-
 model ServicePricingMatrix {
-  id              Int                @id @default(autoincrement())
+  id              Int         @id @default(autoincrement())
   merchantId      String      
-  serviceItemId   Int
   
-  // 🔀 Merged Flat Custom Upgrades: Made optional to support general overrides
+  // 🏷️ Service identity
+  name            String      // e.g., 'Full Groom', 'Teeth Cleaning'
+  
+  // 🔀 Merged Flat Custom Upgrades
   speciesId       Int?        
   weightTier      WeightTier? 
   coatType        CoatType?   
   
-  nameOverride    String?     // Optional custom naming per salon
   durationMinutes Int 
   priceCentsAud   Int         // 🪙 Optimized: Stored as Int cents to ensure precise bookkeeping
 
-  merchant        Merchant           @relation(fields: [merchantId], references: [id])
-  serviceItem     ServiceItem        @relation(fields: [serviceItemId], references: [id])
-  species         Species?           @relation(fields: [speciesId], references: [id])
+  merchant        Merchant    @relation(fields: [merchantId], references: [id])
+  species         Species?    @relation(fields: [speciesId], references: [id])
+  
+  appointments          Appointment[]
   appointmentsWithAddOn AppointmentAddOn[]
 
-  // Allows a flat exception rule or granular tier unique configuration
-  @@unique([merchantId, serviceItemId, speciesId, weightTier, coatType])
-  @@index([serviceItemId, speciesId])
+  @@unique([merchantId, name, speciesId, weightTier, coatType])
+  @@index([name, speciesId])
 }
 
 model User {
