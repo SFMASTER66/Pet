@@ -105,7 +105,7 @@ class _CustomerPortalPageState extends State<CustomerPortalPage> {
                               const Text(
                                 'Experience premium smart treatment plans for your beloved animal companion assets today.',
                                 style: TextStyle(color: Colors.white70, fontSize: 14),
-                              ),
+                                                    ),
                               const SizedBox(height: 16),
                               Wrap(
                                 spacing: 8,
@@ -131,7 +131,25 @@ class _CustomerPortalPageState extends State<CustomerPortalPage> {
                             itemBuilder: (context, index) {
                               final service = widget.activeServices[index];
                               final isSelected = targetedService?['id'] == service['id'];
-                              final double cleanPrice = service['priceCentsAud'] / 100;
+                              
+                              // Handle dynamic variations in price keys safely
+                              final rawPrice = service['priceCentsAud'] ?? service['priceCents'] ?? 0;
+                              final double cleanPrice = rawPrice / 100;
+
+                              // Safely map incoming backend keys to prevent Strict Null Safety crashes
+                              final String displayTitle = service['title'] ?? service['name'] ?? 'Untitled Service';
+                              final String displayDesc = service['description'] ?? 'No description available.';
+                              final int duration = service['durationMinutes'] ?? 0;
+                              final String weightTier = service['weightTier'] ?? 'Standard Weight';
+
+                              // 🛡️ FIX: Look up the child 'name' attribute inside the nested 'species' map block
+                              String species = 'All Species';
+                              if (service['species'] != null && service['species'] is Map) {
+                                species = service['species']['name'] ?? 'Dog';
+                              } else if (service['speciesId'] != null) {
+                                // Safe fallback to mapping IDs directly if object join is bypassed
+                                species = service['speciesId'] == 1 ? 'Dog' : 'Cat';
+                              }
 
                               return GestureDetector(
                                 onTap: () => setState(() => targetedService = service),
@@ -158,27 +176,27 @@ class _CustomerPortalPageState extends State<CustomerPortalPage> {
                                         child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            Text(service['title'], style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                            Text(displayTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                                             const SizedBox(height: 4),
-                                            Text(service['description'], style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                                            Text(displayDesc, style: const TextStyle(color: Colors.grey, fontSize: 13)),
                                             const SizedBox(height: 8),
                                             Row(
                                               children: [
                                                 Icon(Icons.schedule, size: 14, color: Colors.grey.shade500),
                                                 const SizedBox(width: 4),
-                                                Text('${service['durationMinutes']} mins', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                                                Text('$duration mins', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
                                                 const SizedBox(width: 12),
                                                 Container(
                                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                                   decoration: BoxDecoration(
-                                                    color: Colors.grey.shade100, // 💡 Fixed: Changed from slate.shade100
+                                                    color: Colors.grey.shade100, 
                                                     borderRadius: BorderRadius.circular(4),
                                                   ),
                                                   child: Text(
-                                                    '${service['species']} • ${service['weightTier']}', 
+                                                    '$species • $weightTier', 
                                                     style: TextStyle(
                                                       fontSize: 10, 
-                                                      color: Colors.blueGrey.shade700, // 💡 Fixed: Changed from slate.shade700
+                                                      color: Colors.blueGrey.shade700, 
                                                       fontWeight: FontWeight.bold,
                                                     ),
                                                   ),
@@ -218,62 +236,71 @@ class _CustomerPortalPageState extends State<CustomerPortalPage> {
                     ),
                     child: targetedService == null
                         ? const Center(child: Text('Please select an active catalog service layout from the left.'))
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('Booking Summary', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                              const Divider(height: 32),
-                              Row(
-                                children: [
-                                  Icon(targetedService!['icon'] ?? Icons.star_border_outlined, color: themeColor),
-                                  const SizedBox(width: 8),
-                                  Expanded(child: Text(targetedService!['title'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              Text(targetedService!['description'], style: const TextStyle(color: Colors.grey, fontSize: 13, height: 1.4)),
-                              const SizedBox(height: 24),
-                              Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(8)),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        : () {
+                            // Extract fallback properties cleanly for the right panel summary block
+                            final String summaryTitle = targetedService!['title'] ?? targetedService!['name'] ?? 'Untitled Service';
+                            final String summaryDesc = targetedService!['description'] ?? 'No description available.';
+                            final int summaryDuration = targetedService!['durationMinutes'] ?? 0;
+                            final rawPrice = targetedService!['priceCentsAud'] ?? targetedService!['priceCents'] ?? 0;
+                            final double summaryPrice = rawPrice / 100;
+
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Booking Summary', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                const Divider(height: 32),
+                                Row(
                                   children: [
-                                    const Text('Est. Service Duration', style: TextStyle(color: Colors.grey)),
-                                    Text('${targetedService!['durationMinutes']} mins', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    Icon(targetedService!['icon'] ?? Icons.star_border_outlined, color: themeColor),
+                                    const SizedBox(width: 8),
+                                    Expanded(child: Text(summaryTitle, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
                                   ],
                                 ),
-                              ),
-                              const Spacer(),
-                              const Divider(),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 16.0),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    const Text('Grand Total Payable Amount:', style: TextStyle(fontWeight: FontWeight.bold)),
-                                    Text('\$${(targetedService!['priceCentsAud'] / 100).toStringAsFixed(2)} AUD', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: themeColor)),
-                                  ],
-                                ),
-                              ),
-                              SizedBox(
-                                width: double.infinity,
-                                height: 50,
-                                child: ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: themeColor,
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  ),
-                                  onPressed: () => _triggerClientBookingAction(context, targetedService!['title']),
-                                  child: Text(
-                                    widget.config.getTxt('btn_book', 'Schedule Checkout Appointment'),
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                const SizedBox(height: 16),
+                                Text(summaryDesc, style: const TextStyle(color: Colors.grey, fontSize: 13, height: 1.4)),
+                                const SizedBox(height: 24),
+                                Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(8)),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text('Est. Service Duration', style: TextStyle(color: Colors.grey)),
+                                      Text('$summaryDuration mins', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    ],
                                   ),
                                 ),
-                              )
-                            ],
-                          ),
+                                const Spacer(),
+                                const Divider(),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 16.0),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text('Grand Total Payable Amount:', style: TextStyle(fontWeight: FontWeight.bold)),
+                                      Text('\$${summaryPrice.toStringAsFixed(2)} AUD', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: themeColor)),
+                                    ],
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 50,
+                                  child: ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: themeColor,
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    ),
+                                    onPressed: () => _triggerClientBookingAction(context, summaryTitle),
+                                    child: Text(
+                                      widget.config.getTxt('btn_book', 'Schedule Checkout Appointment'),
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                    ),
+                                  ),
+                                )
+                              ],
+                            );
+                          }(),
                   ),
                 )
               ],

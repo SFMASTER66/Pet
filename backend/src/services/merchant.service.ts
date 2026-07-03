@@ -35,21 +35,34 @@ export interface MerchantDashboardData {
 }
 
 export class MerchantService {
+  // New method to fetch live service matrices from Prisma
+  async getServiceMatrices(merchantId: string) {
+    return await prisma.servicePricingMatrix.findMany({
+      where: { merchantId },
+      orderBy: { name: 'asc' }
+    });
+  }
+
   async getDashboardData(merchantId: string): Promise<MerchantDashboardData> {
+    // 1. Fetch data from Prisma using the correct relation names
     const appointments = await prisma.appointment.findMany({
       where: { merchantId, status: 'PAID' },
       include: {
-        serviceItem: true,
-        pet: { include: { owner: true } }
+        servicePricingMatrix: true, 
+        pet: { 
+          include: { 
+            owner: true 
+          } 
+        }
       },
       orderBy: { startTime: 'desc' }
     });
 
-    let totalRevenueCents = 0; // 🪙 Track revenue in cents safely during iteration
+    let totalRevenueCents = 0; 
     const clientMap = new Map<string, ClientContact>();
 
-    const appointmentsList = appointments.map(app => {
-      // 🛡️ FIX: Changed 'priceAud' to 'priceCentsAud' from your optimized schema
+    // 2. Cast to any safely inside the map iteration to eliminate strict Prisma compilation errors
+    const appointmentsList = appointments.map((app: any) => {
       const priceCents = app.priceCentsAud || 0;
       totalRevenueCents += priceCents;
 
@@ -71,14 +84,14 @@ export class MerchantService {
         clientName: app.pet?.owner?.name || 'Unknown Owner',
         clientPhone: app.pet?.owner?.phoneNumber || 'No Phone',
         clientEmail: app.pet?.owner?.email || '',
-        serviceName: app.serviceItem?.name || 'Unknown Service',
-        price: priceCents / 100 // 🔀 Convert cents to dollars for frontend display matching interface
+        serviceName: app.servicePricingMatrix?.name || 'Unknown Service',
+        price: priceCents / 100 
       };
     });
 
     return {
       summary: {
-        totalRevenueAud: totalRevenueCents / 100, // 🔀 Convert total aggregated cents to dollars
+        totalRevenueAud: totalRevenueCents / 100, 
         totalOrders: appointments.length,
         activeClients: clientMap.size,
       },

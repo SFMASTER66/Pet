@@ -58,24 +58,15 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
   late TabController _drawerTabController;
   late List<Map<String, dynamic>> mockAppointments;
 
-  final List<Map<String, dynamic>> liveServiceMatrices = [
-    {
-      'id': 1,
-      'name': 'Signature Full Style Grooming',
-      'species': 'Dog',
-      'coatType': 'LONG_CURLY',
-      'weightTier': 'L',
-      'durationMinutes': 90,
-      'priceCentsAud': 12000,
-      'icon': Icons.cut_outlined
-    }
-  ];
+  // Moved from static property to component reactive state list
+  List<Map<String, dynamic>> liveServiceMatrices = [];
 
   @override
   void initState() {
     super.initState();
     _drawerTabController = TabController(length: widget.isAdmin ? 2 : 1, vsync: this);
     _syncControllers();
+    _fetchServiceMatrices(); // Fetch live configurations from backend database clusters
     
     mockAppointments = [
       {
@@ -113,6 +104,35 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     _btnCancelController.text = widget.config.getTxt('btn_cancel', 'Cancel');
     _btnEditController.text = widget.config.getTxt('btn_edit', 'Reschedule');
     _txtRevenueController.text = widget.config.getTxt('txt_revenue', 'Today Forecast Revenue');
+  }
+
+  // Fetch matrix records live from backend routes
+  Future<void> _fetchServiceMatrices() async {
+    setState(() => _isServiceLoading = true);
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/api/v1/matrix?merchantId=${widget.config.merchantId}'),
+        headers: {
+          'Authorization': 'Bearer ${widget.authToken}',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        if (responseData['success'] == true && responseData['data'] != null) {
+          setState(() {
+            liveServiceMatrices = List<Map<String, dynamic>>.from(responseData['data']);
+          });
+        }
+      } else {
+        _showSnackBar('❌ Failed to fetch backend service options matrix schema models.');
+      }
+    } catch (networkError) {
+      _showSnackBar('❌ Transport layer connection fault during background matrix synchronization.');
+    } finally {
+      setState(() => _isServiceLoading = false);
+    }
   }
 
   void _saveUiTextConfigToDatabase() {
@@ -170,16 +190,8 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
       final Map<String, dynamic> responseData = jsonDecode(response.body);
 
       if ((response.statusCode == 200 || response.statusCode == 201) && responseData['success'] == true) {
-        setState(() {
-          liveServiceMatrices.add({
-            'id': responseData['data']?['id'] ?? DateTime.now().millisecondsSinceEpoch,
-            'name': name,
-            'coatType': coatType,
-            'weightTier': weightTier,
-            'durationMinutes': duration,
-            'priceCentsAud': priceCents,
-          });
-        });
+        // Fetch fresh up-to-date data directly from database to guarantee synchronization match
+        await _fetchServiceMatrices();
         _showSnackBar('🚀 New pricing matrix synchronized with backend production database.');
       } else {
         _showSnackBar('❌ Sync failed: ${responseData['message'] ?? 'Unknown controller validation error.'}');
@@ -474,50 +486,52 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
           ),
           if (_isServiceMatrixVisible) ...[
             const Divider(height: 1),
-            Table(
-              columnWidths: const {0: FlexColumnWidth(3.5), 1: FlexColumnWidth(2.5), 2: FlexColumnWidth(1.2), 3: FlexColumnWidth(1.3), 4: FlexColumnWidth(1)},
-              children: [
-                TableRow(
-                  decoration: BoxDecoration(color: Colors.grey.shade50),
-                  children: const [
-                    Padding(padding: EdgeInsets.all(12), child: Text('Service Name', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569)))),
-                    Padding(padding: EdgeInsets.all(12), child: Text('Target Coat / Size', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569)))),
-                    Padding(padding: EdgeInsets.all(12), child: Text('Duration', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569)))),
-                    Padding(padding: EdgeInsets.all(12), child: Text('Price', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569)))),
-                    Padding(padding: EdgeInsets.all(12), child: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569)))),
-                  ]
-                ),
-                ...liveServiceMatrices.map((matrix) {
-                  final displayTitle = matrix['name'];
-                  final String ruleSet = 'Coat: ${matrix['coatType'] ?? 'ANY'} • Size: ${matrix['weightTier'] ?? 'ANY'}';
-                  return TableRow(
-                    decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9)))),
+            _isServiceLoading && liveServiceMatrices.isEmpty
+                ? const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))
+                : Table(
+                    columnWidths: const {0: FlexColumnWidth(3.5), 1: FlexColumnWidth(2.5), 2: FlexColumnWidth(1.2), 3: FlexColumnWidth(1.3), 4: FlexColumnWidth(1)},
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.all(12), 
-                        child: Text(displayTitle, style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF1E293B)))
+                      TableRow(
+                        decoration: BoxDecoration(color: Colors.grey.shade50),
+                        children: const [
+                          Padding(padding: EdgeInsets.all(12), child: Text('Service Name', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569)))),
+                          Padding(padding: EdgeInsets.all(12), child: Text('Target Coat / Size', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569)))),
+                          Padding(padding: EdgeInsets.all(12), child: Text('Duration', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569)))),
+                          Padding(padding: EdgeInsets.all(12), child: Text('Price', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569)))),
+                          Padding(padding: EdgeInsets.all(12), child: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569)))),
+                        ]
                       ),
-                      Padding(padding: const EdgeInsets.all(12), child: Text(ruleSet, style: const TextStyle(fontSize: 12))),
-                      Padding(padding: const EdgeInsets.all(12), child: Text('${matrix['durationMinutes']} mins', style: const TextStyle(fontSize: 13))),
-                      Padding(padding: const EdgeInsets.all(12), child: Text('\$${(matrix['priceCentsAud'] / 100).toStringAsFixed(2)} AUD', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.green))),
-                      Padding(
-                        padding: const EdgeInsets.all(4.0),
-                        child: widget.isAdmin 
-                            ? IconButton(
-                                icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
-                                onPressed: () => _confirmActionGuard(
-                                  title: 'Purge Service Definition',
-                                  body: 'Are you sure you want to completely erase "$displayTitle"?',
-                                  onConfirm: () => setState(() => liveServiceMatrices.removeWhere((item) => item['id'] == matrix['id']))
-                                ),
-                              )
-                            : const Padding(padding: EdgeInsets.all(12.0), child: Text('Read-Only', style: TextStyle(color: Colors.grey, fontSize: 12))),
-                      )
-                    ]
-                  );
-                }),
-              ],
-            )
+                      ...liveServiceMatrices.map((matrix) {
+                        final displayTitle = matrix['name'] ?? 'Unknown Service';
+                        final String ruleSet = 'Coat: ${matrix['coatType'] ?? 'ANY'} • Size: ${matrix['weightTier'] ?? 'ANY'}';
+                        return TableRow(
+                          decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9)))),
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.all(12), 
+                              child: Text(displayTitle, style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF1E293B)))
+                            ),
+                            Padding(padding: const EdgeInsets.all(12), child: Text(ruleSet, style: const TextStyle(fontSize: 12))),
+                            Padding(padding: const EdgeInsets.all(12), child: Text('${matrix['durationMinutes']} mins', style: const TextStyle(fontSize: 13))),
+                            Padding(padding: const EdgeInsets.all(12), child: Text('\$${((matrix['priceCentsAud'] ?? 0) / 100).toStringAsFixed(2)} AUD', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.green))),
+                            Padding(
+                              padding: const EdgeInsets.all(4.0),
+                              child: widget.isAdmin 
+                                  ? IconButton(
+                                      icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
+                                      onPressed: () => _confirmActionGuard(
+                                        title: 'Purge Service Definition',
+                                        body: 'Are you sure you want to completely erase "$displayTitle"?',
+                                        onConfirm: () => setState(() => liveServiceMatrices.removeWhere((item) => item['id'] == matrix['id']))
+                                      ),
+                                    )
+                                  : const Padding(padding: EdgeInsets.all(12.0), child: Text('Read-Only', style: TextStyle(color: Colors.grey, fontSize: 12))),
+                            )
+                          ]
+                        );
+                      }),
+                    ],
+                  )
           ]
         ],
       ),
