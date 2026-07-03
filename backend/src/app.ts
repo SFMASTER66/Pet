@@ -34,7 +34,7 @@ app.use((req, res, next) => {
 app.use('/api/v1', bookingRoutes);
 app.use('/api/v1', merchantRoutes);
 app.use('/api/v1', stripeRoutes);
-app.use('/api/v1/services', serviceRouter);
+app.use('/api/v1', serviceRouter);
 
 // 基础测试路由
 app.get('/health', (req, res) => {

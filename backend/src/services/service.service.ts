@@ -1,36 +1,39 @@
-import prisma from './db'; // Points to your Prisma client instantiation in db.ts
+import { WeightTier, CoatType } from '@prisma/client'; 
+import prisma from './db'; 
 
 export class ServiceService {
   async fetchMerchantServices(merchantId: string) {
     return prisma.servicePricingMatrix.findMany({
       where: { merchantId },
       include: {
-        serviceItem: true,
         species: true,
       },
       orderBy: {
-        serviceItem: {
-          name: 'asc',
-        },
+        name: 'asc',
       },
     });
   }
 
-  async createServiceItem(data: { slug: string; name: string }) {
-    return prisma.serviceItem.create({ data });
-  }
-
   async createPricingMatrix(data: {
     merchantId: string;
-    serviceItemId: number;
+    name: string;
     speciesId?: number;
-    weightTier?: any;
-    coatType?: any;
-    nameOverride?: string;
+    weightTier?: WeightTier;
+    coatType?: CoatType;
     durationMinutes: number;
     priceCentsAud: number;
   }) {
-    return prisma.servicePricingMatrix.create({ data });
+    return prisma.servicePricingMatrix.create({
+      data: {
+        merchantId: data.merchantId,
+        name: data.name,
+        speciesId: data.speciesId,
+        weightTier: data.weightTier,
+        coatType: data.coatType,
+        durationMinutes: data.durationMinutes,
+        priceCentsAud: data.priceCentsAud,
+      }
+    });
   }
 
   async updatePricingMatrix(id: number, data: Partial<any>) {

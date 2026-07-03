@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 class MerchantConfig {
+  final String merchantId; // ✨ explicitly tracked property
   final String businessName;
   final String logoIcon;
   final int primaryColorValue;
@@ -8,6 +9,7 @@ class MerchantConfig {
   final Map<String, String> uiDictionary;
 
   MerchantConfig({
+    required this.merchantId,
     required this.businessName,
     required this.logoIcon,
     required this.primaryColorValue,
@@ -32,33 +34,53 @@ class MerchantConfig {
   }
 
   factory MerchantConfig.fromMap(Map<String, dynamic> map) {
-    // 1. Safely extract and parse the primary color
+    // 1. Extract Merchant ID from various possible payload positions
+    String extractedMerchantId = '1';
+    if (map['merchantId'] != null) {
+      extractedMerchantId = map['merchantId'].toString();
+    } else if (map['id'] != null) {
+      extractedMerchantId = map['id'].toString();
+    } else if (map['uiDictionary'] != null && map['uiDictionary']['merchantId'] != null) {
+      extractedMerchantId = map['uiDictionary']['merchantId'].toString();
+    }
+
+    // 2. Safely extract and parse the primary color
     int parsedColor = 0xFF0F766E; // Default fallback color
-    
     if (map['primaryColor'] != null) {
       final rawColor = map['primaryColor'];
       if (rawColor is int) {
         parsedColor = rawColor;
       } else if (rawColor is String) {
-        // Safely parse a numeric string (e.g., "4279203438") or a hex string
         parsedColor = int.tryParse(rawColor) ?? 
                       int.tryParse(rawColor.replaceAll('#', '').replaceAll('0x', ''), radix: 16) ?? 
                       0xFF0F766E;
       }
     }
 
-    // 2. Return the cleanly initialized object
+    // 3. Build dictionary ensuring the merchantId is stored inside it too
+    final Map<String, String> rawUiDict = {};
+    if (map['uiDictionary'] != null) {
+      (map['uiDictionary'] as Map).forEach((k, v) {
+        rawUiDict[k.toString()] = v.toString();
+      });
+    }
+    rawUiDict['merchantId'] = extractedMerchantId;
+
+    // 4. Return the cleanly initialized object
     return MerchantConfig(
+      merchantId: extractedMerchantId,
       businessName: map['businessName'] ?? 'Paws & Claws Smart SPA Lounge',
       logoIcon: map['logoIcon'] ?? '🐶',
       primaryColorValue: parsedColor,
       tags: List<String>.from(map['tags'] ?? []),
-      uiDictionary: Map<String, String>.from(map['uiDictionary'] ?? {}),
+      uiDictionary: rawUiDict,
     );
   }
 
+  /// ✨ ADD THIS METHOD TO FIX THE COMPILATION ERROR
   Map<String, dynamic> toMap() {
     return {
+      'merchantId': merchantId,
       'businessName': businessName,
       'logoIcon': logoIcon,
       'primaryColor': primaryColorValue,

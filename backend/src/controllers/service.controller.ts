@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { WeightTier, CoatType } from '@prisma/client';
 import { ServiceService } from '../services/service.service';
 
 const serviceService = new ServiceService();
@@ -6,9 +7,7 @@ const serviceService = new ServiceService();
 export class ServiceController {
   async getMerchantServices(req: Request, res: Response): Promise<void> {
     try {
-      // 🛠️ Fixed: Enforced type conversion to absolute string
       const merchantId = String(req.params.merchantId);
-      
       const data = await serviceService.fetchMerchantServices(merchantId);
       res.status(200).json({ success: true, data });
     } catch (error: any) {
@@ -16,18 +15,28 @@ export class ServiceController {
     }
   }
 
-  async createServiceItem(req: Request, res: Response): Promise<void> {
-    try {
-      const item = await serviceService.createServiceItem(req.body);
-      res.status(201).json({ success: true, data: item });
-    } catch (error: any) {
-      res.status(400).json({ success: false, message: error.message });
-    }
-  }
-
   async createPricingMatrix(req: Request, res: Response): Promise<void> {
     try {
-      const matrix = await serviceService.createPricingMatrix(req.body);
+      const { 
+        merchantId, 
+        name, 
+        speciesId, 
+        weightTier, 
+        coatType, 
+        durationMinutes, 
+        priceCentsAud 
+      } = req.body;
+
+      const matrix = await serviceService.createPricingMatrix({
+        merchantId: String(merchantId),
+        name: String(name),
+        speciesId: speciesId ? Number(speciesId) : undefined,
+        weightTier: weightTier ? (String(weightTier) as WeightTier) : undefined,
+        coatType: coatType ? (String(coatType) as CoatType) : undefined,
+        durationMinutes: Number(durationMinutes),
+        priceCentsAud: Number(priceCentsAud)
+      });
+
       res.status(201).json({ success: true, data: matrix });
     } catch (error: any) {
       res.status(400).json({ success: false, message: error.message });

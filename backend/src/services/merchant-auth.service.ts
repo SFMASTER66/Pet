@@ -121,6 +121,7 @@ export class MerchantAuthService {
     if (user.role === UserRole.MERCHANT_ADMIN) {
       features = ['dashboard', 'bookings', 'settings', 'staff', 'billing']; // All features
       configurations = {
+        merchantId: user.merchant.id,
         businessName: user.merchant.businessName,
         logoIcon: user.merchant.logoIcon,
         primaryColor: user.merchant.primaryColor,
@@ -129,6 +130,7 @@ export class MerchantAuthService {
     } else if (user.role === UserRole.MERCHANT_STAFF) {
       features = ['bookings']; // Staff only see bookings feature
       configurations = {
+        merchantId: user.merchant.id,
         businessName: user.merchant.businessName,
         logoIcon: user.merchant.logoIcon,
         // primaryColor, tags etc. excluded/hidden for staff
