@@ -56,8 +56,8 @@ export class MerchantAuthService {
       });
 
       return { 
-        user: adminUser, // Changed key from adminUser to user
-        config: merchant // Providing a clean config mapping
+        user: adminUser, 
+        config: merchant 
       };
     },{
       timeout: 30000 
@@ -73,8 +73,13 @@ export class MerchantAuthService {
       success: true,
       message: 'Merchant tenant workspace initialized successfully.',
       token,
-      role: result.user.role, // 🛠️ FIX: Explicitly include the role here!
+      role: result.user.role, 
       config: {
+        merchantId: result.config.id,
+        // ========================================================
+        // 🔥 HIGHLIGHT: ADDED USER ID FOR PROPER APPOINTMENT LINKING
+        // ========================================================
+        userId: result.user.id, 
         businessName: result.config.businessName,
         logoIcon: result.config.logoIcon,
         primaryColor: result.config.primaryColor,
@@ -88,7 +93,6 @@ export class MerchantAuthService {
    * Authenticates an administrator or staff based purely on email validation
    */
   static async loginMerchant(email: string, passwordRaw: string) {
-    // 1. Query using only email
     const user = await prisma.user.findFirst({
       where: { email },
       include: { merchant: true },
@@ -98,7 +102,6 @@ export class MerchantAuthService {
       throw new Error('Invalid credentials or tenant workspace missing.');
     }
 
-    // 2. Extra safety gate check
     if (user.role !== UserRole.MERCHANT_ADMIN && user.role !== UserRole.MERCHANT_STAFF) {
       throw new Error('Access denied. Insufficient permissions.');
     }
@@ -114,26 +117,32 @@ export class MerchantAuthService {
       { expiresIn: '7d' }
     );
 
-    // 3. Conditional Feature Payload Assignment
     let features: string[] = [];
     let configurations: Record<string, any> = {};
 
     if (user.role === UserRole.MERCHANT_ADMIN) {
-      features = ['dashboard', 'bookings', 'settings', 'staff', 'billing']; // All features
+      features = ['dashboard', 'bookings', 'settings', 'staff', 'billing']; 
       configurations = {
         merchantId: user.merchant.id,
+        // ========================================================
+        // 🔥 HIGHLIGHT: RETURN USER ID FOR ADMIN CONNECTIONS
+        // ========================================================
+        userId: user.id,
         businessName: user.merchant.businessName,
         logoIcon: user.merchant.logoIcon,
         primaryColor: user.merchant.primaryColor,
         tags: user.merchant.tags,
       };
     } else if (user.role === UserRole.MERCHANT_STAFF) {
-      features = ['bookings']; // Staff only see bookings feature
+      features = ['bookings']; 
       configurations = {
         merchantId: user.merchant.id,
+        // ========================================================
+        // 🔥 HIGHLIGHT: RETURN USER ID FOR STAFF CONNECTIONS TOO
+        // ========================================================
+        userId: user.id,
         businessName: user.merchant.businessName,
         logoIcon: user.merchant.logoIcon,
-        // primaryColor, tags etc. excluded/hidden for staff
       };
     }
 
@@ -158,25 +167,21 @@ export class MerchantAuthService {
     });
 
     if (!user) {
-      // Security best practice: Don't explicitly reveal if an email doesn't exist
       throw new Error('If the account exists, a recovery link has been generated.');
     }
 
-    // Generate a secure, short-lived reset token (valid for 15 mins)
     const resetToken = jwt.sign(
       { userId: user.id, email: user.email },
       RESET_SECRET,
       { expiresIn: '15m' }
     );
 
-    // In production, integrate Nodemailer/SendGrid here to email the token/link.
-    // For this implementation, we return it so the API can pass it or log it.
     console.log(`[PASSWORD RESET TOKEN FOR ${email}]: ${resetToken}`);
 
     return {
       success: true,
       message: 'Password reset token generated successfully.',
-      resetToken, // Returned for ease of testing/UI matching
+      resetToken, 
     };
   }
 
@@ -190,14 +195,12 @@ export class MerchantAuthService {
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(passwordRaw, salt);
 
-      // Update password across both tables if necessary, or just the User table
       await prisma.$transaction(async (tx) => {
         await tx.user.update({
           where: { id: decoded.userId },
           data: { passwordHash: hashedPassword },
         });
 
-        // Also sync back to merchant if this user shares the primary tenant credentials
         await tx.merchant.updateMany({
           where: { email: decoded.email },
           data: { passwordHash: hashedPassword },

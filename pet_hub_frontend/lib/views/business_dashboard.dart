@@ -58,7 +58,6 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
   late TabController _drawerTabController;
   late List<Map<String, dynamic>> mockAppointments;
 
-  // Moved from static property to component reactive state list
   List<Map<String, dynamic>> liveServiceMatrices = [];
 
   @override
@@ -66,7 +65,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     super.initState();
     _drawerTabController = TabController(length: widget.isAdmin ? 2 : 1, vsync: this);
     _syncControllers();
-    _fetchServiceMatrices(); // Fetch live configurations from backend database clusters
+    _fetchServiceMatrices(); 
     
     mockAppointments = [
       {
@@ -106,7 +105,6 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     _txtRevenueController.text = widget.config.getTxt('txt_revenue', 'Today Forecast Revenue');
   }
 
-  // Fetch matrix records live from backend routes
   Future<void> _fetchServiceMatrices() async {
     setState(() => _isServiceLoading = true);
     try {
@@ -138,6 +136,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
   void _saveUiTextConfigToDatabase() {
     MerchantConfig updated = MerchantConfig(
       merchantId: widget.config.merchantId,
+      userId: widget.config.userId,
       businessName: widget.config.businessName,
       logoIcon: widget.config.logoIcon,
       primaryColorValue: widget.config.primaryColorValue,
@@ -190,7 +189,6 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
       final Map<String, dynamic> responseData = jsonDecode(response.body);
 
       if ((response.statusCode == 200 || response.statusCode == 201) && responseData['success'] == true) {
-        // Fetch fresh up-to-date data directly from database to guarantee synchronization match
         await _fetchServiceMatrices();
         _showSnackBar('🚀 New pricing matrix synchronized with backend production database.');
       } else {
@@ -708,7 +706,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     );
   }
 
-  Widget _buildStatusBadge(String text, Color col, {bool isTag = false}) {
+  Widget _buildStatusBadge(String text, Color col) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(color: col.withAlpha(24), borderRadius: BorderRadius.circular(4)),
@@ -924,11 +922,254 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
   }
 
   void _showCreateBookingDialog() {
+    if (liveServiceMatrices.isEmpty) {
+      _showSnackBar('⚠️ Please add at least one item to the Service Matrix before using manual booking.');
+      return;
+    }
+
+    final dogNameCtrl = TextEditingController();
+    final dogBreedCtrl = TextEditingController();
+    final dogDescCtrl = TextEditingController();
+    final ownerNameCtrl = TextEditingController();
+    final ownerPhoneCtrl = TextEditingController();
+    final ownerEmailCtrl = TextEditingController();
+
+    Map<String, dynamic>? selectedMatrixRow = liveServiceMatrices.first;
+    String selectedGender = 'UNKNOWN'; 
+    bool isDesexed = false;
+    
+    DateTime bookingDate = DateTime.now();
+    TimeOfDay bookingTime = const TimeOfDay(hour: 9, minute: 0);
+
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Create'),
-        actions: [ElevatedButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.add_task_rounded, color: widget.config.primaryColor),
+            const SizedBox(width: 10),
+            const Text('New Administrative Portal Booking', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
+        content: SizedBox(
+          width: 600,
+          child: StatefulBuilder(
+            builder: (context, setDialogState) {
+              return SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Select Service Matrix Tier', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569))),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400), borderRadius: BorderRadius.circular(4)),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<Map<String, dynamic>>(
+                          isExpanded: true,
+                          value: selectedMatrixRow,
+                          items: liveServiceMatrices.map((matrix) {
+                            return DropdownMenuItem<Map<String, dynamic>>(
+                              value: matrix,
+                              child: Text('${matrix['name']} (${matrix['weightTier']} / ${matrix['coatType']}) - \$${((matrix['priceCentsAud'] ?? 0) / 100).toStringAsFixed(2)}'),
+                            );
+                          }).toList(),
+                          onChanged: (val) => setDialogState(() => selectedMatrixRow = val),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    Row(
+                      children: [
+                        Expanded(child: TextField(controller: dogNameCtrl, decoration: const InputDecoration(labelText: 'Dog Name *', border: OutlineInputBorder()))),
+                        const SizedBox(width: 12),
+                        Expanded(child: TextField(controller: dogBreedCtrl, decoration: const InputDecoration(labelText: 'Dog Breed *', border: OutlineInputBorder()))),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400), borderRadius: BorderRadius.circular(4)),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                isExpanded: true,
+                                value: selectedGender,
+                                items: const [
+                                  DropdownMenuItem(value: 'UNKNOWN', child: Text('Sex: Unknown')),
+                                  DropdownMenuItem(value: 'MALE', child: Text('Sex: Male')),
+                                  DropdownMenuItem(value: 'FEMALE', child: Text('Sex: Female')),
+                                ],
+                                onChanged: (val) => setDialogState(() => selectedGender = val!),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: CheckboxListTile(
+                            title: const Text('Desexed', style: TextStyle(fontSize: 14)),
+                            value: isDesexed,
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            onChanged: (val) => setDialogState(() => isDesexed = val ?? false),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    TextField(controller: ownerNameCtrl, decoration: const InputDecoration(labelText: 'Owner Name *', border: OutlineInputBorder())),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(child: TextField(controller: ownerPhoneCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Phone Number *', border: OutlineInputBorder()))),
+                        const SizedBox(width: 12),
+                        Expanded(child: TextField(controller: ownerEmailCtrl, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Email Address (Optional)', border: OutlineInputBorder()))),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    const Text('Booking Scheduled Service Time *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569))),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            icon: const Icon(Icons.calendar_month),
+                            label: Text('${bookingDate.day}/${bookingDate.month}/${bookingDate.year}'),
+                            onPressed: () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: bookingDate,
+                                firstDate: DateTime.now().subtract(const Duration(days: 1)),
+                                lastDate: DateTime.now().add(const Duration(days: 365)),
+                              );
+                              if (picked != null) setDialogState(() => bookingDate = picked);
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            icon: const Icon(Icons.access_time),
+                            label: Text(bookingTime.format(context)),
+                            onPressed: () async {
+                              final picked = await showTimePicker(
+                                context: context,
+                                initialTime: bookingTime,
+                              );
+                              if (picked != null) setDialogState(() => bookingTime = picked);
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    TextField(
+                      controller: dogDescCtrl,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                        labelText: 'Dog Special Notes / Customer Request Interactions',
+                        alignLabelWithHint: true,
+                        border: OutlineInputBorder()
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Abort')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: widget.config.primaryColor, foregroundColor: Colors.white),
+            onPressed: () async {
+              if (dogNameCtrl.text.isEmpty || dogBreedCtrl.text.isEmpty || ownerNameCtrl.text.isEmpty || ownerPhoneCtrl.text.isEmpty) {
+                _showSnackBar('⚠️ Please complete all mandatory fields marked with an asterisk (*).');
+                return;
+              }
+
+              final DateTime exactScheduledServiceTime = DateTime(
+                bookingDate.year,
+                bookingDate.month,
+                bookingDate.day,
+                bookingTime.hour,
+                bookingTime.minute,
+              );
+
+              final Map<String, dynamic> payload = {
+                'merchantId': widget.config.merchantId,
+                // ========================================================
+                // 🔥 HIGHLIGHT: CHANGED FROM merchantId TO THE VALID userId
+                // ========================================================
+                'bookedById': widget.config.userId, 
+                'servicePricingMatrixId': selectedMatrixRow?['id'],
+                'dogName': dogNameCtrl.text.trim(),
+                'dogBreed': dogBreedCtrl.text.trim(),
+                'dogGender': selectedGender,
+                'isDesexed': isDesexed,
+                'ownerName': ownerNameCtrl.text.trim(),
+                'ownerPhone': ownerPhoneCtrl.text.trim(),
+                'ownerEmail': ownerEmailCtrl.text.trim(),
+                'serviceTime': exactScheduledServiceTime.toIso8601String(),
+                'groomerId': null, 
+                'note': dogDescCtrl.text.trim(),
+              };
+
+              try {
+                final response = await http.post(
+                  Uri.parse('$_baseUrl/api/v1/bookings/add'),
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ${widget.authToken}',
+                  },
+                  body: jsonEncode(payload),
+                );
+
+                final Map<String, dynamic> responseData = jsonDecode(response.body);
+                if ((response.statusCode == 200 || response.statusCode == 201) && responseData['success'] == true && responseData['data'] != null) {
+                  Navigator.pop(context);
+                  _showSnackBar('🎉 Manual booking successfully submitted and synchronized.');
+                  
+                  setState(() {
+                    mockAppointments.add({
+                      'id': responseData['data']?['id'] ?? 'app-gen-${DateTime.now().millisecondsSinceEpoch}',
+                      'time': '${bookingTime.hour.toString().padLeft(2, '0')}:${bookingTime.minute.toString().padLeft(2, '0')}',
+                      'weekdayIndex': exactScheduledServiceTime.weekday,
+                      'petName': dogNameCtrl.text.trim(),
+                      'breed': dogBreedCtrl.text.trim(),
+                      'ownerName': ownerNameCtrl.text.trim(),
+                      'ownerPhone': ownerPhoneCtrl.text.trim(),
+                      'ownerEmail': ownerEmailCtrl.text.trim(),
+                      'pastMerchantVisitsCount': 1,
+                      'service': selectedMatrixRow?['name'] ?? 'Custom Service',
+                      'price': ((selectedMatrixRow?['priceCentsAud'] ?? 0) / 100).toDouble(),
+                      'status': 'CONFIRMED',
+                      'isCheckedIn': false,
+                      'isDepositPaid': false,
+                      'isReadyForPickup': false,
+                      'staffTags': [],
+                    });
+                  });
+                } else {
+                  _showSnackBar('❌ Submission Rejected: ${responseData['message'] ?? 'Check input parameters.'}');
+                }
+              } catch (err) {
+                _showSnackBar('❌ Error: Could not connect to target administrative cluster route.');
+              }
+            },
+            child: const Text('Place Booking'),
+          ),
+        ],
       ),
     );
   }

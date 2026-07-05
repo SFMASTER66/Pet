@@ -3,7 +3,83 @@ import { BookingService } from '../services/booking.service';
 import { Gender } from '@prisma/client';
 import prisma from '../services/db';
 
+/**
+ * GET /api/bookings/services?merchantId=XYZ
+ * Queries current available matrix configurations for dropdowns
+ */
+export const fetchDropdownServices = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { merchantId } = req.query;
+    if (!merchantId || typeof merchantId !== 'string') {
+      res.status(400).json({ success: false, message: 'Missing query parameter: merchantId criteria required.' });
+      return;
+    }
+    const services = await BookingService.getAvailableServices(merchantId);
+    res.status(200).json({ success: true, data: services });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message || 'Fatal read execution failure.' });
+  }
+};
 
+/**
+ * POST /api/bookings/admin-add
+ * Processes administrative dashboard manual appointments forms
+ */
+export const portalBooking = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const {
+      merchantId,
+      bookedById,
+      servicePricingMatrixId,
+      dogName,
+      dogBreed,
+      dogGender,
+      isDesexed,
+      ownerName,
+      ownerPhone,
+      ownerEmail,
+      serviceTime,
+      groomerId,
+      note
+    } = req.body;
+
+    if (!merchantId || !bookedById || !servicePricingMatrixId || !dogName || !ownerPhone || !serviceTime) {
+      res.status(400).json({
+        success: false,
+        message: 'Missing core criteria: mandatory fields incomplete.'
+      });
+      return;
+    }
+
+    const payload = await BookingService.portalBooking({
+      merchantId,
+      bookedById,
+      servicePricingMatrixId: Number(servicePricingMatrixId),
+      dogName,
+      dogBreed,
+      dogGender: dogGender as Gender,
+      isDesexed: Boolean(isDesexed),
+      ownerName,
+      ownerPhone,
+      ownerEmail: ownerEmail || `${ownerPhone.replace(/\s+/g, '')}@placeholder-salon-system.com`,
+      serviceTime,
+      groomerId,
+      note
+    });
+
+    res.status(201).json(payload);
+  } catch (error: any) {
+    res.status(422).json({
+      success: false,
+      message: error.message || 'Unprocessable transactional logic handling errors discovered.'
+    });
+  }
+};
+
+/**
+ * POST /api/bookings
+ * Keeps your original method safe and functional for the public customer flow
+ */
 export const registerBooking = async (req: Request, res: Response): Promise<void> => {
   try {
     const {
@@ -22,7 +98,7 @@ export const registerBooking = async (req: Request, res: Response): Promise<void
     if (!ownerId || !breed || !name) {
       res.status(400).json({
         success: false,
-        message: 'Missing mandatory structural parameters: ownerId, speciesId, breed, or name.',
+        message: 'Missing mandatory parameters: ownerId, breed, or name.',
       });
       return;
     }
@@ -34,7 +110,7 @@ export const registerBooking = async (req: Request, res: Response): Promise<void
     if (!dogSpecies) {
       res.status(500).json({
         success: false,
-        message: "System configuration fault: 'Dog' species records are missing. Please execute 'npx prisma db seed' first.",
+        message: "System configuration fault: 'Dog' species records are missing.",
       });
       return;
     }
@@ -53,11 +129,8 @@ export const registerBooking = async (req: Request, res: Response): Promise<void
       merchantId,
     });
 
-    res.status(201).json(result);
+    res.status(211).json(result);
   } catch (error: any) {
-    res.status(400).json({
-      success: false,
-      message: error.message || 'An internal file processing fault occurred.',
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };

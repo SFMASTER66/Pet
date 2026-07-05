@@ -20,12 +20,12 @@ final GoRouter _router = GoRouter(
                            state.matchedLocation == '/api/v1/register';
 
     // 🛠️ FIX: Only read from storage cache if runtime memory variables are empty
-  // This prevents overwriting the freshly assigned 'true' state with stale storage values during redirect transitions
-  jwtToken ??= prefs.getString('jwt_token');
-  if (prefs.containsKey('is_admin') && jwtToken != null) {
-    // If memory says true, preserve it; otherwise fallback to cache
-    isAdmin = isAdmin || (prefs.getBool('is_admin') ?? false); 
-  }
+    // This prevents overwriting the freshly assigned 'true' state with stale storage values during redirect transitions
+    jwtToken ??= prefs.getString('jwt_token');
+    if (prefs.containsKey('is_admin') && jwtToken != null) {
+      // If memory says true, preserve it; otherwise fallback to cache
+      isAdmin = isAdmin || (prefs.getBool('is_admin') ?? false); 
+    }
     
     if (jwtToken == null) {
       if (loggingIn) return null;
@@ -80,7 +80,8 @@ final GoRouter _router = GoRouter(
           },
           onConfigChanged: (updatedConfig) async {
             globalMerchantConfig = updatedConfig;
-            await prefs.setString('cached_config', jsonEncode(updatedConfig.toMap()));
+            // Changed to .toJson() 👇
+            await prefs.setString('cached_config', jsonEncode(updatedConfig.toJson()));
           },
         );
       },
@@ -92,7 +93,8 @@ final GoRouter _router = GoRouter(
 Future<void> _handleAuthUpdate(String token, String role, Map<String, dynamic> configPayload) async {
   jwtToken = token;
   isAdmin = (role == 'MERCHANT_ADMIN');
-  globalMerchantConfig = MerchantConfig.fromMap(configPayload);
+  // Changed to .fromJson() 👇
+  globalMerchantConfig = MerchantConfig.fromJson(configPayload);
 
   // 🛠️ Synchronize elements completely before triggering router mutations
   await prefs.setString('jwt_token', token);
@@ -118,7 +120,8 @@ void main() async {
   final String? cachedConfigJson = prefs.getString('cached_config');
   if (cachedConfigJson != null) {
     try {
-      globalMerchantConfig = MerchantConfig.fromMap(jsonDecode(cachedConfigJson));
+      // Changed to .fromJson() 👇
+      globalMerchantConfig = MerchantConfig.fromJson(jsonDecode(cachedConfigJson));
     } catch (_) {
       _loadDefaultConfig();
     }
@@ -130,10 +133,11 @@ void main() async {
 }
 
 void _loadDefaultConfig() {
-  globalMerchantConfig = MerchantConfig.fromMap({
+  // Changed to .fromJson() 👇
+  globalMerchantConfig = MerchantConfig.fromJson({
     'businessName': 'My Workspace',
     'logoIcon': '💼',
-    'primaryColor': 0xFF1E293B,
+    'primaryColor': '0xFF1E293B', // Wrapped in quotes to match hex string parsing if required by your model
     'tags': ['General'],
     'uiDictionary': {
       'btn_book': 'Book Appointment (Manual)',

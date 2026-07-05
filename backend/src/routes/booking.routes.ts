@@ -1,9 +1,17 @@
 import { Router } from 'express';
-import { registerBooking } from '../controllers/booking.controller';
+import { 
+  registerBooking, 
+  portalBooking, 
+  fetchDropdownServices 
+} from '../controllers/booking.controller';
 
 const router = Router();
 
-// This will catch POST requests sent to /pets
+// Public Customer Facing Booking Entry Point
 router.post('/bookings', registerBooking);
+
+// Admin Portal Booking Entry Points
+router.get('/bookings/services', fetchDropdownServices);
+router.post('/bookings/add', portalBooking);
 
 export default router;
