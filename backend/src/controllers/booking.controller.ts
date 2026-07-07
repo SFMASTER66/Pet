@@ -77,6 +77,48 @@ export const portalBooking = async (req: Request, res: Response): Promise<void> 
 };
 
 /**
+ * PUT /api/bookings/update/:id
+ * Updates administrative appointment statuses, check-in markers, and timestamps
+ */
+export const updateBooking = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const {
+      status,
+      startTime,
+      isCheckedIn,
+      depositPaid,
+      isReadyToPickup,
+      isLoyaltyWaived,
+      internalTags
+    } = req.body;
+
+    if (!id) {
+      res.status(400).json({ success: false, message: 'Missing target appointment tracking identifier param.' });
+      return;
+    }
+
+    // Fixed error TS2345 by explicitly casting 'id' as a string parameter
+    const payload = await BookingService.updateBooking(id as string, {
+      status,
+      startTime,
+      isCheckedIn: isCheckedIn !== undefined ? Boolean(isCheckedIn) : undefined,
+      depositPaid: depositPaid !== undefined ? Boolean(depositPaid) : undefined,
+      isReadyToPickup: isReadyToPickup !== undefined ? Boolean(isReadyToPickup) : undefined,
+      isLoyaltyWaived: isLoyaltyWaived !== undefined ? Boolean(isLoyaltyWaived) : undefined,
+      internalTags: Array.isArray(internalTags) ? internalTags : undefined,
+    });
+
+    res.status(200).json(payload);
+  } catch (error: any) {
+    res.status(422).json({
+      success: false,
+      message: error.message || 'Unprocessable transactional logic handling errors encountered during modification.'
+    });
+  }
+};
+
+/**
  * POST /api/bookings
  * Keeps your original method safe and functional for the public customer flow
  */

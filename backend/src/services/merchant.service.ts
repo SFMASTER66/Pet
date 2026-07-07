@@ -1,5 +1,5 @@
 import prisma from './db';
-import { UserRole } from '@prisma/client';
+import { UserRole, AppointmentStatus } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 export interface DashboardSummary {
@@ -20,6 +20,10 @@ export interface FormattedAppointment {
   clientEmail: string;
   serviceName: string;
   price: number;
+  isCheckedIn: boolean;
+  depositPaid: boolean;
+  isReadyToPickup: boolean;
+  internalTags: string[];
 }
 
 export interface ClientContact {
@@ -35,7 +39,7 @@ export interface MerchantDashboardData {
 }
 
 export class MerchantService {
-  // New method to fetch live service matrices from Prisma
+  // Method to fetch live service matrices from Prisma
   async getServiceMatrices(merchantId: string) {
     return await prisma.servicePricingMatrix.findMany({
       where: { merchantId },
@@ -44,9 +48,9 @@ export class MerchantService {
   }
 
   async getDashboardData(merchantId: string): Promise<MerchantDashboardData> {
-    // 1. Fetch data from Prisma using the correct relation names
+    // 1. Fetch ALL appointments for the business across any status lifecycle step
     const appointments = await prisma.appointment.findMany({
-      where: { merchantId, status: 'PAID' },
+      where: { merchantId }, 
       include: {
         servicePricingMatrix: true, 
         pet: { 
@@ -61,9 +65,11 @@ export class MerchantService {
     let totalRevenueCents = 0; 
     const clientMap = new Map<string, ClientContact>();
 
-    // 2. Cast to any safely inside the map iteration to eliminate strict Prisma compilation errors
+    // 2. Map results cleanly to structured response layout formats
     const appointmentsList = appointments.map((app: any) => {
       const priceCents = app.priceCentsAud || 0;
+      
+      // Accumulate revenue calculation metrics safely
       totalRevenueCents += priceCents;
 
       if (app.pet?.owner) {
@@ -85,7 +91,11 @@ export class MerchantService {
         clientPhone: app.pet?.owner?.phoneNumber || 'No Phone',
         clientEmail: app.pet?.owner?.email || '',
         serviceName: app.servicePricingMatrix?.name || 'Unknown Service',
-        price: priceCents / 100 
+        price: priceCents / 100,
+        isCheckedIn: app.isCheckedIn ?? false,
+        depositPaid: app.depositPaid ?? false,
+        isReadyToPickup: app.isReadyToPickup ?? false,
+        internalTags: app.internalTags || []
       };
     });
 

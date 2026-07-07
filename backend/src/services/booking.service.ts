@@ -32,6 +32,16 @@ interface AdminCreateBookingInput {
   note?: string;
 }
 
+interface AdminUpdateBookingInput {
+  status?: AppointmentStatus;
+  startTime?: string;
+  isCheckedIn?: boolean;
+  depositPaid?: boolean;
+  isReadyToPickup?: boolean;
+  isLoyaltyWaived?: boolean;
+  internalTags?: string[];
+}
+
 export const BookingService = {
   /**
    * 🔍 Fetches all pricing matrix profiles for drop-down configuration layers
@@ -239,6 +249,56 @@ export const BookingService = {
       };
     }
     catch (error: any) {
+      throw new Error(error.message);
+    }
+  },
+
+  /**
+   * 🔄 Modifies an existing booking state matrix parameter layout row
+   */
+  async updateBooking(id: string, input: AdminUpdateBookingInput) {
+    try {
+      const existingAppointment = await prisma.appointment.findUnique({
+        where: { id },
+      });
+
+      if (!existingAppointment) {
+        throw new Error(`❌ Appointment with unique context identifier [${id}] was not found.`);
+      }
+
+      const updateData: any = {
+        status: input.status,
+        isCheckedIn: input.isCheckedIn,
+        depositPaid: input.depositPaid,
+        isReadyToPickup: input.isReadyToPickup,
+        isLoyaltyWaived: input.isLoyaltyWaived,
+        internalTags: input.internalTags,
+      };
+
+      // Recalculate end times dynamically if the start date tracker shifts layout windows
+      if (input.startTime) {
+        const parsedStartTime = new Date(input.startTime);
+        const duration = existingAppointment.durationMinutes || 60; 
+        updateData.startTime = parsedStartTime;
+        updateData.endTime = new Date(parsedStartTime.getTime() + duration * 60000);
+        updateData.durationMinutes = duration;
+      }
+
+      const updatedAppointment = await prisma.appointment.update({
+        where: { id },
+        data: updateData,
+        include: {
+          pet: true,
+          servicePricingMatrix: true,
+        },
+      });
+
+      return {
+        success: true,
+        message: 'Administrative appointment altered and snapshot metrics updated securely.',
+        data: updatedAppointment,
+      };
+    } catch (error: any) {
       throw new Error(error.message);
     }
   }
