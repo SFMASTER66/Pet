@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io' show Platform; 
+import 'package:flutter/services.dart'; // Added for FilteringTextInputFormatter
 import 'package:flutter/foundation.dart' show kIsWeb; 
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
@@ -422,10 +423,13 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                         Expanded(
                           child: TextField(
                             controller: ownerPhoneCtrl, 
-                            keyboardType: TextInputType.phone,
+                            keyboardType: TextInputType.number, // Prevents typing text, sets numeric keyboard
+                            maxLength: 10, // Locks entry at exactly Australia mobile length (10 digits)
+                            inputFormatters: [FilteringTextInputFormatter.digitsOnly], // Explicitly ignores non-numeric inputs
                             decoration: const InputDecoration(
                               labelText: 'Owner Phone * (04..)', 
-                              hintText: '0412 345 678',
+                              hintText: '0412345678',
+                              counterText: '', // Hides default length counter to preserve original UI layout look
                               border: OutlineInputBorder()
                             )
                           )
@@ -1349,7 +1353,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                       // 2. Exact Start Time Set From Your Time Picker Elements
                       mockAppointments[targetIdx]['rawStartTime'] = targetFullDateTime;
                       
-                      // 3. 🎯 FIXED: Pull explicit durationMinutes sent from the backend data payload instead of calculating timestamps differences
+                      // 3. Pull explicit durationMinutes sent from the backend data payload instead of calculating timestamps differences
                       final int trueDurationMinutes = mockAppointments[targetIdx]['durationMinutes'] ?? app['durationMinutes'] ?? 45;
                       
                       // 4. Calculate Clean Absolute End Timestamp
