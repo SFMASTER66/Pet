@@ -3,7 +3,8 @@ import {
   registerBooking, 
   portalBooking, 
   fetchDropdownServices ,
-  updateBooking
+  updateBooking,
+  removeBooking
 } from '../controllers/booking.controller';
 
 const router = Router();
@@ -15,5 +16,6 @@ router.post('/bookings', registerBooking);
 router.get('/bookings/services', fetchDropdownServices);
 router.post('/bookings/add', portalBooking);
 router.put('/bookings/update/:id', updateBooking);
+router.delete('/bookings/delete/:id', removeBooking);
 
 export default router;

@@ -301,5 +301,28 @@ export const BookingService = {
     } catch (error: any) {
       throw new Error(error.message);
     }
+  },
+
+  async deleteBooking(id: string) {
+    try {
+      const existingAppointment = await prisma.appointment.findUnique({
+        where: { id },
+      });
+
+      if (!existingAppointment) {
+        throw new Error(`❌ Appointment with unique context identifier [${id}] was not found.`);
+      }
+
+      await prisma.appointment.delete({
+        where: { id },
+      });
+
+      return {
+        success: true,
+        message: 'Administrative appointment removed successfully from persistent storage.',
+      };
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
   }
 };

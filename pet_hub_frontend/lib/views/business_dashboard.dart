@@ -1227,50 +1227,38 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                     ),
                     const SizedBox(height: 20),
                     
-                    const Text('Administrative Actions', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.redAccent)),
+                    // const Text('Administrative Actions', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.redAccent)),
                     const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            style: OutlinedButton.styleFrom(foregroundColor: Colors.orange),
-                            onPressed: () {
-                              setModalState(() => currentStatus = 'CANCELLED');
-                              _showSnackBar('Status switched to CANCELLED locally. Click Commit to save.');
-                            },
-                            child: const Text('Cancel Booking'),
-                          ),
+                    Center(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red.shade800, 
+                          foregroundColor: Colors.white,
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade800, foregroundColor: Colors.white),
-                            onPressed: () async {
-                              Navigator.pop(context);
-                              _confirmActionGuard(
-                                title: 'Purge Operational Record',
-                                body: 'This operation will delete booking identifier ${app['id']} permanently from the production cluster.',
-                                onConfirm: () async {
-                                  try {
-                                    final res = await http.delete(
-                                      Uri.parse('$_baseUrl/api/bookings/${app['id']}'),
-                                      headers: {'Authorization': 'Bearer ${widget.authToken}'},
-                                    );
-                                    _showSnackBar('🚀 Purge schema sync completed.');
-                                    _fetchDashboardAppointments();
-                                  } catch (e) {
-                                    setState(() {
-                                      mockAppointments.removeWhere((item) => item['id'] == app['id']);
-                                    });
-                                    _showSnackBar('Removed local record object safely.');
-                                  }
-                                }
-                              );
-                            },
-                            child: const Text('Delete Permanently'),
-                          ),
-                        ),
-                      ],
+                        onPressed: () async {
+                          Navigator.pop(context);
+                          _confirmActionGuard(
+                            title: 'Purge Operational Record',
+                            body: 'This operation will delete booking identifier ${app['id']} permanently from the production cluster.',
+                            onConfirm: () async {
+                              try {
+                                final res = await http.delete(
+                                  Uri.parse('$_baseUrl/api/v1/bookings/delete/${app['id']}'),
+                                  headers: {'Authorization': 'Bearer ${widget.authToken}'},
+                                );
+                                _showSnackBar('🚀 Purge schema sync completed.');
+                                _fetchDashboardAppointments();
+                              } catch (e) {
+                                setState(() {
+                                  mockAppointments.removeWhere((item) => item['id'] == app['id']);
+                                });
+                                _showSnackBar('Removed local record object safely.');
+                              }
+                            }
+                          );
+                        },
+                        child: const Text('Delete Permanently'),
+                      ),
                     )
                   ],
                 ),
