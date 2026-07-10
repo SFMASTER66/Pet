@@ -56,8 +56,9 @@ export class ServiceController {
   async deletePricingMatrix(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
+      // Highlights: Now fires the soft deactivation service layer routine instead of erasing data
       await serviceService.deletePricingMatrix(Number(id));
-      res.status(200).json({ success: true, message: 'Matrix configuration purged successfully.' });
+      res.status(200).json({ success: true, message: 'Service set to inactive status successfully.' });
     } catch (error: any) {
       res.status(400).json({ success: false, message: error.message });
     }

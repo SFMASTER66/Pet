@@ -790,6 +790,37 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     );
   }
 
+  // Highlights: Added function to handle updating and reenabling services on the fly via PUT route
+  Future<void> _toggleServiceActiveStatus(int matrixId, bool currentStatus) async {
+    setState(() => _isServiceLoading = true);
+    try {
+      final response = await http.put(
+        Uri.parse('$_baseUrl/api/v1/matrix/$matrixId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${widget.authToken}',
+        },
+        body: jsonEncode({
+          'isActive': !currentStatus,
+        }),
+      );
+
+      final Map<String, dynamic> responseData = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && responseData['success'] == true) {
+        await _fetchServiceMatrices();
+        _showSnackBar('🔄 Service definition status successfully synchronized.');
+      } else {
+        _showSnackBar('❌ Failed to update status: ${responseData['message'] ?? 'Error'}');
+      }
+    } catch (e) {
+      _showSnackBar('❌ Transport Layer Error during service state modification.');
+    } finally {
+      setState(() => _isServiceLoading = false);
+    }
+  }
+
+  // Highlights: Updated service catalog presentation logic displaying clear indicators and actionable toggles
   Widget _buildToggleableServiceCatalogSection(Color col) {
     return Container(
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
@@ -806,86 +837,105 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                 children: [
                   Row(
                     children: [
-                      Icon(
-                        _isServiceMatrixVisible ? Icons.keyboard_arrow_down_rounded : Icons.keyboard_arrow_right_rounded,
-                        color: const Color(0xFF475569),
-                        size: 24,
-                      ),
+                      Icon(_isServiceMatrixVisible ? Icons.keyboard_arrow_down_rounded : Icons.keyboard_arrow_right_rounded, color: const Color(0xFF475569)),
                       const SizedBox(width: 8),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Service Matrix Configurator', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                          const SizedBox(height: 4),
-                          Text('Manage custom tiered business offerings.', style: TextStyle(color: Colors.grey.shade600, fontSize: 12))
-                        ],
-                      ),
+                      const Text('Service Pricing Configuration Matrix', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
                     ],
                   ),
+                  if (_isServiceLoading) const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
                   if (widget.isAdmin && _isServiceMatrixVisible)
                     ElevatedButton.icon(
                       icon: const Icon(Icons.add_business_outlined, size: 16),
                       label: const Text('Add Entry'),
                       style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F172A), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))),
                       onPressed: _showAddServiceMatrixDialog,
-                    )
+                    ),
                 ],
               ),
             ),
           ),
           if (_isServiceMatrixVisible) ...[
             const Divider(height: 1),
-            _isServiceLoading && liveServiceMatrices.isEmpty
-                ? const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()))
-                : liveServiceMatrices.isEmpty
-                    ? const Padding(padding: EdgeInsets.all(20), child: Text('No tiered matrix config layers detected.'))
-                    : Table(
-                        border: TableBorder.symmetric(inside: BorderSide(color: Colors.grey.shade200, width: 1)),
-                        columnWidths: const {
-                          0: FlexColumnWidth(3),
-                          1: FlexColumnWidth(2),
-                          2: FlexColumnWidth(2),
-                          3: FlexColumnWidth(2),
-                          4: FlexColumnWidth(2),
-                          5: FlexColumnWidth(2),
-                        },
-                        children: [
-                          const TableRow(
-                            decoration: BoxDecoration(color: Color(0xFFF8FAFC)),
+            if (liveServiceMatrices.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(24.0),
+                child: Text('No pricing profiles defined inside database layers yet.', style: TextStyle(color: Colors.grey)),
+              )
+            else
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: liveServiceMatrices.length,
+                separatorBuilder: (context, index) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final matrix = liveServiceMatrices[index];
+                  final bool active = matrix['isActive'] ?? true;
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Padding(padding: EdgeInsets.all(12), child: Text('Service Variant', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569)))),
-                              Padding(padding: EdgeInsets.all(12), child: Text('Coat Style', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569)))),
-                              Padding(padding: EdgeInsets.all(12), child: Text('Weight Tier', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569)))),
-                              Padding(padding: EdgeInsets.all(12), child: Text('Duration', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569)))),
-                              Padding(padding: EdgeInsets.all(12), child: Text('Target Price', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569)))),
-                              Padding(padding: EdgeInsets.all(12), child: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569)))),
+                              Row(
+                                children: [
+                                  Text(
+                                    matrix['name'] ?? 'Unnamed Template',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: active ? const Color(0xFF1E293B) : Colors.grey,
+                                      decoration: active ? TextDecoration.none : TextDecoration.lineThrough,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: active ? Colors.green.shade50 : Colors.red.shade50,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      active ? 'Active' : 'Inactive',
+                                      style: TextStyle(fontSize: 10, color: active ? Colors.green.shade700 : Colors.red.shade700, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Weight Class: ${matrix['weightTier'] ?? 'ALL'} • Coat Configuration: ${matrix['coatType'] ?? 'ALL'} • Est Duration: ${matrix['durationMinutes']} mins',
+                                style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                              ),
                             ],
                           ),
-                          ...liveServiceMatrices.map((matrix) {
-                            final displayTitle = matrix['name'] ?? 'Unnamed Service Tier';
-                            return TableRow(
-                              children: [
-                                Padding(padding: const EdgeInsets.all(12), child: Text(displayTitle, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
-                                Padding(padding: const EdgeInsets.all(12), child: Text(matrix['coatType'] ?? 'STANDARD', style: const TextStyle(fontSize: 12))),
-                                Padding(padding: const EdgeInsets.all(12), child: Text(matrix['weightTier'] ?? 'ALL', style: const TextStyle(fontSize: 12))),
-                                Padding(padding: const EdgeInsets.all(12), child: Text('${matrix['durationMinutes']} mins', style: const TextStyle(fontSize: 13))),
-                                Padding(padding: const EdgeInsets.all(12), child: Text('\$${((matrix['priceCentsAud'] ?? 0) / 100).toStringAsFixed(2)} AUD', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.green))),
-                                Padding(
-                                  padding: const EdgeInsets.all(4.0),
-                                  child: widget.isAdmin ? IconButton(
-                                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
-                                    onPressed: () => _confirmActionGuard(
-                                      title: 'Purge Service Definition',
-                                      body: 'Are you sure you want to completely erase "$displayTitle"?',
-                                      onConfirm: () => setState(() => liveServiceMatrices.removeWhere((item) => item['id'] == matrix['id']))
-                                    ),
-                                  ) : const Padding(padding: EdgeInsets.all(12.0), child: Text('Read-Only', style: TextStyle(color: Colors.grey, fontSize: 12))),
-                                )
-                              ]
-                            );
-                          }),
-                        ],
-                      )
+                        ),
+                        Row(
+                          children: [
+                            Text(
+                              '\$${((matrix['priceCentsAud'] ?? 0) / 100).toStringAsFixed(2)}',
+                              style: TextStyle(fontWeight: FontWeight.bold, color: active ? const Color(0xFF0F172A) : Colors.grey),
+                            ),
+                            // ✅ FIX: Only render the toggle switch interactive element if the user has admin credentials
+                            if (widget.isAdmin) ...[
+                              const SizedBox(width: 16),
+                              Switch(
+                                value: active,
+                                activeColor: col,
+                                onChanged: (bool value) {
+                                  _toggleServiceActiveStatus(matrix['id'], active);
+                                },
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
           ],
         ],
       ),

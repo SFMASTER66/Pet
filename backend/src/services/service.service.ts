@@ -43,9 +43,11 @@ export class ServiceService {
     });
   }
 
+  // Highlights: Soft Delete Fix - Changed from .delete to an update toggle
   async deletePricingMatrix(id: number) {
-    return prisma.servicePricingMatrix.delete({
+    return prisma.servicePricingMatrix.update({
       where: { id },
+      data: { isActive: false },
     });
   }
 }

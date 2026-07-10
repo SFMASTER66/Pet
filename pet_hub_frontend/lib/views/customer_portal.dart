@@ -3,7 +3,7 @@ import '../models/merchant_config.dart';
 
 class CustomerPortalPage extends StatefulWidget {
   final MerchantConfig config;
-  final List<Map<String, dynamic>> activeServices; // 🧠 Injected real-time synchronization link
+  final List<Map<String, dynamic>> activeServices; // Injected real-time synchronization link
 
   const CustomerPortalPage({
     super.key, 
@@ -21,8 +21,10 @@ class _CustomerPortalPageState extends State<CustomerPortalPage> {
   @override
   void initState() {
     super.initState();
-    if (widget.activeServices.isNotEmpty) {
-      targetedService = widget.activeServices.first;
+    // ✅ FIX: Filter out inactive services when setting the initial target selection
+    final activeOnly = widget.activeServices.where((s) => s['isActive'] ?? true).toList();
+    if (activeOnly.isNotEmpty) {
+      targetedService = activeOnly.first;
     }
   }
 
@@ -30,9 +32,12 @@ class _CustomerPortalPageState extends State<CustomerPortalPage> {
   Widget build(BuildContext context) {
     final themeColor = widget.config.primaryColor;
 
+    // ✅ FIX: Compute a local list containing only active services
+    final displayedServices = widget.activeServices.where((service) => service['isActive'] ?? true).toList();
+
     // Reset layout selection gracefully if items are entirely pruned by administrator shifts
-    if (targetedService != null && !widget.activeServices.contains(targetedService)) {
-      targetedService = widget.activeServices.isNotEmpty ? widget.activeServices.first : null;
+    if (targetedService != null && !displayedServices.contains(targetedService)) {
+      targetedService = displayedServices.isNotEmpty ? displayedServices.first : null;
     }
 
     return Scaffold(
@@ -65,7 +70,8 @@ class _CustomerPortalPageState extends State<CustomerPortalPage> {
           )
         ],
       ),
-      body: widget.activeServices.isEmpty
+      // ✅ FIX: Use displayedServices instead of widget.activeServices
+      body: displayedServices.isEmpty
           ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -79,7 +85,7 @@ class _CustomerPortalPageState extends State<CustomerPortalPage> {
             )
           : Row(
               children: [
-                // Left dynamic marketplace module
+                // Left dynamic marketplace module[cite: 2]
                 Expanded(
                   flex: 5,
                   child: Padding(
@@ -105,7 +111,7 @@ class _CustomerPortalPageState extends State<CustomerPortalPage> {
                               const Text(
                                 'Experience premium smart treatment plans for your beloved animal companion assets today.',
                                 style: TextStyle(color: Colors.white70, fontSize: 14),
-                                                    ),
+                              ),
                               const SizedBox(height: 16),
                               Wrap(
                                 spacing: 8,
@@ -127,27 +133,29 @@ class _CustomerPortalPageState extends State<CustomerPortalPage> {
                         
                         Expanded(
                           child: ListView.builder(
-                            itemCount: widget.activeServices.length,
+                            // ✅ FIX: Use displayedServices instead of widget.activeServices
+                            itemCount: displayedServices.length,
                             itemBuilder: (context, index) {
-                              final service = widget.activeServices[index];
+                              // ✅ FIX: Use displayedServices instead of widget.activeServices
+                              final service = displayedServices[index];
                               final isSelected = targetedService?['id'] == service['id'];
                               
-                              // Handle dynamic variations in price keys safely
+                              // Handle dynamic variations in price keys safely[cite: 2]
                               final rawPrice = service['priceCentsAud'] ?? service['priceCents'] ?? 0;
                               final double cleanPrice = rawPrice / 100;
 
-                              // Safely map incoming backend keys to prevent Strict Null Safety crashes
+                              // Safely map incoming backend keys to prevent Strict Null Safety crashes[cite: 2]
                               final String displayTitle = service['title'] ?? service['name'] ?? 'Untitled Service';
                               final String displayDesc = service['description'] ?? 'No description available.';
                               final int duration = service['durationMinutes'] ?? 0;
                               final String weightTier = service['weightTier'] ?? 'Standard Weight';
 
-                              // 🛡️ FIX: Look up the child 'name' attribute inside the nested 'species' map block
+                              // 🛡️ FIX: Look up the child 'name' attribute inside the nested 'species' map block[cite: 2]
                               String species = 'All Species';
                               if (service['species'] != null && service['species'] is Map) {
                                 species = service['species']['name'] ?? 'Dog';
                               } else if (service['speciesId'] != null) {
-                                // Safe fallback to mapping IDs directly if object join is bypassed
+                                // Safe fallback to mapping IDs directly if object join is bypassed[cite: 2]
                                 species = service['speciesId'] == 1 ? 'Dog' : 'Cat';
                               }
 
@@ -223,7 +231,7 @@ class _CustomerPortalPageState extends State<CustomerPortalPage> {
                   ),
                 ),
                 
-                // Right summary calculations pane
+                // Right summary calculations pane[cite: 2]
                 Expanded(
                   flex: 3,
                   child: Container(
@@ -237,7 +245,7 @@ class _CustomerPortalPageState extends State<CustomerPortalPage> {
                     child: targetedService == null
                         ? const Center(child: Text('Please select an active catalog service layout from the left.'))
                         : () {
-                            // Extract fallback properties cleanly for the right panel summary block
+                            // Extract fallback properties cleanly for the right panel summary block[cite: 2]
                             final String summaryTitle = targetedService!['title'] ?? targetedService!['name'] ?? 'Untitled Service';
                             final String summaryDesc = targetedService!['description'] ?? 'No description available.';
                             final int summaryDuration = targetedService!['durationMinutes'] ?? 0;

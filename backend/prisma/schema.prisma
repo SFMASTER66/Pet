@@ -1,15 +1,215 @@
-// Datasource and Generator Configuration
-datasource db {
-  provider = "postgresql"
-}
-
 generator client {
   provider = "prisma-client-js"
 }
 
-// ==========================================
-// 💡 ENUMS DEFINITIONS
-// ==========================================
+datasource db {
+  provider = "postgresql"
+}
+
+model Species {
+  id                 Int                    @id @default(autoincrement())
+  name               String                 @unique
+  baseTimeMultiplier Float                  @default(1.0)
+  pets               Pet[]
+  matrices           ServicePricingMatrix[]
+}
+
+model Pet {
+  id                String        @id @default(uuid())
+  ownerId           String
+  speciesId         Int
+  merchantId        String
+  breed             String
+  name              String
+  microchipNumber   String?       @unique
+  status            PetStatus     @default(ACTIVE)
+  gender            Gender        @default(UNKNOWN)
+  isDesexed         Boolean       @default(false)
+  dob               DateTime?
+  behaviorTags      String[]
+  behaviorNotes     String?
+  loyaltyGroomCount Int           @default(0)
+  appointments      Appointment[]
+  merchant          Merchant      @relation(fields: [merchantId], references: [id])
+  owner             User          @relation(fields: [ownerId], references: [id])
+  species           Species       @relation(fields: [speciesId], references: [id])
+
+  @@index([merchantId, name, status])
+  @@index([merchantId, ownerId])
+}
+
+model Appointment {
+  id                     String               @id @default(uuid())
+  petId                  String
+  groomerId              String?
+  merchantId             String
+  startTime              DateTime
+  endTime                DateTime
+  status                 AppointmentStatus    @default(PENDING)
+  priceCentsAud          Int
+  durationMinutes        Int
+  isLoyaltyWaived        Boolean              @default(false)
+  depositPaid            Boolean              @default(false)
+  internalTags           String[]
+  isCheckedIn            Boolean              @default(false)
+  isReadyToPickup        Boolean              @default(false)
+  bookedById             String
+  notes                  String?
+  servicePricingMatrixId Int
+  bookedBy               User                 @relation("CreatedAppointments", fields: [bookedById], references: [id])
+  groomer                Employee?            @relation(fields: [groomerId], references: [id])
+  merchant               Merchant             @relation(fields: [merchantId], references: [id])
+  pet                    Pet                  @relation(fields: [petId], references: [id])
+  servicePricingMatrix   ServicePricingMatrix @relation(fields: [servicePricingMatrixId], references: [id])
+  addOns                 AppointmentAddOn[]
+
+  @@index([merchantId, startTime, groomerId])
+}
+
+model ServicePricingMatrix {
+  id                    Int                @id @default(autoincrement())
+  merchantId            String
+  speciesId             Int?
+  weightTier            WeightTier?
+  coatType              CoatType?
+  durationMinutes       Int
+  priceCentsAud         Int
+  name                  String
+  isActive              Boolean            @default(true)
+  appointments          Appointment[]
+  appointmentsWithAddOn AppointmentAddOn[]
+  merchant              Merchant           @relation(fields: [merchantId], references: [id])
+  species               Species?           @relation(fields: [speciesId], references: [id])
+
+  @@unique([merchantId, name, speciesId, weightTier, coatType])
+  @@index([name, speciesId])
+}
+
+model User {
+  id                  String            @id @default(uuid())
+  merchantId          String
+  email               String            @unique
+  phoneNumber         String?           @unique
+  passwordHash        String
+  name                String
+  avatarUrl           String?
+  role                UserRole          @default(CUSTOMER)
+  countryCode         String            @default("AU")
+  createdAt           DateTime          @default(now())
+  activityLogs        ActivityLog[]
+  createdAppointments Appointment[]     @relation("CreatedAppointments")
+  pets                Pet[]
+  merchant            Merchant          @relation(fields: [merchantId], references: [id])
+  waiverSignatures    WaiverSignature[]
+
+  @@index([merchantId, createdAt])
+  @@index([merchantId, name])
+}
+
+model Merchant {
+  id               String                 @id @default(uuid())
+  email            String                 @unique
+  passwordHash     String
+  businessName     String
+  abn              String?
+  stripeAccountId  String?                @unique
+  createdAt        DateTime               @default(now())
+  logoIcon         String?
+  logoUrl          String?
+  primaryColor     String                 @default("#FF05050E")
+  tags             String[]               @default([])
+  businessTags     Json?
+  uiDictionary     Json?
+  activityLogs     ActivityLog[]
+  appointments     Appointment[]
+  businessHours    BusinessHours[]
+  employees        Employee[]
+  pets             Pet[]
+  rosterExceptions RosterException[]
+  pricingMatrices  ServicePricingMatrix[]
+  users            User[]
+  waiverSignatures WaiverSignature[]
+}
+
+model Employee {
+  id               String            @id @default(uuid())
+  merchantId       String
+  name             String
+  avatarUrl        String?
+  appointments     Appointment[]
+  merchant         Merchant          @relation(fields: [merchantId], references: [id])
+  rosterExceptions RosterException[]
+
+  @@index([merchantId])
+}
+
+model ActivityLog {
+  id          String      @id @default(uuid())
+  merchantId  String
+  userId      String?
+  category    LogCategory @default(ACTIVITY)
+  moduleName  String
+  action      String
+  description String?
+  ipAddress   String?
+  userAgent   String?
+  path        String?
+  method      HttpMethod?
+  metaData    Json?
+  createdAt   DateTime    @default(now())
+  merchant    Merchant    @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  user        User?       @relation(fields: [userId], references: [id])
+
+  @@index([merchantId, createdAt])
+  @@index([merchantId, category])
+  @@index([merchantId, userId])
+}
+
+model AppointmentAddOn {
+  appointmentId String
+  matrixId      Int
+  appointment   Appointment          @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  pricingMatrix ServicePricingMatrix @relation(fields: [matrixId], references: [id])
+
+  @@id([appointmentId, matrixId])
+}
+
+model WaiverSignature {
+  id           String   @id @default(uuid())
+  merchantId   String
+  ownerId      String
+  ipAddress    String
+  signedAt     DateTime @default(now())
+  termsVersion String
+  merchant     Merchant @relation(fields: [merchantId], references: [id])
+  owner        User     @relation(fields: [ownerId], references: [id])
+
+  @@unique([merchantId, ownerId])
+}
+
+model BusinessHours {
+  id         Int      @id @default(autoincrement())
+  merchantId String
+  dayOfWeek  Int
+  openTime   String
+  closeTime  String
+  isClosed   Boolean  @default(false)
+  merchant   Merchant @relation(fields: [merchantId], references: [id])
+
+  @@unique([merchantId, dayOfWeek])
+}
+
+model RosterException {
+  id         String   @id @default(uuid())
+  employeeId String
+  merchantId String
+  date       DateTime
+  startTime  String?
+  endTime    String?
+  reason     String?
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  merchant   Merchant @relation(fields: [merchantId], references: [id])
+}
 
 enum PetStatus {
   ACTIVE
@@ -37,12 +237,12 @@ enum AppointmentStatus {
 }
 
 enum WeightTier {
-  XS    // <= 3.5 KG
-  S     // 3.5 - 7 KG
-  M     // 7.1 - 15 KG
-  L     // 15.1 - 23 KG
-  XL    // 23.1 - 30 KG
-  XXL   // 30.1 - 40 KG
+  XS
+  S
+  M
+  L
+  XL
+  XXL
   ALL
 }
 
@@ -55,9 +255,9 @@ enum CoatType {
 }
 
 enum LogCategory {
-  AUTH       // Login, Logout, Password Reset, Registration
-  ACTIVITY   // Viewing or interacting with a specific frontend module
-  SECURITY   // Failed login attempts, unauthorized access tries
+  AUTH
+  ACTIVITY
+  SECURITY
 }
 
 enum HttpMethod {
@@ -66,255 +266,4 @@ enum HttpMethod {
   PUT
   DELETE
   PATCH
-}
-
-// ==========================================
-// 🏗️ OPTIMIZED MODELS
-// ==========================================
-
-model Species {
-  id                 Int                    @id @default(autoincrement())
-  name               String                 @unique // e.g., 'Dog', 'Cat'
-  baseTimeMultiplier Float                  @default(1.0)
-  pets               Pet[]
-  matrices           ServicePricingMatrix[]
-}
-
-model Pet {
-  id                String    @id @default(uuid())
-  ownerId           String
-  speciesId         Int
-  merchantId        String
-  breed             String    // Target dog breed from admin dropdown/text input
-  name              String    // Target dog name
-  microchipNumber   String?   @unique // Compliant with Australian regional animal registries
-  status            PetStatus @default(ACTIVE) // Default active status
-  gender            Gender    @default(UNKNOWN) // Dog sex selection
-  isDesexed         Boolean   @default(false)   // Is the dog desexed? (True/False)
-  dob               DateTime?
-  behaviorTags      String[]       
-  behaviorNotes     String?   @db.Text         
-
-  species           Species       @relation(fields: [speciesId], references: [id])
-  appointments      Appointment[]
-  owner             User          @relation(fields: [ownerId], references: [id])
-  merchant          Merchant      @relation(fields: [merchantId], references: [id])
-  
-  // 🎫 Loyalty Tracking
-  loyaltyGroomCount Int           @default(0) // Increments by 1 on COMPLETED appointments. Resets to 0 after hitting 10.
-
-  // 🏎️ Composite Indexes for High-Frequency Queries
-  @@index([merchantId, name, status])
-  @@index([merchantId, ownerId])
-}
-
-model Appointment {
-  id                     String            @id @default(uuid())
-  petId                  String
-  groomerId              String?
-  merchantId             String            
-  bookedById             String            // 🆕 New track: WHO made the booking (Admin/Staff User UUID)
-  
-  // ⏰ Booking Service Times
-  startTime              DateTime          // 🗓️ THIS IS YOUR BOOKING SERVICE TIME (When the client brings the dog in)
-  endTime                DateTime          // 🕒 Auto-Calculated: startTime + durationMinutes (Saves calendar rendering from freezing up)
-  
-  status                 AppointmentStatus @default(PENDING)
-  servicePricingMatrixId Int               
-  
-  // 🪙 Data Snapshot Isolation: Prevents historical accounting data corruption when service pricing updates later
-  priceCentsAud          Int               // 🪙 Price snapshot at time of booking (stored as an Int to prevent floating point errors)
-  durationMinutes        Int               // ⏳ Duration snapshot at time of booking (guarantees calendar alignment history stays intact)
-  
-  // 📝 Custom Booking Interactions
-  notes                  String?           @db.Text // 🆕 Freely added note for dog special instructions or custom customer requests
-
-  pet                  Pet                  @relation(fields: [petId], references: [id])
-  merchant             Merchant             @relation(fields: [merchantId], references: [id])
-  groomer              Employee?             @relation(fields: [groomerId], references: [id])
-  bookedBy             User                 @relation(name: "CreatedAppointments", fields: [bookedById], references: [id]) // 🆕 Named relation back to target creator profile
-  servicePricingMatrix ServicePricingMatrix @relation(fields: [servicePricingMatrixId], references: [id]) 
-  
-  addOns               AppointmentAddOn[]
-
-  // 🎁 Loyalty Reward Audit
-  isLoyaltyWaived Boolean            @default(false) // True if this was the free reward groom
-
-  isCheckedIn     Boolean  @default(false)
-  depositPaid     Boolean  @default(false)
-  isReadyToPickup Boolean  @default(false)
-  internalTags    String[] // PostgreSQL string array for admin/staff tags
-
-  // 🏎️ Optimized Covering Index for multi-tenant schedule querying
-  @@index([merchantId, startTime, groomerId])
-}
-
-model ServicePricingMatrix {
-  id              Int         @id @default(autoincrement())
-  merchantId      String      
-  
-  // 🏷️ Service identity
-  name            String      // e.g., 'Full Groom', 'Teeth Cleaning' (Read into admin drop-down lists)
-  
-  // 🔀 Merged Flat Custom Upgrades
-  speciesId       Int?        
-  weightTier      WeightTier? 
-  coatType        CoatType?   
-  
-  durationMinutes Int         // Master base duration timeline used to calculate an appointment's initial endTime
-  priceCentsAud   Int         // Master base price currency mapping read into appointment snapshots upon checkout creation
-
-  merchant              Merchant    @relation(fields: [merchantId], references: [id])
-  species               Species?    @relation(fields: [speciesId], references: [id])
-  
-  appointments          Appointment[]
-  appointmentsWithAddOn AppointmentAddOn[]
-
-  @@unique([merchantId, name, speciesId, weightTier, coatType])
-  @@index([name, speciesId])
-}
-
-model User {
-  id              String            @id @default(uuid())
-  merchantId      String   
-  email           String            @unique
-  phoneNumber     String?           @unique // Australian mobile format validation target (Owner Phone Number)
-  passwordHash    String
-  name            String            // Owner Customer Name / Admin Name / Staff Name
-  avatarUrl       String?
-  role            UserRole          @default(CUSTOMER)
-  countryCode     String            @default("AU")
-  createdAt       DateTime          @default(now())
-
-  pets                 Pet[]
-  merchant             Merchant          @relation(fields: [merchantId], references: [id])
-  activityLogs         ActivityLog[]
-  waiverSignatures     WaiverSignature[]
-  createdAppointments  Appointment[]     @relation(name: "CreatedAppointments") // 🆕 Tracks bookings managed by this staff / admin profile
-
-  @@index([merchantId, createdAt])
-  @@index([merchantId, name])
-}
-
-model Merchant {
-  id              String                 @id @default(uuid())
-  email           String                 @unique
-  passwordHash    String
-  businessName    String   
-  abn             String?                // Australian Business Number verification string
-  stripeAccountId String?                @unique 
-  createdAt       DateTime               @default(now())
-  
-  // 🎨 Merged Branding Elements
-  logoIcon        String?
-  logoUrl         String?
-  primaryColor    String                 @default("#FF05050E") 
-  tags            String[]               @default([])
-  businessTags    Json?             
-
-  // 📖 Merged UI Dictionary Text Configuration
-  uiDictionary    Json?             
-
-  employees       Employee[]
-  appointments    Appointment[]
-  pricingMatrices ServicePricingMatrix[] 
-  users           User[]   
-  pets            Pet[]    
-  activityLogs    ActivityLog[]
-  waiverSignatures WaiverSignature[]
-  businessHours   BusinessHours[]
-  rosterExceptions RosterException[]
-}
-
-model Employee {
-  id               String            @id @default(uuid())
-  merchantId       String
-  name             String 
-  avatarUrl        String?
-
-  merchant         Merchant          @relation(fields: [merchantId], references: [id])
-  appointments     Appointment[]
-  rosterExceptions RosterException[]
-
-  // 🏎️ Speeds up dashboard staff filtering 
-  @@index([merchantId])
-}
-
-model ActivityLog {
-  id            String      @id @default(uuid())
-  merchantId    String      // Scopes logs tightly to the specific salon/business
-  userId        String?     // Nullable in case of failed logins where user context isn't set yet
-  category      LogCategory @default(ACTIVITY)
-  
-  // 🗺️ Frontend Tracking Fields
-  moduleName    String      // e.g., 'APPOINTMENTS_BOOKING', 'SALON_SETTINGS', 'CLIENT_DATABASE'
-  action        String      // e.g., 'LOGIN_SUCCESS', 'VIEWED_PAGE', 'UPDATED_PRICING_MATRIX'
-  description   String?     @db.Text 
-  
-  // 🔌 Technical Context (Crucial for audit trails and security tracking)
-  ipAddress     String?
-  userAgent     String?     // Captures browser and OS details
-  path          String?     // The actual URL/route path on the frontend
-  method        HttpMethod? // Captures the corresponding API invocation behavior
-  metaData      Json?       // Flexible field to dump deep payload context
-  
-  createdAt     DateTime    @default(now())
-
-  // 🔗 Mappings
-  merchant      Merchant    @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  user          User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
-
-  // 🏎️ Super-indexes for fast dashboard analytics and historical auditing
-  @@index([merchantId, createdAt])
-  @@index([merchantId, category])
-  @@index([merchantId, userId])
-}
-
-model AppointmentAddOn {
-  appointmentId String
-  matrixId      Int     // References the specific ServicePricingMatrix add-on item
-
-  appointment   Appointment          @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
-  pricingMatrix ServicePricingMatrix @relation(fields: [matrixId], references: [id])
-
-  @@id([appointmentId, matrixId])
-}
-
-model WaiverSignature {
-  id            String   @id @default(uuid())
-  merchantId    String
-  ownerId       String
-  ipAddress     String
-  signedAt      DateTime @default(now())
-  termsVersion  String   // Track which version of the legal terms they signed
-
-  merchant      Merchant @relation(fields: [merchantId], references: [id])
-  owner         User     @relation(fields: [ownerId], references: [id])
-
-  @@unique([merchantId, ownerId]) // One valid signature per customer per salon policy version
-}
-
-model BusinessHours {
-  id          Int      @id @default(autoincrement())
-  merchantId  String
-  dayOfWeek   Int      // 0 = Sunday, 1 = Monday, etc.
-  openTime    String   // e.g., "08:00"
-  closeTime   String   // e.g., "17:00"
-  isClosed    Boolean  @default(false)
-
-  merchant    Merchant @relation(fields: [merchantId], references: [id])
-  @@unique([merchantId, dayOfWeek])
-}
-
-model RosterException {
-  id          String   @id @default(uuid())
-  employeeId  String
-  merchantId  String
-  date        DateTime // Specific day off
-  startTime   String?  // If partial day off (e.g., leaving early at "12:00")
-  endTime     String?
-  reason      String?  // e.g., "Annual Leave", "Sick Leave"
-
-  employee    Employee @relation(fields: [employeeId], references: [id])
-  merchant    Merchant @relation(fields: [merchantId], references: [id])
 }
