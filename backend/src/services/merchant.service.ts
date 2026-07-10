@@ -116,7 +116,20 @@ export class MerchantService {
         merchantId: merchantId,
         role: UserRole.MERCHANT_STAFF,
       },
-      select: { id: true, name: true, email: true, role: true }
+      select: { 
+      id: true, 
+      name: true, 
+      email: true, 
+      role: true,
+      // ========================================================
+      // 🔥 FETCH THE ISACTIVE FIELD FROM THE EMPLOYEE RELATION
+      // ========================================================
+      employee: {
+        select: {
+          isActive: true
+        }
+      }
+    },
     });
   }
 
@@ -137,14 +150,31 @@ export class MerchantService {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(data.passwordRaw, salt);
 
-    const staffUser = await prisma.user.create({
-      data: {
-        email: data.email,
-        passwordHash: hashedPassword,
-        name: data.name,
-        role: UserRole.MERCHANT_STAFF,
-        merchantId: data.merchantId,
-      },
+    // Use a transaction to ensure both records are safely created together
+    const staffUser = await prisma.$transaction(async (tx) => {
+      // 1. Create the User record
+      const user = await tx.user.create({
+        data: {
+          email: data.email,
+          passwordHash: hashedPassword,
+          name: data.name,
+          role: UserRole.MERCHANT_STAFF,
+          merchantId: data.merchantId,
+        },
+      });
+
+      // 2. Create the Employee record using the newly generated User ID
+      await tx.employee.create({
+        data: {
+          id: user.id, // Explicitly linking the IDs as requested
+          merchantId: data.merchantId,
+          name: data.name,
+          isActive: true, // Explicitly ensuring they start as active
+          // avatarUrl is optional, so it defaults to null
+        },
+      });
+
+      return user;
     });
 
     return {
@@ -155,13 +185,18 @@ export class MerchantService {
     };
   }
 
-  async removeStaffAccount(staffId: string, merchantId: string) {
-    return await prisma.user.deleteMany({
-      where: {
-        id: staffId,
-        merchantId: merchantId, 
-        role: UserRole.MERCHANT_STAFF
-      }
+  async removeStaffAccount(staffId: string, merchantId: string, isActive: boolean) {
+    return await prisma.$transaction(async (tx) => {
+      // 1. Flip the Employee status to inactive
+      await tx.employee.updateMany({
+        where: {
+          id: staffId,
+          merchantId: merchantId,
+        },
+        data: {
+          isActive: isActive,
+        },
+      });
     });
   }
 }

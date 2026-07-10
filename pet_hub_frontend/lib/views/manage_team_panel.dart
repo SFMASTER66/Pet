@@ -46,6 +46,9 @@ class _ManageTeamPanelState extends State<ManageTeamPanel> {
     super.dispose();
   }
 
+  // ========================================================================
+  // 🔥 UPDATED TO SAFELY FLATTEN THE NESTED PRISMA 'employee.isActive' VALUE
+  // ========================================================================
   Future<void> _fetchStaffList() async {
     try {
       final response = await http.get(
@@ -59,8 +62,29 @@ class _ManageTeamPanelState extends State<ManageTeamPanel> {
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = jsonDecode(response.body);
         if (responseData['success'] == true && responseData['data'] != null) {
+          final List<dynamic> rawList = responseData['data'];
+          
+          // Map across items to safely extract user.employee.isActive into user.isActive
+          final flattenedList = rawList.map((user) {
+            bool extractedStatus = false;
+            
+            if (user['employee'] != null && user['employee']['isActive'] != null) {
+              extractedStatus = user['employee']['isActive'] as bool;
+            } else if (user['isActive'] != null) {
+              extractedStatus = user['isActive'] as bool;
+            }
+
+            return {
+              'id': user['id'],
+              'name': user['name'],
+              'email': user['email'],
+              'role': user['role'],
+              'isActive': extractedStatus,
+            };
+          }).toList();
+
           setState(() {
-            _invitedStaff = responseData['data'];
+            _invitedStaff = flattenedList;
           });
         }
       }
@@ -116,7 +140,12 @@ class _ManageTeamPanelState extends State<ManageTeamPanel> {
     }
   }
 
-  Future<void> _deleteStaff(String staffId) async {
+  Future<void> _toggleStaffStatus(int index, String staffId, bool newStatus) async {
+    // Instantly update UI toggle state locally for zero latency feedback
+    setState(() {
+      _invitedStaff[index]['isActive'] = newStatus;
+    });
+
     try {
       final response = await http.delete(
         Uri.parse('$_baseUrl/api/v1/merchant/staff/$staffId'),
@@ -124,18 +153,39 @@ class _ManageTeamPanelState extends State<ManageTeamPanel> {
           'Authorization': 'Bearer ${widget.authToken}',
           'Content-Type': 'application/json',
         },
+        body: jsonEncode({
+          'isActive': newStatus,
+        }),
       );
 
       final Map<String, dynamic> responseData = jsonDecode(response.body);
       if (response.statusCode == 200 && responseData['success'] == true) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('🗑️ Staff profile deleted successfully.'))
+          SnackBar(
+            content: Text(newStatus 
+              ? '✅ Staff profile enabled successfully.' 
+              : '⏸️ Staff profile disabled successfully.'
+            ),
+            duration: const Duration(seconds: 1),
+          ),
         );
         _fetchStaffList();
+      } else {
+        // Revert toggle state locally if endpoint errors out
+        setState(() {
+          _invitedStaff[index]['isActive'] = !newStatus;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ Error: ${responseData['message'] ?? 'Failed to alter status.'}'))
+        );
       }
     } catch (_) {
+      // Revert toggle state locally if HTTP connection cuts out
+      setState(() {
+        _invitedStaff[index]['isActive'] = !newStatus;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('❌ Failed to process account teardown.'))
+        const SnackBar(content: Text('❌ Network transport failure altering profile access status.'))
       );
     }
   }
@@ -200,12 +250,39 @@ class _ManageTeamPanelState extends State<ManageTeamPanel> {
                       separatorBuilder: (_, __) => const Divider(),
                       itemBuilder: (context, index) {
                         final staff = _invitedStaff[index];
+                        final bool isActive = staff['isActive'] ?? false;
+
                         return ListTile(
-                          title: Text(staff['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: Text(staff['email'] ?? ''),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete_outline, color: Colors.red),
-                            onPressed: () => _deleteStaff(staff['id']),
+                          title: Text(
+                            staff['name'] ?? '', 
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: isActive ? Colors.black : Colors.grey,
+                            ),
+                          ),
+                          subtitle: Text(
+                            staff['email'] ?? '',
+                            style: TextStyle(
+                              color: isActive ? Colors.black54 : Colors.grey,
+                            ),
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                isActive ? 'Active' : 'Inactive',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: isActive ? Colors.green : Colors.grey,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Switch(
+                                value: isActive,
+                                activeColor: const Color(0xFF0F172A),
+                                onChanged: (bool value) => _toggleStaffStatus(index, staff['id'], value),
+                              ),
+                            ],
                           ),
                         );
                       },

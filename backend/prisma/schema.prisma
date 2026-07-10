@@ -101,6 +101,7 @@ model User {
   pets                Pet[]
   merchant            Merchant          @relation(fields: [merchantId], references: [id])
   waiverSignatures    WaiverSignature[]
+  employee            Employee? // One-to-one relation
 
   @@index([merchantId, createdAt])
   @@index([merchantId, name])
@@ -136,8 +137,10 @@ model Employee {
   merchantId       String
   name             String
   avatarUrl        String?
+  isActive         Boolean           @default(true) // <-- Added this field
   appointments     Appointment[]
   merchant         Merchant          @relation(fields: [merchantId], references: [id])
+  user             User              @relation(fields: [id], references: [id], onDelete: Cascade)
   rosterExceptions RosterException[]
 
   @@index([merchantId])

@@ -55,6 +55,16 @@ export class MerchantAuthService {
         },
       });
 
+      await tx.employee.create({
+        data: {
+          id: adminUser.id, // Explicitly linking the IDs as requested
+          merchantId: merchant.id,
+          name: data.adminName,
+          isActive: true, // Explicitly ensuring they start as active
+          // avatarUrl is optional, so it defaults to null
+        },
+      });
+
       return { 
         user: adminUser, 
         config: merchant 
@@ -95,10 +105,13 @@ export class MerchantAuthService {
   static async loginMerchant(email: string, passwordRaw: string) {
     const user = await prisma.user.findFirst({
       where: { email },
-      include: { merchant: true },
+      include: { 
+        merchant: true,
+        employee: true // <-- Include the employee relation here
+      },
     });
 
-    if (!user || !user.merchant) {
+    if (!user || !user.merchant || user.employee?.isActive === false) {
       throw new Error('Invalid credentials or tenant workspace missing.');
     }
 
@@ -132,6 +145,7 @@ export class MerchantAuthService {
         logoIcon: user.merchant.logoIcon,
         primaryColor: user.merchant.primaryColor,
         tags: user.merchant.tags,
+        isActive: user.employee?.isActive ?? false,
       };
     } else if (user.role === UserRole.MERCHANT_STAFF) {
       features = ['bookings']; 
@@ -143,6 +157,7 @@ export class MerchantAuthService {
         userId: user.id,
         businessName: user.merchant.businessName,
         logoIcon: user.merchant.logoIcon,
+        isActive: user.employee?.isActive ?? false,
       };
     }
 

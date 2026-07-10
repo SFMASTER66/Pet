@@ -66,6 +66,8 @@ export const deleteStaffProfile = async (req: AuthenticatedRequest, res: Respons
     const { staffId } = req.params;
     const adminUser = req.user;
 
+    const { isActive } = req.body;
+
     // 1. Guard check: Ensure adminUser and merchantId exist
     if (!adminUser || !adminUser.merchantId) {
       return res.status(401).json({ 
@@ -84,8 +86,15 @@ export const deleteStaffProfile = async (req: AuthenticatedRequest, res: Respons
       });
     }
 
+    if (isActive === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'The isActive flag is required.'
+      });
+    }
+
     // 3. Execute with guaranteed string parameters
-    await merchantService.removeStaffAccount(safeStaffId, adminUser.merchantId);
+    await merchantService.removeStaffAccount(safeStaffId, adminUser.merchantId, isActive);
     
     return res.status(200).json({ 
       success: true, 
