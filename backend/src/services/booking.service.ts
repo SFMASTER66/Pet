@@ -83,6 +83,9 @@ export const BookingService = {
 
     const ownerExists = await prisma.user.findUnique({
       where: { id: ownerId },
+      include: {
+        employee: true, // 👈 This fetches the related employee data along with the user
+      },
     });
     if (!ownerExists) {
       throw new Error(`❌ Target owner record ID [${ownerId}] cannot be located.`);
@@ -206,6 +209,37 @@ export const BookingService = {
       const parsedStartTime = new Date(input.serviceTime);
       const calculatedEndTime = new Date(parsedStartTime.getTime() + (matrixRow.durationMinutes * 60000));
 
+      // ==========================================
+      // 🔥 START CODE CHANGE: STAFF CAPACITY GUARD
+      // ==========================================
+      const totalStaffCount = await prisma.employee.count({
+        where: { merchantId: input.merchantId, isActive: true }
+      });
+
+      const concurrentBookings = await prisma.appointment.count({
+        where: {
+          merchantId: input.merchantId,
+          status: { in: [AppointmentStatus.PENDING, AppointmentStatus.PAID, AppointmentStatus.COMPLETED] },
+          OR: [
+            {
+              startTime: { lte: parsedStartTime },
+              endTime: { gt: parsedStartTime }
+            },
+            {
+              startTime: { lt: calculatedEndTime },
+              endTime: { gte: calculatedEndTime }
+            }
+          ]
+        }
+      });
+
+      if (concurrentBookings >= totalStaffCount) {
+        throw new Error(`❌ Slot fully booked. Capacity reached for the selected time window.`);
+      }
+      // ==========================================
+      // 🛑 END CODE CHANGE
+      // ==========================================
+
       // 5. Atomic transaction write directly to database cluster rows
       const appointment = await prisma.appointment.create({
         data: {
@@ -257,47 +291,55 @@ export const BookingService = {
    * 🔄 Modifies an existing booking state matrix parameter layout row
    */
   async updateBooking(id: string, input: AdminUpdateBookingInput) {
+    // ... unchanged code
     try {
-      const existingAppointment = await prisma.appointment.findUnique({
-        where: { id },
-      });
+      const existingAppointment = await prisma.appointment.findUnique({ where: { id } });
+      if (!existingAppointment) throw new Error(`❌ Appointment [${id}] not found.`);
 
-      if (!existingAppointment) {
-        throw new Error(`❌ Appointment with unique context identifier [${id}] was not found.`);
-      }
+      const updateData: any = { ...input };
 
-      const updateData: any = {
-        status: input.status,
-        isCheckedIn: input.isCheckedIn,
-        depositPaid: input.depositPaid,
-        isReadyToPickup: input.isReadyToPickup,
-        isLoyaltyWaived: input.isLoyaltyWaived,
-        internalTags: input.internalTags,
-      };
-
-      // Recalculate end times dynamically if the start date tracker shifts layout windows
       if (input.startTime) {
         const parsedStartTime = new Date(input.startTime);
         const duration = existingAppointment.durationMinutes || 60; 
+        const calculatedEndTime = new Date(parsedStartTime.getTime() + duration * 60000);
+
+        // ==========================================
+        // 🔥 START CODE CHANGE: UPDATE CAPACITY GUARD
+        // ==========================================
+        const totalStaffCount = await prisma.employee.count({
+          where: { merchantId: existingAppointment.merchantId, isActive: true }
+        });
+
+        const concurrentBookings = await prisma.appointment.count({
+          where: {
+            id: { not: id },
+            merchantId: existingAppointment.merchantId,
+            status: { in: [AppointmentStatus.PENDING, AppointmentStatus.PAID, AppointmentStatus.COMPLETED] },
+            OR: [
+              { startTime: { lte: parsedStartTime }, endTime: { gt: parsedStartTime } },
+              { startTime: { lt: calculatedEndTime }, endTime: { gte: calculatedEndTime } }
+            ]
+          }
+        });
+
+        if (concurrentBookings >= totalStaffCount) {
+          throw new Error(`❌ Rescheduling rejected. No staff capacity during this period.`);
+        }
+        // ==========================================
+        // 🛑 END CODE CHANGE
+        // ==========================================
+
         updateData.startTime = parsedStartTime;
-        updateData.endTime = new Date(parsedStartTime.getTime() + duration * 60000);
-        updateData.durationMinutes = duration;
+        updateData.endTime = calculatedEndTime;
       }
 
       const updatedAppointment = await prisma.appointment.update({
         where: { id },
         data: updateData,
-        include: {
-          pet: true,
-          servicePricingMatrix: true,
-        },
+        include: { pet: true, servicePricingMatrix: true },
       });
 
-      return {
-        success: true,
-        message: 'Administrative appointment altered and snapshot metrics updated securely.',
-        data: updatedAppointment,
-      };
+      return { success: true, data: updatedAppointment };
     } catch (error: any) {
       throw new Error(error.message);
     }

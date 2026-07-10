@@ -288,7 +288,12 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     bool isDesexed = false;
     
     DateTime selectedBookingDate = _selectedDay ?? DateTime.now();
-    String selectedBookingTimeSlot = '09:00';
+    
+    // --- Dynamic Capacity-Aware Slot States ---
+    List<String> dynamicAvailableSlots = [];
+    String? selectedBookingTimeSlot;
+    bool isLoadingSlots = false;
+    bool hasFetchedInitialSlots = false;
 
     if (liveServiceMatrices.isNotEmpty) {
       selectedMatrixRow = liveServiceMatrices.first;
@@ -308,6 +313,79 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
           width: 600,
           child: StatefulBuilder(
             builder: (context, setDialogState) {
+              
+              // Helper to fetch valid staff slots dynamically from backend
+              Future<void> updateCapacityAvailableSlots() async {
+                if (selectedMatrixRow == null) return;
+                
+                setDialogState(() {
+                  isLoadingSlots = true;
+                });
+
+                try {
+                  // Format date to ISO standard variant required by standard backend parser: YYYY-MM-DD
+                  final String operationalDateString = 
+                      "${selectedBookingDate.year}-${selectedBookingDate.month.toString().padLeft(2, '0')}-${selectedBookingDate.day.toString().padLeft(2, '0')}";
+                  
+                  final int durationMinutes = selectedMatrixRow?['durationMinutes'] ?? 60;
+                  final String merchantId = widget.config.merchantId;
+
+                  // Aligns directly with router.get('/bookings/available-slots', fetchAvailableSlots)
+                  final url = '$_baseUrl/api/v1/bookings/available-slots'
+                      '?merchantId=$merchantId'
+                      '&date=$operationalDateString'
+                      '&duration=$durationMinutes';
+
+                  final response = await http.get(
+                    Uri.parse(url),
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': 'Bearer ${widget.authToken}',
+                    },
+                  );
+
+                  if (response.statusCode == 200) {
+                    final responseData = jsonDecode(response.body);
+                    if (responseData['success'] == true) {
+                      final List<dynamic> backendSlots = responseData['data'] ?? [];
+                      
+                      setDialogState(() {
+                        dynamicAvailableSlots = backendSlots.map((slot) => slot.toString()).toList();
+                        
+                        // Automatically update selected time slot safely based on capacity rules
+                        if (dynamicAvailableSlots.isNotEmpty) {
+                          if (selectedBookingTimeSlot == null || !dynamicAvailableSlots.contains(selectedBookingTimeSlot)) {
+                            selectedBookingTimeSlot = dynamicAvailableSlots.first;
+                          }
+                        } else {
+                          selectedBookingTimeSlot = null; 
+                        }
+                      });
+                    }
+                  } else {
+                    setDialogState(() {
+                      dynamicAvailableSlots = [];
+                      selectedBookingTimeSlot = null;
+                    });
+                  }
+                } catch (err) {
+                  setDialogState(() {
+                    dynamicAvailableSlots = [];
+                    selectedBookingTimeSlot = null;
+                  });
+                } finally {
+                  setDialogState(() {
+                    isLoadingSlots = false;
+                  });
+                }
+              }
+
+              // Fire initial execution cascade block immediately upon layout compilation
+              if (!hasFetchedInitialSlots) {
+                hasFetchedInitialSlots = true;
+                Future.delayed(Duration.zero, () => updateCapacityAvailableSlots());
+              }
+
               return SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -328,7 +406,10 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                               child: Text('${matrix['name']} (${matrix['weightTier']} / ${matrix['coatType']}) - \$${((matrix['priceCentsAud'] ?? 0) / 100).toStringAsFixed(2)}'),
                             );
                           }).toList(),
-                          onChanged: (val) => setDialogState(() => selectedMatrixRow = val),
+                          onChanged: (val) {
+                            setDialogState(() => selectedMatrixRow = val);
+                            updateCapacityAvailableSlots(); // Recalculate duration-based shifts
+                          },
                         ),
                       ),
                     ),
@@ -351,6 +432,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                               );
                               if (pickedDate != null) {
                                 setDialogState(() => selectedBookingDate = pickedDate);
+                                updateCapacityAvailableSlots(); // Recalculate date allocation load profiles
                               }
                             },
                           ),
@@ -359,16 +441,27 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                         Expanded(
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12),
-                            decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(4)),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey.shade300), 
+                              borderRadius: BorderRadius.circular(4),
+                              color: isLoadingSlots ? Colors.grey.shade100 : Colors.white,
+                            ),
                             child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                isExpanded: true,
-                                value: selectedBookingTimeSlot,
-                                items: _timePresetSlots.map((time) {
-                                  return DropdownMenuItem<String>(value: time, child: Text('Time: $time'));
-                                }).toList(),
-                                onChanged: (val) => setDialogState(() => selectedBookingTimeSlot = val!),
-                              ),
+                              child: isLoadingSlots
+                                  ? const SizedBox(
+                                      height: 20, 
+                                      width: 20, 
+                                      child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                                    )
+                                  : DropdownButton<String>(
+                                      isExpanded: true,
+                                      hint: const Text('No available slots', style: TextStyle(fontSize: 13, color: Colors.redAccent)),
+                                      value: selectedBookingTimeSlot,
+                                      items: dynamicAvailableSlots.map((time) {
+                                        return DropdownMenuItem<String>(value: time, child: Text('Time: $time'));
+                                      }).toList(),
+                                      onChanged: (val) => setDialogState(() => selectedBookingTimeSlot = val),
+                                    ),
                             ),
                           ),
                         ),
@@ -423,13 +516,13 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                         Expanded(
                           child: TextField(
                             controller: ownerPhoneCtrl, 
-                            keyboardType: TextInputType.number, // Prevents typing text, sets numeric keyboard
-                            maxLength: 10, // Locks entry at exactly Australia mobile length (10 digits)
-                            inputFormatters: [FilteringTextInputFormatter.digitsOnly], // Explicitly ignores non-numeric inputs
+                            keyboardType: TextInputType.number, 
+                            maxLength: 10, 
+                            inputFormatters: [FilteringTextInputFormatter.digitsOnly], 
                             decoration: const InputDecoration(
                               labelText: 'Owner Phone * (04..)', 
                               hintText: '0412345678',
-                              counterText: '', // Hides default length counter to preserve original UI layout look
+                              counterText: '', 
                               border: OutlineInputBorder()
                             )
                           )
@@ -482,6 +575,12 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                 return;
               }
 
+              // Guard check: ensures a real capacity slot has been selected
+              if (selectedBookingTimeSlot == null || selectedBookingTimeSlot!.isEmpty) {
+                _showSnackBar('⚠️ No real-time staff capacity options selected. Please choose another date or service tier.');
+                return;
+              }
+
               // 2. Numerical enforcement & Australian Mobile Format Alignment
               final String digitsOnlyPhone = cleanPhone.replaceAll(RegExp(r'\D'), '');
               
@@ -497,7 +596,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                 return;
               }
 
-              final timeParts = selectedBookingTimeSlot.split(':');
+              final timeParts = selectedBookingTimeSlot!.split(':');
               final hour = int.parse(timeParts[0]);
               final minute = int.parse(timeParts[1]);
               
@@ -518,7 +617,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                 'dogGender': selectedGender,
                 'isDesexed': isDesexed,
                 'ownerName': ownerNameCtrl.text.trim(),
-                'ownerPhone': digitsOnlyPhone, // Passing cleaned normalized form down to pipeline streams
+                'ownerPhone': digitsOnlyPhone, 
                 'ownerEmail': cleanEmail,
                 'serviceTime': targetDateTime.toIso8601String(),
                 'groomerId': null,

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { BookingService } from '../services/booking.service';
 import { Gender } from '@prisma/client';
 import prisma from '../services/db';
+import { AppointmentStatus } from '@prisma/client';
 
 /**
  * GET /api/bookings/services?merchantId=XYZ
@@ -192,5 +193,55 @@ export const removeBooking = async (req: Request, res: Response): Promise<void> 
       success: false, 
       message: error.message || 'Fatal delete execution failure.' 
     });
+  }
+};
+
+export const fetchAvailableSlots = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { merchantId, date, duration } = req.query;
+    if (!merchantId || !date || !duration) {
+      res.status(400).json({ success: false, message: 'Missing parameters: merchantId, date, and duration are required.' });
+      return;
+    }
+
+    // Define business operational hour steps (e.g., 09:00 to 17:00 at 30 min intervals)
+    const standardSlots = [
+      '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', 
+      '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30'
+    ];
+
+    const totalStaff = await prisma.employee.count({ 
+      where: { 
+        merchantId: String(merchantId),
+        isActive: true // 🔥 Filters to only count active staff
+      } 
+    });
+    const durationMs = Number(duration) * 60000;
+    const availableSlots: string[] = [];
+
+    for (const slot of standardSlots) {
+      const slotStartTime = new Date(`${date}T${slot}:00`);
+      const slotEndTime = new Date(slotStartTime.getTime() + durationMs);
+
+      const activeBookings = await prisma.appointment.count({
+        where: {
+          merchantId: String(merchantId),
+          status: { in: [AppointmentStatus.PENDING, AppointmentStatus.PAID, AppointmentStatus.COMPLETED] },
+          OR: [
+            { startTime: { lte: slotStartTime }, endTime: { gt: slotStartTime } },
+            { startTime: { lt: slotEndTime }, endTime: { gte: slotEndTime } }
+          ]
+        }
+      });
+
+      // Show the time option only if booking load hasn't hit total staff headcount
+      if (activeBookings < totalStaff) {
+        availableSlots.push(slot);
+      }
+    }
+
+    res.status(200).json({ success: true, data: availableSlots });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message || 'Error parsing slot visibility values.' });
   }
 };
