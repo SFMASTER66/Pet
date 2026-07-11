@@ -37,6 +37,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
   final _btnCancelController = TextEditingController();
   final _btnEditController = TextEditingController();
   final _txtRevenueController = TextEditingController();
+  List<dynamic> _businessHoursConfig = [];
 
   final CalendarFormat _calendarFormat = CalendarFormat.month;
   DateTime _focusedDay = DateTime.now();
@@ -84,6 +85,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     _syncControllers();
     _fetchServiceMatrices(); 
     _fetchDashboardAppointments();
+    _fetchBusinessHours(); // <-- Add this call here
   }
 
   @override
@@ -127,6 +129,28 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
       _showSnackBar('❌ Transport layer connection fault during background matrix synchronization.');
     } finally {
       setState(() => _isServiceLoading = false);
+    }
+  }
+
+  Future<void> _fetchBusinessHours() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/api/v1/merchant/${widget.config.merchantId}/hours'),
+        headers: {
+          'Authorization': 'Bearer ${widget.authToken}',
+          'Content-Type': 'application/json',
+        },
+      );
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        if (responseData['success'] == true && responseData['data'] != null) {
+          setState(() {
+            _businessHoursConfig = responseData['data'];
+          });
+        }
+      }
+    } catch (_) {
+      // Isolated background fault handler to keep UI stable
     }
   }
 
@@ -189,6 +213,17 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     } finally {
       setState(() => _isAppointmentsLoading = false);
     }
+  }
+
+  bool _checkIsDayClosed(DateTime date) {
+    if (_businessHoursConfig.isEmpty) return false;
+    
+    final dayRecord = _businessHoursConfig.firstWhere(
+      (element) => element['dayOfWeek'] == date.weekday,
+      orElse: () => null,
+    );
+    
+    return dayRecord != null && dayRecord['isClosed'] == true;
   }
 
   void _saveUiTextConfigToDatabase() {
@@ -290,6 +325,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     bool isDesexed = false;
     
     DateTime selectedBookingDate = _selectedDay ?? DateTime.now();
+    bool isDayClosed = _checkIsDayClosed(selectedBookingDate);
     
     // --- Dynamic Capacity-Aware Slot States ---
     List<String> dynamicAvailableSlots = [];
@@ -433,8 +469,11 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                                 lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
                               );
                               if (pickedDate != null) {
-                                setDialogState(() => selectedBookingDate = pickedDate);
-                                updateCapacityAvailableSlots(); // Recalculate date allocation load profiles
+                                setDialogState(() {
+                                  selectedBookingDate = pickedDate;
+                                  isDayClosed = _checkIsDayClosed(pickedDate); // <-- Added this line
+                                });
+                                updateCapacityAvailableSlots(); 
                               }
                             },
                           ),
@@ -444,26 +483,31 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             decoration: BoxDecoration(
-                              border: Border.all(color: Colors.grey.shade300), 
+                              border: Border.all(color: isDayClosed ? Colors.red.shade300 : Colors.grey.shade300), 
                               borderRadius: BorderRadius.circular(4),
-                              color: isLoadingSlots ? Colors.grey.shade100 : Colors.white,
+                              color: isDayClosed ? Colors.red.shade50 : (isLoadingSlots ? Colors.grey.shade100 : Colors.white),
                             ),
                             child: DropdownButtonHideUnderline(
-                              child: isLoadingSlots
-                                  ? const SizedBox(
-                                      height: 20, 
-                                      width: 20, 
-                                      child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                              child: isDayClosed 
+                                  ? const Padding(
+                                      padding: EdgeInsets.symmetric(vertical: 12.0),
+                                      child: Text('SHOP CLOSED', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.redAccent)),
                                     )
-                                  : DropdownButton<String>(
-                                      isExpanded: true,
-                                      hint: const Text('No available slots', style: TextStyle(fontSize: 13, color: Colors.redAccent)),
-                                      value: selectedBookingTimeSlot,
-                                      items: dynamicAvailableSlots.map((time) {
-                                        return DropdownMenuItem<String>(value: time, child: Text('Time: $time'));
-                                      }).toList(),
-                                      onChanged: (val) => setDialogState(() => selectedBookingTimeSlot = val),
-                                    ),
+                                  : (isLoadingSlots
+                                      ? const SizedBox(
+                                          height: 20, 
+                                          width: 20, 
+                                          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                                        )
+                                      : DropdownButton<String>(
+                                          isExpanded: true,
+                                          hint: const Text('No available slots', style: TextStyle(fontSize: 13, color: Colors.redAccent)),
+                                          value: selectedBookingTimeSlot,
+                                          items: dynamicAvailableSlots.map((time) {
+                                            return DropdownMenuItem<String>(value: time, child: Text('Time: $time'));
+                                          }).toList(),
+                                          onChanged: (val) => setDialogState(() => selectedBookingTimeSlot = val),
+                                        )),
                             ),
                           ),
                         ),
@@ -562,8 +606,12 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Abort')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: widget.config.primaryColor, foregroundColor: Colors.white),
-            onPressed: () async {
+            style: ElevatedButton.styleFrom(
+              // Gray out the button if the day is closed
+              backgroundColor: isDayClosed ? Colors.grey : widget.config.primaryColor, 
+              foregroundColor: Colors.white
+            ),
+            onPressed: isDayClosed ? null : () async {
               final cleanPhone = ownerPhoneCtrl.text.trim();
               final cleanEmail = ownerEmailCtrl.text.trim();
 
