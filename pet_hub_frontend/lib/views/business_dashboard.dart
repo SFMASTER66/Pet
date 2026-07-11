@@ -351,24 +351,28 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
           width: 600,
           child: StatefulBuilder(
             builder: (context, setDialogState) {
-              
-              // Helper to fetch valid staff slots dynamically from backend
+              bool isDayClosed = _checkIsDayClosed(selectedBookingDate);
+
               Future<void> updateCapacityAvailableSlots() async {
-                if (selectedMatrixRow == null) return;
+                if (selectedMatrixRow == null || isDayClosed) {
+                  setDialogState(() {
+                    dynamicAvailableSlots = [];
+                    selectedBookingTimeSlot = null;
+                  });
+                  return;
+                }
                 
                 setDialogState(() {
                   isLoadingSlots = true;
                 });
 
                 try {
-                  // Format date to ISO standard variant required by standard backend parser: YYYY-MM-DD
                   final String operationalDateString = 
                       "${selectedBookingDate.year}-${selectedBookingDate.month.toString().padLeft(2, '0')}-${selectedBookingDate.day.toString().padLeft(2, '0')}";
                   
                   final int durationMinutes = selectedMatrixRow?['durationMinutes'] ?? 60;
                   final String merchantId = widget.config.merchantId;
 
-                  // Aligns directly with router.get('/bookings/available-slots', fetchAvailableSlots)
                   final url = '$_baseUrl/api/v1/bookings/available-slots'
                       '?merchantId=$merchantId'
                       '&date=$operationalDateString'
@@ -390,7 +394,6 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                       setDialogState(() {
                         dynamicAvailableSlots = backendSlots.map((slot) => slot.toString()).toList();
                         
-                        // Automatically update selected time slot safely based on capacity rules
                         if (dynamicAvailableSlots.isNotEmpty) {
                           if (selectedBookingTimeSlot == null || !dynamicAvailableSlots.contains(selectedBookingTimeSlot)) {
                             selectedBookingTimeSlot = dynamicAvailableSlots.first;
@@ -418,287 +421,298 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                 }
               }
 
-              // Fire initial execution cascade block immediately upon layout compilation
               if (!hasFetchedInitialSlots) {
                 hasFetchedInitialSlots = true;
-                Future.delayed(Duration.zero, () => updateCapacityAvailableSlots());
+                if (!isDayClosed) {
+                  Future.delayed(Duration.zero, () => updateCapacityAvailableSlots());
+                }
               }
 
-              return SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Select Service Matrix Tier', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569))),
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400), borderRadius: BorderRadius.circular(4)),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<Map<String, dynamic>>(
-                          isExpanded: true,
-                          value: selectedMatrixRow,
-                          items: liveServiceMatrices.map((matrix) {
-                            return DropdownMenuItem<Map<String, dynamic>>(
-                              value: matrix,
-                              child: Text('${matrix['name']} (${matrix['weightTier']} / ${matrix['coatType']}) - \$${((matrix['priceCentsAud'] ?? 0) / 100).toStringAsFixed(2)}'),
-                            );
-                          }).toList(),
-                          onChanged: (val) {
-                            setDialogState(() => selectedMatrixRow = val);
-                            updateCapacityAvailableSlots(); // Recalculate duration-based shifts
-                          },
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    const Text('Appointment Date & Time Selection', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569))),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            icon: const Icon(Icons.calendar_today, size: 16),
-                            label: Text('Date: ${selectedBookingDate.day}/${selectedBookingDate.month}/${selectedBookingDate.year}'),
-                            onPressed: () async {
-                              final pickedDate = await showDatePicker(
-                                context: context,
-                                initialDate: selectedBookingDate,
-                                firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                                lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
-                              );
-                              if (pickedDate != null) {
-                                setDialogState(() {
-                                  selectedBookingDate = pickedDate;
-                                  isDayClosed = _checkIsDayClosed(pickedDate); // <-- Added this line
-                                });
-                                updateCapacityAvailableSlots(); 
-                              }
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: isDayClosed ? Colors.red.shade300 : Colors.grey.shade300), 
-                              borderRadius: BorderRadius.circular(4),
-                              color: isDayClosed ? Colors.red.shade50 : (isLoadingSlots ? Colors.grey.shade100 : Colors.white),
-                            ),
-                            child: DropdownButtonHideUnderline(
-                              child: isDayClosed 
-                                  ? const Padding(
-                                      padding: EdgeInsets.symmetric(vertical: 12.0),
-                                      child: Text('SHOP CLOSED', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.redAccent)),
-                                    )
-                                  : (isLoadingSlots
-                                      ? const SizedBox(
-                                          height: 20, 
-                                          width: 20, 
-                                          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                                        )
-                                      : DropdownButton<String>(
-                                          isExpanded: true,
-                                          hint: const Text('No available slots', style: TextStyle(fontSize: 13, color: Colors.redAccent)),
-                                          value: selectedBookingTimeSlot,
-                                          items: dynamicAvailableSlots.map((time) {
-                                            return DropdownMenuItem<String>(value: time, child: Text('Time: $time'));
-                                          }).toList(),
-                                          onChanged: (val) => setDialogState(() => selectedBookingTimeSlot = val),
-                                        )),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const Divider(height: 32),
-
-                    Row(
-                      children: [
-                        Expanded(child: TextField(controller: dogNameCtrl, decoration: const InputDecoration(labelText: 'Dog Name *', border: OutlineInputBorder()))),
-                        const SizedBox(width: 12),
-                        Expanded(child: TextField(controller: dogBreedCtrl, decoration: const InputDecoration(labelText: 'Dog Breed Variant *', border: OutlineInputBorder()))),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Container(
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Wrap your entire existing input form layout elements inside an Expanded or flexible scroll body
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Select Service Matrix Tier', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569))),
+                          const SizedBox(height: 6),
+                          Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400), borderRadius: BorderRadius.circular(4)),
                             child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                value: selectedGender,
-                                items: const [
-                                  DropdownMenuItem(value: 'MALE', child: Text('Male')),
-                                  DropdownMenuItem(value: 'FEMALE', child: Text('Female')),
-                                  DropdownMenuItem(value: 'UNKNOWN', child: Text('Unknown')),
-                                ],
-                                onChanged: (v) => setDialogState(() => selectedGender = v!),
+                              child: DropdownButton<Map<String, dynamic>>(
+                                isExpanded: true,
+                                value: selectedMatrixRow,
+                                items: liveServiceMatrices.map((matrix) {
+                                  return DropdownMenuItem<Map<String, dynamic>>(
+                                    value: matrix,
+                                    child: Text('${matrix['name']} (${matrix['weightTier']} / ${matrix['coatType']}) - \$${((matrix['priceCentsAud'] ?? 0) / 100).toStringAsFixed(2)}'),
+                                  );
+                                }).toList(),
+                                onChanged: (val) {
+                                  setDialogState(() => selectedMatrixRow = val);
+                                  updateCapacityAvailableSlots(); 
+                                },
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Row(
-                          children: [
-                            Checkbox(
-                              value: isDesexed,
-                              onChanged: (v) => setDialogState(() => isDesexed = v!),
+                          const SizedBox(height: 16),
+                          
+                          const Text('Appointment Date & Time Selection', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569))),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  icon: const Icon(Icons.calendar_today, size: 16),
+                                  label: Text('Date: ${selectedBookingDate.day}/${selectedBookingDate.month}/${selectedBookingDate.year}'),
+                                  onPressed: () async {
+                                    final pickedDate = await showDatePicker(
+                                      context: context,
+                                      initialDate: selectedBookingDate,
+                                      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                                      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                                    );
+                                    if (pickedDate != null) {
+                                      setDialogState(() {
+                                        selectedBookingDate = pickedDate;
+                                        isDayClosed = _checkIsDayClosed(pickedDate);
+                                      });
+                                      updateCapacityAvailableSlots(); 
+                                    }
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: isDayClosed ? Colors.red.shade300 : Colors.grey.shade300), 
+                                    borderRadius: BorderRadius.circular(4),
+                                    color: isDayClosed ? Colors.red.shade50 : (isLoadingSlots ? Colors.grey.shade100 : Colors.white),
+                                  ),
+                                  child: DropdownButtonHideUnderline(
+                                    child: isDayClosed 
+                                        ? const Padding(
+                                            padding: EdgeInsets.symmetric(vertical: 12.0),
+                                            child: Text('SHOP CLOSED', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.redAccent)),
+                                          )
+                                        : (isLoadingSlots
+                                            ? const SizedBox(
+                                                height: 20, 
+                                                width: 20, 
+                                                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                                              )
+                                            : DropdownButton<String>(
+                                                isExpanded: true,
+                                                hint: const Text('No available slots', style: TextStyle(fontSize: 13, color: Colors.redAccent)),
+                                                value: selectedBookingTimeSlot,
+                                                items: dynamicAvailableSlots.map((time) {
+                                                  return DropdownMenuItem<String>(value: time, child: Text('Time: $time'));
+                                                }).toList(),
+                                                onChanged: (val) => setDialogState(() => selectedBookingTimeSlot = val),
+                                              )),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Divider(height: 32),
+
+                          Row(
+                            children: [
+                              Expanded(child: TextField(controller: dogNameCtrl, decoration: const InputDecoration(labelText: 'Dog Name *', border: OutlineInputBorder()))),
+                              const SizedBox(width: 12),
+                              Expanded(child: TextField(controller: dogBreedCtrl, decoration: const InputDecoration(labelText: 'Dog Breed Variant *', border: OutlineInputBorder()))),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400), borderRadius: BorderRadius.circular(4)),
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<String>(
+                                      value: selectedGender,
+                                      items: const [
+                                        DropdownMenuItem(value: 'MALE', child: Text('Male')),
+                                        DropdownMenuItem(value: 'FEMALE', child: Text('Female')),
+                                        DropdownMenuItem(value: 'UNKNOWN', child: Text('Unknown')),
+                                      ],
+                                      onChanged: (v) => setDialogState(() => selectedGender = v!),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Row(
+                                children: [
+                                  Checkbox(
+                                    value: isDesexed,
+                                    onChanged: (v) => setDialogState(() => isDesexed = v!),
+                                  ),
+                                  const Text('Desexed / Neutered'),
+                                ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          TextField(controller: ownerNameCtrl, decoration: const InputDecoration(labelText: 'Owner Full Name *', border: OutlineInputBorder())),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: ownerPhoneCtrl, 
+                                  keyboardType: TextInputType.number, 
+                                  maxLength: 10, 
+                                  inputFormatters: [FilteringTextInputFormatter.digitsOnly], 
+                                  decoration: const InputDecoration(
+                                    labelText: 'Owner Phone * (04..)', 
+                                    hintText: '0412345678',
+                                    counterText: '', 
+                                    border: OutlineInputBorder()
+                                  )
+                                )
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: TextField(
+                                  controller: ownerEmailCtrl, 
+                                  keyboardType: TextInputType.emailAddress,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Owner Email *', 
+                                    hintText: 'example@domain.com',
+                                    border: OutlineInputBorder()
+                                  )
+                                )
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          TextField(
+                            controller: dogDescCtrl,
+                            maxLines: 2,
+                            decoration: const InputDecoration(
+                              labelText: 'Dog Special Notes / Interaction Requests',
+                              alignLabelWithHint: true,
+                              border: OutlineInputBorder()
                             ),
-                            const Text('Desexed / Neutered'),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(controller: ownerNameCtrl, decoration: const InputDecoration(labelText: 'Owner Full Name *', border: OutlineInputBorder())),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: ownerPhoneCtrl, 
-                            keyboardType: TextInputType.number, 
-                            maxLength: 10, 
-                            inputFormatters: [FilteringTextInputFormatter.digitsOnly], 
-                            decoration: const InputDecoration(
-                              labelText: 'Owner Phone * (04..)', 
-                              hintText: '0412345678',
-                              counterText: '', 
-                              border: OutlineInputBorder()
-                            )
-                          )
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextField(
-                            controller: ownerEmailCtrl, 
-                            keyboardType: TextInputType.emailAddress,
-                            decoration: const InputDecoration(
-                              labelText: 'Owner Email *', 
-                              hintText: 'example@domain.com',
-                              border: OutlineInputBorder()
-                            )
-                          )
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: dogDescCtrl,
-                      maxLines: 2,
-                      decoration: const InputDecoration(
-                        labelText: 'Dog Special Notes / Interaction Requests',
-                        alignLabelWithHint: true,
-                        border: OutlineInputBorder()
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Moving your action buttons INSIDE the StatefulBuilder here makes them highly reactive!
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context), 
+                        child: const Text('Abort'),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isDayClosed ? Colors.grey : widget.config.primaryColor, 
+                          foregroundColor: Colors.white
+                        ),
+                        onPressed: isDayClosed ? null : () async {
+                          final cleanPhone = ownerPhoneCtrl.text.trim();
+                          final cleanEmail = ownerEmailCtrl.text.trim();
+
+                          if (dogNameCtrl.text.isEmpty || 
+                              dogBreedCtrl.text.isEmpty || 
+                              ownerNameCtrl.text.isEmpty || 
+                              cleanPhone.isEmpty || 
+                              cleanEmail.isEmpty) {
+                            _showSnackBar('⚠️ Please complete all mandatory fields marked with an asterisk (*).');
+                            return;
+                          }
+
+                          if (selectedBookingTimeSlot == null || selectedBookingTimeSlot!.isEmpty) {
+                            _showSnackBar('⚠️ No real-time staff capacity options selected. Please choose another date or service tier.');
+                            return;
+                          }
+
+                          final String digitsOnlyPhone = cleanPhone.replaceAll(RegExp(r'\D'), '');
+                          if (digitsOnlyPhone.length != 10 || !digitsOnlyPhone.startsWith('04')) {
+                            _showSnackBar('⚠️ Invalid Phone number. Must be a valid 10-digit Australian mobile number starting with 04.');
+                            return;
+                          }
+
+                          final RegExp emailRegex = RegExp(r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+");
+                          if (!emailRegex.hasMatch(cleanEmail)) {
+                            _showSnackBar('⚠️ Invalid Email pattern structure detected.');
+                            return;
+                          }
+
+                          final timeParts = selectedBookingTimeSlot!.split(':');
+                          final hour = int.parse(timeParts[0]);
+                          final minute = int.parse(timeParts[1]);
+                          
+                          final targetDateTime = DateTime(
+                            selectedBookingDate.year, 
+                            selectedBookingDate.month, 
+                            selectedBookingDate.day, 
+                            hour, 
+                            minute
+                          );
+
+                          final payload = {
+                            'merchantId': widget.config.merchantId,
+                            'bookedById': widget.config.userId,
+                            'servicePricingMatrixId': selectedMatrixRow?['id'],
+                            'dogName': dogNameCtrl.text.trim(),
+                            'dogBreed': dogBreedCtrl.text.trim(),
+                            'dogGender': selectedGender,
+                            'isDesexed': isDesexed,
+                            'ownerName': ownerNameCtrl.text.trim(),
+                            'ownerPhone': digitsOnlyPhone, 
+                            'ownerEmail': cleanEmail,
+                            'serviceTime': targetDateTime.toIso8601String(),
+                            'groomerId': null,
+                            'note': dogDescCtrl.text.trim(),
+                          };
+
+                          try {
+                            final response = await http.post(
+                              Uri.parse('$_baseUrl/api/v1/bookings/add'),
+                              headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': 'Bearer ${widget.authToken}',
+                              },
+                              body: jsonEncode(payload),
+                            );
+
+                            final responseData = jsonDecode(response.body);
+                            if (response.statusCode == 200 || response.statusCode == 201) {
+                              Navigator.pop(context);
+                              _showSnackBar('🚀 Administrative appointment successfully recorded.');
+                              _fetchDashboardAppointments();
+                            } else {
+                              _showSnackBar('❌ Submission Rejected: ${responseData['message'] ?? 'Check input parameters.'}');
+                            }
+                          } catch (err) {
+                            _showSnackBar('❌ Error: Could not connect to target administrative cluster route.');
+                          }
+                        },
+                        child: const Text('Place Booking'),
+                      ),
+                    ],
+                  ),
+                ],
               );
             },
           ),
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Abort')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              // Gray out the button if the day is closed
-              backgroundColor: isDayClosed ? Colors.grey : widget.config.primaryColor, 
-              foregroundColor: Colors.white
-            ),
-            onPressed: isDayClosed ? null : () async {
-              final cleanPhone = ownerPhoneCtrl.text.trim();
-              final cleanEmail = ownerEmailCtrl.text.trim();
-
-              // 1. Mandatory Fields Presence Assessment
-              if (dogNameCtrl.text.isEmpty || 
-                  dogBreedCtrl.text.isEmpty || 
-                  ownerNameCtrl.text.isEmpty || 
-                  cleanPhone.isEmpty || 
-                  cleanEmail.isEmpty) {
-                _showSnackBar('⚠️ Please complete all mandatory fields marked with an asterisk (*).');
-                return;
-              }
-
-              // Guard check: ensures a real capacity slot has been selected
-              if (selectedBookingTimeSlot == null || selectedBookingTimeSlot!.isEmpty) {
-                _showSnackBar('⚠️ No real-time staff capacity options selected. Please choose another date or service tier.');
-                return;
-              }
-
-              // 2. Numerical enforcement & Australian Mobile Format Alignment
-              final String digitsOnlyPhone = cleanPhone.replaceAll(RegExp(r'\D'), '');
-              
-              if (digitsOnlyPhone.length != 10 || !digitsOnlyPhone.startsWith('04')) {
-                _showSnackBar('⚠️ Invalid Phone number. Must be a valid 10-digit Australian mobile number starting with 04.');
-                return;
-              }
-
-              // 3. Email Formatting Compliance Layer Check
-              final RegExp emailRegex = RegExp(r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+");
-              if (!emailRegex.hasMatch(cleanEmail)) {
-                _showSnackBar('⚠️ Invalid Email pattern structure detected.');
-                return;
-              }
-
-              final timeParts = selectedBookingTimeSlot!.split(':');
-              final hour = int.parse(timeParts[0]);
-              final minute = int.parse(timeParts[1]);
-              
-              final targetDateTime = DateTime(
-                selectedBookingDate.year, 
-                selectedBookingDate.month, 
-                selectedBookingDate.day, 
-                hour, 
-                minute
-              );
-
-              final payload = {
-                'merchantId': widget.config.merchantId,
-                'bookedById': widget.config.userId,
-                'servicePricingMatrixId': selectedMatrixRow?['id'],
-                'dogName': dogNameCtrl.text.trim(),
-                'dogBreed': dogBreedCtrl.text.trim(),
-                'dogGender': selectedGender,
-                'isDesexed': isDesexed,
-                'ownerName': ownerNameCtrl.text.trim(),
-                'ownerPhone': digitsOnlyPhone, 
-                'ownerEmail': cleanEmail,
-                'serviceTime': targetDateTime.toIso8601String(),
-                'groomerId': null,
-                'note': dogDescCtrl.text.trim(),
-              };
-
-              try {
-                final response = await http.post(
-                  Uri.parse('$_baseUrl/api/v1/bookings/add'),
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ${widget.authToken}',
-                  },
-                  body: jsonEncode(payload),
-                );
-
-                final responseData = jsonDecode(response.body);
-                if (response.statusCode == 200 || response.statusCode == 201) {
-                  Navigator.pop(context);
-                  _showSnackBar('🚀 Administrative appointment successfully recorded.');
-                  _fetchDashboardAppointments();
-                } else {
-                  _showSnackBar('❌ Submission Rejected: ${responseData['message'] ?? 'Check input parameters.'}');
-                }
-              } catch (err) {
-                _showSnackBar('❌ Error: Could not connect to target administrative cluster route.');
-              }
-            },
-            child: const Text('Place Booking'),
-          ),
-        ],
       ),
     );
   }
