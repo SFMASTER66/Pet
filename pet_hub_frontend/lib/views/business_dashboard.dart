@@ -8,6 +8,7 @@ import 'package:table_calendar/table_calendar.dart';
 import '../models/merchant_config.dart';
 import 'customer_portal.dart';
 import 'manage_team_panel.dart';
+import 'manage_hours_panel.dart'; // Import the new panel cleanly
 
 class UnifiedMerchantDashboard extends StatefulWidget {
   final MerchantConfig config;
@@ -78,7 +79,8 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
   @override
   void initState() {
     super.initState();
-    _drawerTabController = TabController(length: widget.isAdmin ? 2 : 1, vsync: this);
+    // Extended drawer tabs constraint allocation payload limit from 2 slots to 3 slots for admin
+    _drawerTabController = TabController(length: widget.isAdmin ? 3 : 1, vsync: this);
     _syncControllers();
     _fetchServiceMatrices(); 
     _fetchDashboardAppointments();
@@ -89,7 +91,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     super.didUpdateWidget(oldWidget);
     if (widget.isAdmin != oldWidget.isAdmin) {
       _drawerTabController.dispose();
-      _drawerTabController = TabController(length: widget.isAdmin ? 2 : 1, vsync: this);
+      _drawerTabController = TabController(length: widget.isAdmin ? 3 : 1, vsync: this);
     }
   }
 
@@ -709,6 +711,20 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
           if (widget.isAdmin) ...[
             const SizedBox(width: 10),
             OutlinedButton.icon(
+              icon: const Icon(Icons.schedule_outlined, size: 16),
+              label: const Text('Business Hours'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF0F172A),
+                side: const BorderSide(color: Color(0xFFCBD5E1)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              ),
+              onPressed: () {
+                setState(() => _drawerTabController.index = 1); 
+                _scaffoldKey.currentState!.openEndDrawer();
+              },
+            ),
+            const SizedBox(width: 10),
+            OutlinedButton.icon(
               icon: const Icon(Icons.group_outlined, size: 16),
               label: const Text('Manage Team'),
               style: OutlinedButton.styleFrom(
@@ -717,7 +733,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
               ),
               onPressed: () {
-                setState(() => _drawerTabController.index = 1); 
+                setState(() => _drawerTabController.index = 2); 
                 _scaffoldKey.currentState!.openEndDrawer();
               },
             ),
@@ -889,7 +905,6 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     );
   }
 
-  // Highlights: Added function to handle updating and reenabling services on the fly via PUT route
   Future<void> _toggleServiceActiveStatus(int matrixId, bool currentStatus) async {
     setState(() => _isServiceLoading = true);
     try {
@@ -919,7 +934,6 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     }
   }
 
-  // Highlights: Updated service catalog presentation logic displaying clear indicators and actionable toggles
   Widget _buildToggleableServiceCatalogSection(Color col) {
     return Container(
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
@@ -1017,7 +1031,6 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                               '\$${((matrix['priceCentsAud'] ?? 0) / 100).toStringAsFixed(2)}',
                               style: TextStyle(fontWeight: FontWeight.bold, color: active ? const Color(0xFF0F172A) : Colors.grey),
                             ),
-                            // ✅ FIX: Only render the toggle switch interactive element if the user has admin credentials
                             if (widget.isAdmin) ...[
                               const SizedBox(width: 16),
                               Switch(
@@ -1375,8 +1388,6 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                       ),
                     ),
                     const SizedBox(height: 20),
-                    
-                    // const Text('Administrative Actions', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.redAccent)),
                     const SizedBox(height: 6),
                     Center(
                       child: ElevatedButton(
@@ -1446,7 +1457,6 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                     'internalTags': parsedTags,
                   };
 
-                  // 1. Lift variable declaration above the blocks so both try/catch and setState can read and write to it
                   int serverVerifiedDuration = app['durationMinutes'] ?? 60;
 
                   try {
@@ -1461,7 +1471,6 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
 
                     if (response.statusCode == 200) {
                       final Map<String, dynamic> responseData = jsonDecode(response.body);
-                      // Parse out the exact updated data returned by your Prisma service layer update block
                       if (responseData['success'] == true && responseData['data'] != null) {
                         final appointmentSnapshot = responseData['data'];
                         if (appointmentSnapshot['durationMinutes'] != null) {
@@ -1476,29 +1485,21 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                     _showSnackBar('🔄 Connection error; processing local simulation safely.');
                   }
 
-                  // 2. Perform state synchronization with the verified data context
                   setState(() {
                     final targetIdx = mockAppointments.indexWhere((element) => element['id'] == app['id']);
                     if (targetIdx != -1) {
-                      // Core State Properties Synchronized
                       mockAppointments[targetIdx]['isCheckedIn'] = isCheckedIn;
                       mockAppointments[targetIdx]['isDepositPaid'] = depositPaid;
                       mockAppointments[targetIdx]['isReadyForPickup'] = isReadyForPickup;
                       mockAppointments[targetIdx]['isLoyaltyWaived'] = isLoyaltyWaived;
                       mockAppointments[targetIdx]['status'] = currentStatus;
                       mockAppointments[targetIdx]['staffTags'] = parsedTags;
-                      
-                      // Exact Start Time Set From Your Time Picker Elements
                       mockAppointments[targetIdx]['rawStartTime'] = targetFullDateTime;
-                      
-                      // ✅ FIX: Save the fresh value into the local array item state mapping directly!
                       mockAppointments[targetIdx]['durationMinutes'] = serverVerifiedDuration;
                       
-                      // Calculate Clean Absolute End Timestamp using the fresh update value
                       final rangeEnd = targetFullDateTime.add(Duration(minutes: serverVerifiedDuration));
                       mockAppointments[targetIdx]['rawEndTime'] = rangeEnd; 
                       
-                      // Update Time Window Display Text String Formats
                       mockAppointments[targetIdx]['time'] = 
                           "${targetFullDateTime.hour.toString().padLeft(2, '0')}:${targetFullDateTime.minute.toString().padLeft(2, '0')} - ${rangeEnd.hour.toString().padLeft(2, '0')}:${rangeEnd.minute.toString().padLeft(2, '0')}";
                     }
@@ -1647,7 +1648,10 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
               indicatorColor: themeColor,
               tabs: [
                 const Tab(icon: Icon(Icons.tune), text: 'UI Text Config'),
-                if (widget.isAdmin) const Tab(icon: Icon(Icons.badge_outlined), text: 'Team Members'),
+                if (widget.isAdmin) ...[
+                  const Tab(icon: Icon(Icons.schedule_rounded), text: 'Hours'),
+                  const Tab(icon: Icon(Icons.badge_outlined), text: 'Team Members'),
+                ]
               ],
             ),
             Expanded(
@@ -1683,11 +1687,16 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                       ),
                     ),
                   ),
-                  if (widget.isAdmin)
+                  if (widget.isAdmin) ...[
+                    ManageHoursPanel(
+                      config: widget.config,
+                      authToken: widget.authToken,
+                    ),
                     ManageTeamPanel(
                       config: widget.config, 
                       authToken: widget.authToken,
                     ),
+                  ],
                 ],
               ),
             )

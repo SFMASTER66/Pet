@@ -104,3 +104,47 @@ export const deleteStaffProfile = async (req: AuthenticatedRequest, res: Respons
     return res.status(400).json({ success: false, message: error.message });
   }
 };
+
+export const fetchMerchantHours = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { merchantId } = req.params;
+    
+    // Security Context Enforcement Guard Rule
+    if (!req.user || req.user.merchantId !== merchantId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized merchant domain boundary context.' });
+    }
+
+    const hours = await merchantService.getBusinessHours(merchantId);
+    return res.status(200).json({ success: true, data: hours });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const updateMerchantHoursDay = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { merchantId } = req.params;
+    const { dayOfWeek, openTime, closeTime, isClosed } = req.body;
+
+    // Security context validation guard check
+    if (!req.user || req.user.merchantId !== merchantId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized operational modification frame.' });
+    }
+
+    if (!dayOfWeek || !openTime || !closeTime || isClosed === undefined) {
+      return res.status(400).json({ success: false, message: 'Missing explicit day structural boundary components.' });
+    }
+
+    const updatedDay = await merchantService.upsertBusinessHoursDay(
+      merchantId,
+      Number(dayOfWeek),
+      openTime,
+      closeTime,
+      isClosed
+    );
+
+    return res.status(200).json({ success: true, data: updatedDay });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};

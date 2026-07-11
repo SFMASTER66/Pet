@@ -199,4 +199,62 @@ export class MerchantService {
       });
     });
   }
+
+  async getBusinessHours(merchantId: string) {
+  // 1. Fetch current business hours records
+  let hours = await prisma.businessHours.findMany({
+    where: { merchantId },
+    orderBy: { dayOfWeek: 'asc' },
+  });
+
+  // 2. If no entries exist yet, seed default standard business week records matching model constraints
+  if (hours.length === 0) {
+    const defaults = Array.from({ length: 7 }, (_, i) => ({
+      merchantId,
+      dayOfWeek: i + 1,
+      openTime: '09:00',
+      closeTime: '17:00',
+      isClosed: (i + 1) > 5, // Saturday & Sunday closed by default
+    }));
+
+    await prisma.businessHours.createMany({ data: defaults });
+    
+    hours = await prisma.businessHours.findMany({
+      where: { merchantId },
+      orderBy: { dayOfWeek: 'asc' },
+    });
+  }
+
+  return hours;
+}
+
+  async upsertBusinessHoursDay(
+    merchantId: string, 
+    dayOfWeek: number, 
+    openTime: string, 
+    closeTime: string, 
+    isClosed: boolean
+  ) {
+    // Uses atomic unique composite key constraints: [merchantId, dayOfWeek]
+    return await prisma.businessHours.upsert({
+      where: {
+        merchantId_dayOfWeek: {
+          merchantId,
+          dayOfWeek,
+        },
+      },
+      update: {
+        openTime,
+        closeTime,
+        isClosed,
+      },
+      create: {
+        merchantId,
+        dayOfWeek,
+        openTime,
+        closeTime,
+        isClosed,
+      },
+    });
+  }
 }

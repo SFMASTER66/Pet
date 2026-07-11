@@ -10,7 +10,9 @@ import {
   createStaffProfile, 
   getStaffDirectory, 
   deleteStaffProfile, 
-  getMerchantDashboard 
+  getMerchantDashboard,
+  fetchMerchantHours, 
+  updateMerchantHoursDay
 } from '../controllers/merchant.controller';
 import { requestLogger, LoggedRequest } from '../middlewares/activity-log.middleware';
 
@@ -42,5 +44,8 @@ router.post(
   createStaffProfile as any
 );
 router.delete('/merchant/staff/:staffId', requireAdmin, deleteStaffProfile);
+
+router.get('/merchant/:merchantId/hours', requireAdmin as any, fetchMerchantHours as any);
+router.put('/merchant/:merchantId/hours', requireAdmin as any, updateMerchantHoursDay as any);
 
 export default router;
