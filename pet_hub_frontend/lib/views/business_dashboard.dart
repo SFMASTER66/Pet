@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io' show Platform; 
-import 'package:flutter/services.dart'; // Added for FilteringTextInputFormatter
+import 'package:flutter/services.dart'; 
 import 'package:flutter/foundation.dart' show kIsWeb; 
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
@@ -8,7 +8,8 @@ import 'package:table_calendar/table_calendar.dart';
 import '../models/merchant_config.dart';
 import 'customer_portal.dart';
 import 'manage_team_panel.dart';
-import 'manage_hours_panel.dart'; // Import the new panel cleanly
+import 'manage_hours_panel.dart'; 
+import 'customer_info_panel.dart'; // New separation file layout layer integration
 
 class UnifiedMerchantDashboard extends StatefulWidget {
   final MerchantConfig config;
@@ -80,12 +81,21 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
   @override
   void initState() {
     super.initState();
-    // Extended drawer tabs constraint allocation payload limit from 2 slots to 3 slots for admin
-    _drawerTabController = TabController(length: widget.isAdmin ? 3 : 1, vsync: this);
+    _drawerTabController = TabController(length: widget.isAdmin ? 4 : 1, vsync: this);
     _syncControllers();
     _fetchServiceMatrices(); 
     _fetchDashboardAppointments();
-    _fetchBusinessHours(); // <-- Add this call here
+    _fetchBusinessHours(); 
+  }
+
+  @override
+  void dispose() {
+    _drawerTabController.dispose();
+    _btnBookController.dispose();
+    _btnCancelController.dispose();
+    _btnEditController.dispose();
+    _txtRevenueController.dispose();
+    super.dispose();
   }
 
   @override
@@ -93,7 +103,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     super.didUpdateWidget(oldWidget);
     if (widget.isAdmin != oldWidget.isAdmin) {
       _drawerTabController.dispose();
-      _drawerTabController = TabController(length: widget.isAdmin ? 3 : 1, vsync: this);
+      _drawerTabController = TabController(length: widget.isAdmin ? 4 : 1, vsync: this);
     }
   }
 
@@ -149,9 +159,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
           });
         }
       }
-    } catch (_) {
-      // Isolated background fault handler to keep UI stable
-    }
+    } catch (_) {}
   }
 
   Future<void> _fetchDashboardAppointments() async {
@@ -217,12 +225,10 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
 
   bool _checkIsDayClosed(DateTime date) {
     if (_businessHoursConfig.isEmpty) return false;
-    
     final dayRecord = _businessHoursConfig.firstWhere(
       (element) => element['dayOfWeek'] == date.weekday,
       orElse: () => null,
     );
-    
     return dayRecord != null && dayRecord['isClosed'] == true;
   }
 
@@ -302,16 +308,6 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
         .fold(0, (p, e) => p + e);
   }
 
-  @override
-  void dispose() {
-    _btnBookController.dispose();
-    _btnCancelController.dispose();
-    _btnEditController.dispose();
-    _txtRevenueController.dispose();
-    _drawerTabController.dispose();
-    super.dispose();
-  }
-
   void _showCreateBookingDialog() {
     final dogNameCtrl = TextEditingController();
     final dogBreedCtrl = TextEditingController();
@@ -327,7 +323,6 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     DateTime selectedBookingDate = _selectedDay ?? DateTime.now();
     bool isDayClosed = _checkIsDayClosed(selectedBookingDate);
     
-    // --- Dynamic Capacity-Aware Slot States ---
     List<String> dynamicAvailableSlots = [];
     String? selectedBookingTimeSlot;
     bool isLoadingSlots = false;
@@ -431,7 +426,6 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Wrap your entire existing input form layout elements inside an Expanded or flexible scroll body
                   Expanded(
                     child: SingleChildScrollView(
                       child: Column(
@@ -610,7 +604,6 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                     ),
                   ),
                   const SizedBox(height: 16),
-                  // Moving your action buttons INSIDE the StatefulBuilder here makes them highly reactive!
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
@@ -771,6 +764,20 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
             onPressed: _showCreateBookingDialog,
           ),
           if (widget.isAdmin) ...[
+            const SizedBox(width: 10),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.people_outline, size: 16),
+              label: const Text('Customer Info'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF0F172A),
+                side: const BorderSide(color: Color(0xFFCBD5E1)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              ),
+              onPressed: () {
+                setState(() => _drawerTabController.index = 3); 
+                _scaffoldKey.currentState!.openEndDrawer();
+              },
+            ),
             const SizedBox(width: 10),
             OutlinedButton.icon(
               icon: const Icon(Icons.schedule_outlined, size: 16),
@@ -1309,11 +1316,11 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     );
   }
 
-  Widget _buildStatusBadge(String text, Color col) {
+  Widget _buildStatusBadge(String text, Color mappedColor) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: col.withAlpha(24), borderRadius: BorderRadius.circular(4)),
-      child: Text(text, style: TextStyle(color: col.darken(), fontSize: 10, fontWeight: FontWeight.bold)),
+      decoration: BoxDecoration(color: mappedColor.withAlpha(24), borderRadius: BorderRadius.circular(4)),
+      child: Text(text, style: TextStyle(color: mappedColor, fontSize: 10, fontWeight: FontWeight.bold)),
     );
   }
 
@@ -1450,7 +1457,6 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                       ),
                     ),
                     const SizedBox(height: 20),
-                    const SizedBox(height: 6),
                     Center(
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
@@ -1464,7 +1470,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                             body: 'This operation will delete booking identifier ${app['id']} permanently from the production cluster.',
                             onConfirm: () async {
                               try {
-                                final res = await http.delete(
+                                await http.delete(
                                   Uri.parse('$_baseUrl/api/v1/bookings/delete/${app['id']}'),
                                   headers: {'Authorization': 'Bearer ${widget.authToken}'},
                                 );
@@ -1713,6 +1719,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                 if (widget.isAdmin) ...[
                   const Tab(icon: Icon(Icons.schedule_rounded), text: 'Hours'),
                   const Tab(icon: Icon(Icons.badge_outlined), text: 'Team Members'),
+                  const Tab(icon: Icon(Icons.pets), text: 'Customers'),
                 ]
               ],
             ),
@@ -1757,6 +1764,12 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                     ManageTeamPanel(
                       config: widget.config, 
                       authToken: widget.authToken,
+                    ),
+                    CustomerInfoPanel(
+                      config: widget.config,
+                      authToken: widget.authToken,
+                      baseUrl: _baseUrl,
+                      themeColor: themeColor,
                     ),
                   ],
                 ],

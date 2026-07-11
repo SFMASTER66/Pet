@@ -12,7 +12,8 @@ import {
   deleteStaffProfile, 
   getMerchantDashboard,
   fetchMerchantHours, 
-  updateMerchantHoursDay
+  updateMerchantHoursDay,
+  getPaginatedCustomersList
 } from '../controllers/merchant.controller';
 import { requestLogger, LoggedRequest } from '../middlewares/activity-log.middleware';
 
@@ -24,6 +25,8 @@ router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);
 
 router.get('/:merchantId/dashboard', getMerchantDashboard);
+
+router.get('/merchant/:merchantId/customers', requireAdmin as any, getPaginatedCustomersList as any);
 
 // Protected Staff Management API Operations
 router.get('/merchant/staff', requireAdmin, getStaffDirectory);

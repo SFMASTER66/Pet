@@ -18,6 +18,26 @@ export const getMerchantDashboard = async (req: any, res: Response) => {
   }
 };
 
+export const getPaginatedCustomersList = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { merchantId } = req.params;
+    
+    // Security Context Enforcement Guard Rule
+    if (!req.user || req.user.merchantId !== merchantId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized merchant domain boundary context.' });
+    }
+
+    // Safely parse pagination query inputs with absolute defaults
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+
+    const customersPayload = await merchantService.getPaginatedCustomers(merchantId, page, limit);
+    return res.status(200).json({ success: true, data: customersPayload });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 export const getStaffDirectory = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const adminUser = req.user;

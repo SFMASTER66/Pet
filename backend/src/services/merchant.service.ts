@@ -110,6 +110,51 @@ export class MerchantService {
     };
   }
 
+  async getPaginatedCustomers(merchantId: string, page: number, limit: number) {
+    const skip = (page - 1) * limit;
+
+    // Fetch matching pet profiles belonging to this merchant with their associated owners
+    const [records, totalCount] = await prisma.$transaction([
+      prisma.pet.findMany({
+        where: { merchantId },
+        skip: skip,
+        take: limit,
+        include: {
+          owner: true, // Fetch structural link relational context
+        },
+        orderBy: {
+          name: 'asc',
+        },
+      }),
+      prisma.pet.count({
+        where: { merchantId },
+      }),
+    ]);
+
+    // Transform database schema model directly into the UI mapping contract matching frontend
+    const formattedRecords = records.map((pet) => ({
+      id: pet.id,
+      name: pet.name,
+      breed: pet.breed || 'N/A',
+      gender: pet.gender || 'MALE',
+      isDesexed: pet.isDesexed || false,
+      notes: pet.behaviorNotes || null,
+      owner: {
+        name: pet.owner?.name || 'Unknown Owner',
+        email: pet.owner?.email || 'No contact email listed',
+        phone: pet.owner?.phoneNumber || 'N/A',
+      },
+    }));
+
+    const totalPages = Math.ceil(totalCount / limit) || 1;
+
+    return {
+      records: formattedRecords,
+      totalPages: totalPages,
+      totalCount: totalCount,
+    };
+  }
+
   async getMerchantStaff(merchantId: string) {
     return await prisma.user.findMany({
       where: {
