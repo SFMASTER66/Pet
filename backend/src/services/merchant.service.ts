@@ -110,13 +110,43 @@ export class MerchantService {
     };
   }
 
-  async getPaginatedCustomers(merchantId: string, page: number, limit: number) {
+  // =========================================================================
+  // 🔥 UPDATED METHOD SIGNATURE TO ACCEPT AN OPTIONAL 'search' VALUE
+  // =========================================================================
+  async getPaginatedCustomers(merchantId: string, page: number, limit: number, search?: string) {
     const skip = (page - 1) * limit;
+
+    // =========================================================================
+    // 🔥 NEW: DYNAMIC CLAUSE BUILDING TO INTERCEPT DOG OR OWNER RECORDS MATCHES
+    // =========================================================================
+    const whereClause: any = {
+      merchantId: merchantId,
+    };
+
+    if (search && search.length > 0) {
+      whereClause.AND = [
+        {
+          OR: [
+            { name: { contains: search, mode: 'insensitive' } },  // Match Pet Name
+            { breed: { contains: search, mode: 'insensitive' } }, // Match Pet Breed
+            {
+              owner: {
+                OR: [
+                  { name: { contains: search, mode: 'insensitive' } },        // Match Owner Name
+                  { email: { contains: search, mode: 'insensitive' } },       // Match Owner Email
+                  { phoneNumber: { contains: search, mode: 'insensitive' } }, // Match Owner Phone
+                ],
+              },
+            },
+          ],
+        },
+      ];
+    }
 
     // Fetch matching pet profiles belonging to this merchant with their associated owners
     const [records, totalCount] = await prisma.$transaction([
       prisma.pet.findMany({
-        where: { merchantId },
+        where: whereClause, // 🔥 Updated from fixed 'where: { merchantId }'
         skip: skip,
         take: limit,
         include: {
@@ -127,7 +157,7 @@ export class MerchantService {
         },
       }),
       prisma.pet.count({
-        where: { merchantId },
+        where: whereClause, // 🔥 Updated count query so it stays in parity with records total
       }),
     ]);
 
