@@ -116,9 +116,6 @@ export class MerchantService {
   async getPaginatedCustomers(merchantId: string, page: number, limit: number, search?: string) {
     const skip = (page - 1) * limit;
 
-    // =========================================================================
-    // 🔥 NEW: DYNAMIC CLAUSE BUILDING TO INTERCEPT DOG OR OWNER RECORDS MATCHES
-    // =========================================================================
     const whereClause: any = {
       merchantId: merchantId,
     };
@@ -127,14 +124,14 @@ export class MerchantService {
       whereClause.AND = [
         {
           OR: [
-            { name: { contains: search, mode: 'insensitive' } },  // Match Pet Name
-            { breed: { contains: search, mode: 'insensitive' } }, // Match Pet Breed
+            { name: { contains: search, mode: 'insensitive' } },  
+            { breed: { contains: search, mode: 'insensitive' } }, 
             {
               owner: {
                 OR: [
-                  { name: { contains: search, mode: 'insensitive' } },        // Match Owner Name
-                  { email: { contains: search, mode: 'insensitive' } },       // Match Owner Email
-                  { phoneNumber: { contains: search, mode: 'insensitive' } }, // Match Owner Phone
+                  { name: { contains: search, mode: 'insensitive' } },        
+                  { email: { contains: search, mode: 'insensitive' } },       
+                  { phoneNumber: { contains: search, mode: 'insensitive' } }, 
                 ],
               },
             },
@@ -143,32 +140,40 @@ export class MerchantService {
       ];
     }
 
-    // Fetch matching pet profiles belonging to this merchant with their associated owners
     const [records, totalCount] = await prisma.$transaction([
       prisma.pet.findMany({
-        where: whereClause, // 🔥 Updated from fixed 'where: { merchantId }'
+        where: whereClause, 
         skip: skip,
         take: limit,
         include: {
-          owner: true, // Fetch structural link relational context
+          owner: true, 
+          // ==========================================
+          // 🔥 NEW: AGGREGATE COUNT RELATION FOR APPOINTMENTS
+          // ==========================================
+          _count: {
+            select: { appointments: true }
+          }
         },
         orderBy: {
           name: 'asc',
         },
       }),
       prisma.pet.count({
-        where: whereClause, // 🔥 Updated count query so it stays in parity with records total
+        where: whereClause, 
       }),
     ]);
 
-    // Transform database schema model directly into the UI mapping contract matching frontend
-    const formattedRecords = records.map((pet) => ({
+    const formattedRecords = records.map((pet: any) => ({
       id: pet.id,
       name: pet.name,
       breed: pet.breed || 'N/A',
       gender: pet.gender || 'MALE',
       isDesexed: pet.isDesexed || false,
       notes: pet.behaviorNotes || null,
+      // ==========================================
+      // 🔥 NEW: MAP THE APPOINTMENT COUNT TO UI PAYLOAD
+      // ==========================================
+      appointmentCount: pet._count?.appointments ?? 0,
       owner: {
         name: pet.owner?.name || 'Unknown Owner',
         email: pet.owner?.email || 'No contact email listed',

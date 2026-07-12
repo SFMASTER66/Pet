@@ -87,9 +87,6 @@ class _CustomerInfoPanelState extends State<CustomerInfoPanel> {
     }
   }
 
-  // ==========================================
-  // 🔥 UPDATED: TRIGGER SEARCH INSTANTLY ON CHANGE
-  // ==========================================
   void _onSearchChanged(String value) {
     setState(() {
       _searchQuery = value.trim();
@@ -124,9 +121,6 @@ class _CustomerInfoPanelState extends State<CustomerInfoPanel> {
             elevation: 2,
             child: TextField(
               controller: _searchController,
-              // ========================================================
-              // 🔥 HIGHLIGHT: Swapped 'onSubmitted' with 'onChanged' 
-              // ========================================================
               onChanged: _onSearchChanged,
               decoration: InputDecoration(
                 hintText: 'Search dog or owner details...',
@@ -196,7 +190,38 @@ class _CustomerInfoPanelState extends State<CustomerInfoPanel> {
                                     Text('Pet Name: ${item['name'] ?? 'Unknown'}', style: const TextStyle(fontWeight: FontWeight.w600)),
                                     Text('Breed Type: ${item['breed'] ?? 'N/A'}'),
                                     Text('Status: ${item['gender'] ?? 'MALE'} (${item['isDesexed'] == true ? 'Desexed' : 'Intact'})'),
-                                    if (item['notes'] != null) Text('Special Handling Guidelines: ${item['notes']}'),
+                                    
+                                    // ==========================================
+                                    // 🔥 HIGHLIGHT: DISPLAY TOTAL APPOINTMENT COUNT
+                                    // ==========================================
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue.shade50,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.calendar_month, size: 14, color: Colors.blue),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            'Total Appointments: ${item['appointmentCount'] ?? 0}',
+                                            style: const TextStyle(
+                                              fontSize: 12, 
+                                              color: Colors.blue, 
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    
+                                    if (item['notes'] != null) ...[
+                                      const SizedBox(height: 6),
+                                      Text('Special Handling Guidelines: ${item['notes']}'),
+                                    ],
                                   ],
                                 ),
                               )
