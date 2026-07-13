@@ -116,23 +116,34 @@ export class MerchantService {
   async getPaginatedCustomers(merchantId: string, page: number, limit: number, search?: string) {
     const skip = (page - 1) * limit;
 
+    // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    // 🚀 CHANGE: WHERE CLAUSE BASE TARGETS USERS (OWNERS) WITH PETS AT THIS MERCHANT
+    // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
     const whereClause: any = {
-      merchantId: merchantId,
+      role: UserRole.CUSTOMER,
+      pets: {
+        some: {
+          merchantId: merchantId,
+        },
+      },
     };
 
     if (search && search.length > 0) {
       whereClause.AND = [
         {
           OR: [
-            { name: { contains: search, mode: 'insensitive' } },  
-            { breed: { contains: search, mode: 'insensitive' } }, 
+            { name: { contains: search, mode: 'insensitive' } },
+            { email: { contains: search, mode: 'insensitive' } },
+            { phoneNumber: { contains: search, mode: 'insensitive' } },
             {
-              owner: {
-                OR: [
-                  { name: { contains: search, mode: 'insensitive' } },        
-                  { email: { contains: search, mode: 'insensitive' } },       
-                  { phoneNumber: { contains: search, mode: 'insensitive' } }, 
-                ],
+              pets: {
+                some: {
+                  merchantId: merchantId,
+                  OR: [
+                    { name: { contains: search, mode: 'insensitive' } },
+                    { breed: { contains: search, mode: 'insensitive' } },
+                  ],
+                },
               },
             },
           ],
@@ -140,81 +151,75 @@ export class MerchantService {
       ];
     }
 
-    const [records, totalCount] = await prisma.$transaction([
-      prisma.pet.findMany({
-        where: whereClause, 
+    const [owners, totalCount] = await prisma.$transaction([
+      prisma.user.findMany({
+        where: whereClause,
         skip: skip,
         take: limit,
         include: {
-          owner: true, 
-          _count: {
-            select: { appointments: true }
-          },
-          // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-          // 🚀 FIX: PULL LATEST VALID SYSTEM APPOINTMENT 
-          // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-          appointments: {
-            where: {
-              status: {
-                in: [AppointmentStatus.PENDING, AppointmentStatus.PAID, AppointmentStatus.COMPLETED]
+          pets: {
+            where: { merchantId: merchantId },
+            include: {
+              _count: {
+                select: { appointments: true }
+              },
+              appointments: {
+                where: {
+                  status: {
+                    in: [AppointmentStatus.PENDING, AppointmentStatus.PAID, AppointmentStatus.COMPLETED]
+                  }
+                },
+                orderBy: { startTime: 'desc' },
+                take: 1,
+                include: {
+                  servicePricingMatrix: true
+                }
               }
             },
-            orderBy: { startTime: 'desc' },
-            take: 1,
-            include: {
-              servicePricingMatrix: true
-            }
+            orderBy: { name: 'asc' }
           }
-          // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
         },
         orderBy: {
           name: 'asc',
         },
       }),
-      prisma.pet.count({
-        where: whereClause, 
+      prisma.user.count({
+        where: whereClause,
       }),
     ]);
 
-    const formattedRecords = records.map((pet: any) => {
-      // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-      // 🚀 FIX: EXTRACT MAPPED RECORD WITH AN ALTERNATIVE FALLBACK CHECK
-      // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-      const lastAppointmentRaw = pet.appointments && pet.appointments.length > 0 ? pet.appointments[0] : null;
-      
-      const lastAppointment = lastAppointmentRaw ? {
-        id: lastAppointmentRaw.id,
-        startTime: lastAppointmentRaw.startTime,
-        endTime: lastAppointmentRaw.endTime,
-        status: lastAppointmentRaw.status,
-        priceCentsAud: lastAppointmentRaw.priceCentsAud,
-        durationMinutes: lastAppointmentRaw.durationMinutes,
-        serviceName: lastAppointmentRaw.servicePricingMatrix?.name || 'Unknown Service',
-        isCheckedIn: lastAppointmentRaw.isCheckedIn,
-        isReadyToPickup: lastAppointmentRaw.isReadyToPickup,
-      } : null;
-      // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-
+    const formattedRecords = owners.map((owner: any) => {
       return {
-        id: pet.id,
-        name: pet.name,
-        breed: pet.breed || 'N/A',
-        gender: pet.gender || 'MALE',
-        isDesexed: pet.isDesexed || false,
-        notes: pet.behaviorNotes || null,
-        appointmentCount: pet._count?.appointments ?? 0,
-        // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-        // 🚀 FIX: FORCE EXPLICIT FIELD RETURN
-        // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-        lastAppointment: lastAppointment,
-        // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-        owner: {
-          name: pet.owner?.name || 'Unknown Owner',
-          email: pet.owner?.email || 'No contact email listed',
-          phone: pet.owner?.phoneNumber || 'N/A',
-        },
+        id: owner.id,
+        name: owner.name,
+        email: owner.email || 'No contact email listed',
+        phone: owner.phoneNumber || 'N/A',
+        // MAP ALL PETS UNDER THIS SPECIFIC OWNER
+        pets: owner.pets.map((pet: any) => {
+          const lastAppointmentRaw = pet.appointments && pet.appointments.length > 0 ? pet.appointments[0] : null;
+          
+          const lastAppointment = lastAppointmentRaw ? {
+            id: lastAppointmentRaw.id,
+            startTime: lastAppointmentRaw.startTime,
+            endTime: lastAppointmentRaw.endTime,
+            status: lastAppointmentRaw.status,
+            serviceName: lastAppointmentRaw.servicePricingMatrix?.name || 'Unknown Service',
+          } : null;
+
+          return {
+            id: pet.id,
+            name: pet.name,
+            breed: pet.breed || 'N/A',
+            gender: pet.gender || 'MALE',
+            isDesexed: pet.isDesexed || false,
+            notes: pet.behaviorNotes || null,
+            appointmentCount: pet._count?.appointments ?? 0,
+            lastAppointment: lastAppointment,
+          };
+        }),
       };
     });
+    // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
     const totalPages = Math.ceil(totalCount / limit) || 1;
 
@@ -224,7 +229,7 @@ export class MerchantService {
       totalCount: totalCount,
     };
   }
-
+  
   async getMerchantStaff(merchantId: string) {
     return await prisma.user.findMany({
       where: {

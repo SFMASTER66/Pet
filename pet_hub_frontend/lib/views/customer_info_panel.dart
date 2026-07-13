@@ -154,26 +154,11 @@ class _CustomerInfoPanelState extends State<CustomerInfoPanel> {
                   : ListView.builder(
                       itemCount: _customerPetList.length,
                       itemBuilder: (context, idx) {
-                        final item = _customerPetList[idx];
-                        final owner = item['owner'] ?? {};
-                        
                         // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-                        // 🚀 CHANGE: UPDATED DATE FORMAT PARSING STRING
+                        // 🚀 CHANGE: RENDER LOOP READS THE OWNER RECORD OBJECTS
                         // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-                        final lastApp = item['lastAppointment'];
-                        String lastServiceText = 'No prior appointments';
-                        
-                        if (lastApp != null && lastApp is Map && lastApp['startTime'] != null) {
-                          try {
-                            final parsedDate = DateTime.parse(lastApp['startTime'].toString()).toLocal();
-                            final formattedDate = "${parsedDate.day}/${parsedDate.month}/${parsedDate.year}";
-                            final serviceName = lastApp['serviceName'] ?? 'Service';
-                            lastServiceText = '$serviceName on $formattedDate';
-                          } catch (_) {
-                            lastServiceText = 'Invalid date format';
-                          }
-                        }
-                        // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+                        final owner = _customerPetList[idx];
+                        final List<dynamic> pets = owner['pets'] ?? [];
 
                         return Card(
                           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -200,62 +185,95 @@ class _CustomerInfoPanelState extends State<CustomerInfoPanel> {
                                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueGrey),
                                     ),
                                     const SizedBox(height: 4),
-                                    Text('Pet Name: ${item['name'] ?? 'Unknown'}', style: const TextStyle(fontWeight: FontWeight.w600)),
-                                    Text('Breed Type: ${item['breed'] ?? 'N/A'}'),
-                                    Text('Status: ${item['gender'] ?? 'MALE'} (${item['isDesexed'] == true ? 'Desexed' : 'Intact'})'),
                                     
-                                    const SizedBox(height: 4),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.blue.shade50,
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Icon(Icons.calendar_month, size: 14, color: Colors.blue),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            'Total Appointments: ${item['appointmentCount'] ?? 0}',
-                                            style: const TextStyle(
-                                              fontSize: 12, 
-                                              color: Colors.blue, 
-                                              fontWeight: FontWeight.bold,
-                                            ),
+                                    // LOOP DYNAMICALLY THROUGH ALL PETS BELONGING TO THIS OWNER
+                                    if (pets.isEmpty)
+                                      const Text('No registered pets.', style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12))
+                                    else
+                                      ...pets.map((item) {
+                                        final lastApp = item['lastAppointment'];
+                                        String lastServiceText = 'No prior appointments';
+                                        
+                                        if (lastApp != null && lastApp is Map && lastApp['startTime'] != null) {
+                                          try {
+                                            final parsedDate = DateTime.parse(lastApp['startTime'].toString()).toLocal();
+                                            final formattedDate = "${parsedDate.day}/${parsedDate.month}/${parsedDate.year}";
+                                            final serviceName = lastApp['serviceName'] ?? 'Service';
+                                            lastServiceText = '$serviceName on $formattedDate';
+                                          } catch (_) {
+                                            lastServiceText = 'Invalid date format';
+                                          }
+                                        }
+
+                                        return Container(
+                                          margin: const EdgeInsets.only(bottom: 12.0),
+                                          padding: const EdgeInsets.all(8.0),
+                                          decoration: BoxDecoration(
+                                            color: Colors.grey.shade50,
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(color: Colors.grey.shade200),
                                           ),
-                                        ],
-                                      ),
-                                    ),
-                                    
-                                    const SizedBox(height: 6),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.purple.shade50,
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Icon(Icons.history, size: 14, color: Colors.purple),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            'Last Service: $lastServiceText',
-                                            style: const TextStyle(
-                                              fontSize: 12, 
-                                              color: Colors.purple, 
-                                              fontWeight: FontWeight.bold,
-                                            ),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text('Pet Name: ${item['name'] ?? 'Unknown'}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                                              Text('Breed Type: ${item['breed'] ?? 'N/A'}'),
+                                              Text('Status: ${item['gender'] ?? 'MALE'} (${item['isDesexed'] == true ? 'Desexed' : 'Intact'})'),
+                                              const SizedBox(height: 6),
+                                              Row(
+                                                children: [
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.blue.shade50,
+                                                      borderRadius: BorderRadius.circular(4),
+                                                    ),
+                                                    child: Row(
+                                                      children: [
+                                                        const Icon(Icons.calendar_month, size: 14, color: Colors.blue),
+                                                        const SizedBox(width: 4),
+                                                        Text(
+                                                          'Total: ${item['appointmentCount'] ?? 0}',
+                                                          style: const TextStyle(fontSize: 12, color: Colors.blue, fontWeight: FontWeight.bold),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Flexible(
+                                                    child: Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.purple.shade50,
+                                                        borderRadius: BorderRadius.circular(4),
+                                                      ),
+                                                      child: Row(
+                                                        mainAxisSize: MainAxisSize.min,
+                                                        children: [
+                                                          const Icon(Icons.history, size: 14, color: Colors.purple),
+                                                          const SizedBox(width: 4),
+                                                          Flexible(
+                                                            child: Text(
+                                                              'Last Service: $lastServiceText',
+                                                              style: const TextStyle(fontSize: 11, color: Colors.purple, fontWeight: FontWeight.bold),
+                                                              overflow: TextOverflow.ellipsis,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              if (item['notes'] != null) ...[
+                                                const SizedBox(height: 6),
+                                                Text('Special Guidelines: ${item['notes']}', style: const TextStyle(fontSize: 12)),
+                                              ],
+                                            ],
                                           ),
-                                        ],
-                                      ),
-                                    ),
-                                    
-                                    if (item['notes'] != null) ...[
-                                      const SizedBox(height: 6),
-                                      Text('Special Handling Guidelines: ${item['notes']}'),
-                                    ],
+                                        );
+                                      }),
+                                    // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
                                   ],
                                 ),
                               )
