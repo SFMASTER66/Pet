@@ -28,7 +28,6 @@ class _CustomerInfoPanelState extends State<CustomerInfoPanel> {
   int _totalCustomerPages = 1;
   final int _customerLimitPerPage = 10;
   
-  // Search controllers and state
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
@@ -49,7 +48,6 @@ class _CustomerInfoPanelState extends State<CustomerInfoPanel> {
     setState(() => _isCustomersLoading = true);
     
     try {
-      // Build the URL dynamically including the search parameter if active
       String url = '${widget.baseUrl}/api/v1/merchant/${widget.config.merchantId}/customers'
           '?page=$_currentCustomerPage&limit=$_customerLimitPerPage';
       
@@ -90,7 +88,7 @@ class _CustomerInfoPanelState extends State<CustomerInfoPanel> {
   void _onSearchChanged(String value) {
     setState(() {
       _searchQuery = value.trim();
-      _currentCustomerPage = 1; // Reset to page 1 for new search results
+      _currentCustomerPage = 1; 
     });
     _fetchPaginatedCustomerPetData();
   }
@@ -114,7 +112,6 @@ class _CustomerInfoPanelState extends State<CustomerInfoPanel> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Search Bar UI
         Padding(
           padding: const EdgeInsets.fromLTRB(12.0, 12.0, 12.0, 4.0),
           child: Card(
@@ -139,12 +136,9 @@ class _CustomerInfoPanelState extends State<CustomerInfoPanel> {
           ),
         ),
 
-        // Main content area handling loading, empty state, or list rendering
         Expanded(
           child: _isCustomersLoading
-              ? const Center(
-                  child: CircularProgressIndicator(),
-                )
+              ? const Center(child: CircularProgressIndicator())
               : _customerPetList.isEmpty
                   ? Center(
                       child: Padding(
@@ -162,6 +156,25 @@ class _CustomerInfoPanelState extends State<CustomerInfoPanel> {
                       itemBuilder: (context, idx) {
                         final item = _customerPetList[idx];
                         final owner = item['owner'] ?? {};
+                        
+                        // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+                        // 🚀 CHANGE: UPDATED DATE FORMAT PARSING STRING
+                        // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+                        final lastApp = item['lastAppointment'];
+                        String lastServiceText = 'No prior appointments';
+                        
+                        if (lastApp != null && lastApp is Map && lastApp['startTime'] != null) {
+                          try {
+                            final parsedDate = DateTime.parse(lastApp['startTime'].toString()).toLocal();
+                            final formattedDate = "${parsedDate.day}/${parsedDate.month}/${parsedDate.year}";
+                            final serviceName = lastApp['serviceName'] ?? 'Service';
+                            lastServiceText = '$serviceName on $formattedDate';
+                          } catch (_) {
+                            lastServiceText = 'Invalid date format';
+                          }
+                        }
+                        // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
                         return Card(
                           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           child: ExpansionTile(
@@ -191,9 +204,6 @@ class _CustomerInfoPanelState extends State<CustomerInfoPanel> {
                                     Text('Breed Type: ${item['breed'] ?? 'N/A'}'),
                                     Text('Status: ${item['gender'] ?? 'MALE'} (${item['isDesexed'] == true ? 'Desexed' : 'Intact'})'),
                                     
-                                    // ==========================================
-                                    // 🔥 HIGHLIGHT: DISPLAY TOTAL APPOINTMENT COUNT
-                                    // ==========================================
                                     const SizedBox(height: 4),
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -218,6 +228,30 @@ class _CustomerInfoPanelState extends State<CustomerInfoPanel> {
                                       ),
                                     ),
                                     
+                                    const SizedBox(height: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.purple.shade50,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.history, size: 14, color: Colors.purple),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            'Last Service: $lastServiceText',
+                                            style: const TextStyle(
+                                              fontSize: 12, 
+                                              color: Colors.purple, 
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    
                                     if (item['notes'] != null) ...[
                                       const SizedBox(height: 6),
                                       Text('Special Handling Guidelines: ${item['notes']}'),
@@ -232,7 +266,6 @@ class _CustomerInfoPanelState extends State<CustomerInfoPanel> {
                     ),
         ),
 
-        // Pagination controls footer
         Container(
           padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
           decoration: BoxDecoration(

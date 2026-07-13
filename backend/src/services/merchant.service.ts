@@ -147,12 +147,25 @@ export class MerchantService {
         take: limit,
         include: {
           owner: true, 
-          // ==========================================
-          // 🔥 NEW: AGGREGATE COUNT RELATION FOR APPOINTMENTS
-          // ==========================================
           _count: {
             select: { appointments: true }
+          },
+          // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+          // 🚀 FIX: PULL LATEST VALID SYSTEM APPOINTMENT 
+          // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+          appointments: {
+            where: {
+              status: {
+                in: [AppointmentStatus.PENDING, AppointmentStatus.PAID, AppointmentStatus.COMPLETED]
+              }
+            },
+            orderBy: { startTime: 'desc' },
+            take: 1,
+            include: {
+              servicePricingMatrix: true
+            }
           }
+          // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
         },
         orderBy: {
           name: 'asc',
@@ -163,23 +176,45 @@ export class MerchantService {
       }),
     ]);
 
-    const formattedRecords = records.map((pet: any) => ({
-      id: pet.id,
-      name: pet.name,
-      breed: pet.breed || 'N/A',
-      gender: pet.gender || 'MALE',
-      isDesexed: pet.isDesexed || false,
-      notes: pet.behaviorNotes || null,
-      // ==========================================
-      // 🔥 NEW: MAP THE APPOINTMENT COUNT TO UI PAYLOAD
-      // ==========================================
-      appointmentCount: pet._count?.appointments ?? 0,
-      owner: {
-        name: pet.owner?.name || 'Unknown Owner',
-        email: pet.owner?.email || 'No contact email listed',
-        phone: pet.owner?.phoneNumber || 'N/A',
-      },
-    }));
+    const formattedRecords = records.map((pet: any) => {
+      // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+      // 🚀 FIX: EXTRACT MAPPED RECORD WITH AN ALTERNATIVE FALLBACK CHECK
+      // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+      const lastAppointmentRaw = pet.appointments && pet.appointments.length > 0 ? pet.appointments[0] : null;
+      
+      const lastAppointment = lastAppointmentRaw ? {
+        id: lastAppointmentRaw.id,
+        startTime: lastAppointmentRaw.startTime,
+        endTime: lastAppointmentRaw.endTime,
+        status: lastAppointmentRaw.status,
+        priceCentsAud: lastAppointmentRaw.priceCentsAud,
+        durationMinutes: lastAppointmentRaw.durationMinutes,
+        serviceName: lastAppointmentRaw.servicePricingMatrix?.name || 'Unknown Service',
+        isCheckedIn: lastAppointmentRaw.isCheckedIn,
+        isReadyToPickup: lastAppointmentRaw.isReadyToPickup,
+      } : null;
+      // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+      return {
+        id: pet.id,
+        name: pet.name,
+        breed: pet.breed || 'N/A',
+        gender: pet.gender || 'MALE',
+        isDesexed: pet.isDesexed || false,
+        notes: pet.behaviorNotes || null,
+        appointmentCount: pet._count?.appointments ?? 0,
+        // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+        // 🚀 FIX: FORCE EXPLICIT FIELD RETURN
+        // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+        lastAppointment: lastAppointment,
+        // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+        owner: {
+          name: pet.owner?.name || 'Unknown Owner',
+          email: pet.owner?.email || 'No contact email listed',
+          phone: pet.owner?.phoneNumber || 'N/A',
+        },
+      };
+    });
 
     const totalPages = Math.ceil(totalCount / limit) || 1;
 
