@@ -311,6 +311,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
   void _showCreateBookingDialog() {
     final dogNameCtrl = TextEditingController();
     final dogBreedCtrl = TextEditingController();
+    final dogWeightCtrl = TextEditingController(); // Added controller for dog weight
     final ownerNameCtrl = TextEditingController();
     final ownerPhoneCtrl = TextEditingController();
     final ownerEmailCtrl = TextEditingController();
@@ -319,6 +320,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     Map<String, dynamic>? selectedMatrixRow;
     String selectedGender = 'MALE';
     bool isDesexed = false;
+    DateTime? selectedDogDob; // Added state tracker for dog date of birth
     
     DateTime selectedBookingDate = _selectedDay ?? DateTime.now();
     bool isDayClosed = _checkIsDayClosed(selectedBookingDate);
@@ -528,6 +530,45 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                           Row(
                             children: [
                               Expanded(
+                                child: OutlinedButton.icon(
+                                  icon: const Icon(Icons.cake_outlined, size: 16),
+                                  label: Text(selectedDogDob == null 
+                                      ? 'Select Dog DOB *' 
+                                      : 'DOB: ${selectedDogDob!.day}/${selectedDogDob!.month}/${selectedDogDob!.year}'),
+                                  onPressed: () async {
+                                    final pickedDob = await showDatePicker(
+                                      context: context,
+                                      initialDate: selectedDogDob ?? DateTime.now().subtract(const Duration(days: 365 * 2)),
+                                      firstDate: DateTime(2000),
+                                      lastDate: DateTime.now(),
+                                    );
+                                    if (pickedDob != null) {
+                                      setDialogState(() => selectedDogDob = pickedDob);
+                                    }
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: TextField(
+                                  controller: dogWeightCtrl,
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')), // Regex ensuring numeric floating input restriction
+                                  ],
+                                  decoration: const InputDecoration(
+                                    labelText: 'Dog Weight (kg) *', 
+                                    border: OutlineInputBorder(),
+                                    hintText: 'e.g., 14.5'
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 12),
                                   decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400), borderRadius: BorderRadius.circular(4)),
@@ -620,9 +661,12 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                         onPressed: isDayClosed ? null : () async {
                           final cleanPhone = ownerPhoneCtrl.text.trim();
                           final cleanEmail = ownerEmailCtrl.text.trim();
+                          final weightText = dogWeightCtrl.text.trim();
 
                           if (dogNameCtrl.text.isEmpty || 
                               dogBreedCtrl.text.isEmpty || 
+                              weightText.isEmpty ||
+                              selectedDogDob == null ||
                               ownerNameCtrl.text.isEmpty || 
                               cleanPhone.isEmpty || 
                               cleanEmail.isEmpty) {
@@ -647,6 +691,12 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                             return;
                           }
 
+                          final double? parsedWeight = double.tryParse(weightText);
+                          if (parsedWeight == null) {
+                            _showSnackBar('⚠️ Invalid Weight value. Must be a valid decimal number.');
+                            return;
+                          }
+
                           final timeParts = selectedBookingTimeSlot!.split(':');
                           final hour = int.parse(timeParts[0]);
                           final minute = int.parse(timeParts[1]);
@@ -667,6 +717,8 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                             'dogBreed': dogBreedCtrl.text.trim(),
                             'dogGender': selectedGender,
                             'isDesexed': isDesexed,
+                            'dogWeight': parsedWeight, // Included weight field in upstream transmission mapping
+                            'dogDob': selectedDogDob!.toIso8601String(), // Included structured ISO 8601 DOB entry
                             'ownerName': ownerNameCtrl.text.trim(),
                             'ownerPhone': digitsOnlyPhone, 
                             'ownerEmail': cleanEmail,

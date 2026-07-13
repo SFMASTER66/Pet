@@ -29,6 +29,7 @@ model Pet {
   behaviorTags      String[]
   behaviorNotes     String?
   loyaltyGroomCount Int           @default(0)
+  weight            Float?
   appointments      Appointment[]
   merchant          Merchant      @relation(fields: [merchantId], references: [id])
   owner             User          @relation(fields: [ownerId], references: [id])
@@ -98,10 +99,10 @@ model User {
   createdAt           DateTime          @default(now())
   activityLogs        ActivityLog[]
   createdAppointments Appointment[]     @relation("CreatedAppointments")
+  employee            Employee?
   pets                Pet[]
   merchant            Merchant          @relation(fields: [merchantId], references: [id])
   waiverSignatures    WaiverSignature[]
-  employee            Employee? // One-to-one relation
 
   @@index([merchantId, createdAt])
   @@index([merchantId, name])
@@ -137,10 +138,10 @@ model Employee {
   merchantId       String
   name             String
   avatarUrl        String?
-  isActive         Boolean           @default(true) // <-- Added this field
+  isActive         Boolean           @default(true)
   appointments     Appointment[]
-  merchant         Merchant          @relation(fields: [merchantId], references: [id])
   user             User              @relation(fields: [id], references: [id], onDelete: Cascade)
+  merchant         Merchant          @relation(fields: [merchantId], references: [id])
   rosterExceptions RosterException[]
 
   @@index([merchantId])

@@ -36,6 +36,8 @@ export const portalBooking = async (req: Request, res: Response): Promise<void> 
       dogBreed,
       dogGender,
       isDesexed,
+      dogWeight,
+      dogDob,
       ownerName,
       ownerPhone,
       ownerEmail,
@@ -44,7 +46,7 @@ export const portalBooking = async (req: Request, res: Response): Promise<void> 
       note
     } = req.body;
 
-    if (!merchantId || !bookedById || !servicePricingMatrixId || !dogName || !ownerPhone || !serviceTime) {
+    if (!merchantId || !bookedById || !servicePricingMatrixId || !dogName || !ownerPhone || !serviceTime || !dogWeight || !dogDob) {
       res.status(400).json({
         success: false,
         message: 'Missing core criteria: mandatory fields incomplete.'
@@ -60,6 +62,8 @@ export const portalBooking = async (req: Request, res: Response): Promise<void> 
       dogBreed,
       dogGender: dogGender as Gender,
       isDesexed: Boolean(isDesexed),
+      dogWeight: Number(dogWeight),
+      dogDob: new Date(dogDob),
       ownerName,
       ownerPhone,
       ownerEmail: ownerEmail || `${ownerPhone.replace(/\s+/g, '')}@placeholder-salon-system.com`,
