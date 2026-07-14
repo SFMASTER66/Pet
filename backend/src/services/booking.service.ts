@@ -222,7 +222,11 @@ export const BookingService = {
 
         // 5. STAFF CAPACITY GUARD
         const totalStaffCount = await prisma.employee.count({
-          where: { merchantId: input.merchantId, isActive: true }
+          where: { 
+            merchantId: input.merchantId, 
+            isActive: true,
+            role: 'MERCHANT_STAFF' // Explicitly filter for staff roles only
+          }
         });
 
         const concurrentBookings = await prisma.appointment.count({
