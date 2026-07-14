@@ -4,7 +4,10 @@ import prisma from './db';
 export class ServiceService {
   async fetchMerchantServices(merchantId: string) {
     return prisma.servicePricingMatrix.findMany({
-      where: { merchantId },
+      where: { 
+        merchantId,
+        isActive: true 
+      },
       include: {
         species: true,
       },
