@@ -1,4 +1,4 @@
-import { Gender, PetStatus, AppointmentStatus } from '@prisma/client';
+import { Gender, PetStatus, AppointmentStatus, UserRole } from '@prisma/client';
 import prisma from './db';
 
 // Strict Type Definitions for Operational Validation Inputs
@@ -225,7 +225,7 @@ export const BookingService = {
           where: { 
             merchantId: input.merchantId, 
             isActive: true,
-            role: 'MERCHANT_STAFF' // Explicitly filter for staff roles only
+            role: UserRole.MERCHANT_STAFF // Explicitly filter for staff roles only
           }
         });
 
