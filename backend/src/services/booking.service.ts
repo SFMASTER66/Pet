@@ -225,7 +225,9 @@ export const BookingService = {
           where: { 
             merchantId: input.merchantId, 
             isActive: true,
-            role: UserRole.MERCHANT_STAFF // Explicitly filter for staff roles only
+            user: {
+              role: UserRole.MERCHANT_STAFF 
+            }
           }
         });
 
@@ -304,7 +306,13 @@ export const BookingService = {
         // 🔥 START CODE CHANGE: UPDATE CAPACITY GUARD
         // ==========================================
         const totalStaffCount = await prisma.employee.count({
-          where: { merchantId: existingAppointment.merchantId, isActive: true }
+          where: { 
+            merchantId: existingAppointment.merchantId, 
+            isActive: true,
+            user: {
+              role: UserRole.MERCHANT_STAFF 
+            }
+           }
         });
 
         const concurrentBookings = await prisma.appointment.count({
