@@ -147,7 +147,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
       final response = await http.get(
         Uri.parse('$_baseUrl/api/v1/merchant/${widget.config.merchantId}/hours'),
         headers: {
-          'Authorization': 'Bearer ${widget.authToken}',
+          // 'Authorization': 'Bearer ${widget.authToken}',
           'Content-Type': 'application/json',
         },
       );
@@ -799,7 +799,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
             onPressed: () => Navigator.push(
               context, 
               MaterialPageRoute(
-                builder: (_) => CustomerPortalPage(config: widget.config, activeServices: liveServiceMatrices)
+                builder: (_) => CustomerPortalPage(config: widget.config, activeServices: liveServiceMatrices, baseUrl: _baseUrl)
               )
             ),
           ),

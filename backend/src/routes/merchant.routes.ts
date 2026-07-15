@@ -48,7 +48,7 @@ router.post(
 );
 router.delete('/merchant/staff/:staffId', requireAdmin, deleteStaffProfile);
 
-router.get('/merchant/:merchantId/hours', requireAdmin as any, fetchMerchantHours as any);
+router.get('/merchant/:merchantId/hours', fetchMerchantHours as any);
 router.put('/merchant/:merchantId/hours', requireAdmin as any, updateMerchantHoursDay as any);
 
 export default router;

@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import '../models/merchant_config.dart';
 
 class BookingFormPage extends StatefulWidget {
@@ -7,6 +9,7 @@ class BookingFormPage extends StatefulWidget {
   final List<Map<String, dynamic>> variantsMatrix;
   final Color themeColor;
   final MerchantConfig config;
+  final String baseUrl; // Added to standardise network domains with customer_info_panel.dart
 
   const BookingFormPage({
     super.key,
@@ -14,6 +17,7 @@ class BookingFormPage extends StatefulWidget {
     required this.variantsMatrix,
     required this.themeColor,
     required this.config,
+    required this.baseUrl, // Ingest URL dynamically
   });
 
   @override
@@ -39,18 +43,112 @@ class _BookingFormPageState extends State<BookingFormPage> {
   String? _selectedDesexed;
   DateTime? _dogDob;
 
-  // Pricing Matrix Selection Elements (Driven exclusively by DB records)
+  // Pricing Matrix Selection Elements
   String? _selectedWeightTier;
   String? _selectedCoatType;
 
-  // Predefined salon operational appointment time choices
-  final List<String> _availableTimeSlots = [
-    '08:00 AM', '09:00 AM', '10:00 AM', '11:00 AM',
-    '12:00 PM', '01:00 PM', '02:00 PM', '03:00 PM',
-    '04:00 PM', '05:00 PM'
-  ];
+  // Live operational hours fetched from the backend API database records
+  List<dynamic> _merchantHours = [];
+  List<String> _dynamicAvailableSlots = [];
+  bool _isLoadingHours = true;
+  bool _isDayClosed = false; // Track if the selected date falls on a closed business day
+  String? _errorMessage;
 
-  // Dynamically pull weight tiers that exist in the DB records[cite: 4]
+  @override
+  void initState() {
+    super.initState();
+    _fetchLiveOperationalHours();
+  }
+
+  // Live backend database fetch execution
+  Future<void> _fetchLiveOperationalHours() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoadingHours = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // FIXED: URL structure now cleanly inherits widget.baseUrl matching customer_info_panel.dart rules
+      final String targetUrl = '${widget.baseUrl}/api/v1/merchant/${widget.config.merchantId}/hours';
+      
+      final response = await http.get(
+        Uri.parse(targetUrl),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> parsedBody = json.decode(response.body);
+        if (parsedBody['success'] == true && parsedBody['data'] is List) {
+          setState(() {
+            _merchantHours = parsedBody['data'];
+            _isLoadingHours = false;
+          });
+          return;
+        }
+      }
+      
+      setState(() {
+        _errorMessage = 'Failed to download updated business operating hours from servers.';
+        _isLoadingHours = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Network connection failed: Unable to fetch live scheduling rules.';
+        _isLoadingHours = false;
+      });
+    }
+  }
+
+  // Parses operational hours from data array and splits dynamically into 1-hour interval segments
+  void _calculateAvailableTimeSlots(DateTime date) {
+    // DateTime weekday: 1 = Monday, 7 = Sunday. Matches backend database format perfectly.
+    final int targetDay = date.weekday;
+    
+    final dayConfig = _merchantHours.firstWhere(
+      (h) => h['dayOfWeek'] == targetDay,
+      orElse: () => null,
+    );
+
+    if (dayConfig == null || dayConfig['isClosed'] == true) {
+      setState(() {
+        _dynamicAvailableSlots = [];
+        _selectedTimeSlot = "SHOP_CLOSED"; // Set to a concrete dummy string value so it matches the dropdown item
+        _isDayClosed = true; // Mark this day explicitly as closed
+      });
+      return;
+    }
+
+    final String openStr = dayConfig['openTime'] ?? '09:00';
+    final String closeStr = dayConfig['closeTime'] ?? '17:00';
+
+    // Extract numerical hour components from structural string 'HH:mm'
+    final int startHour = int.parse(openStr.split(':')[0]);
+    final int endHour = int.parse(closeStr.split(':')[0]);
+
+    final List<String> generatedSlots = [];
+    
+    // Generate full hourly slots based on the gap parameters layout rule
+    for (int hour = startHour; hour < endHour; hour++) {
+      final int displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+      final String amPm = hour >= 12 ? 'PM' : 'AM';
+      final String paddedHour = displayHour.toString().padLeft(2, '0');
+      
+      generatedSlots.add('$paddedHour:00 $amPm');
+    }
+
+    setState(() {
+      _dynamicAvailableSlots = generatedSlots;
+      _selectedTimeSlot = null; // Clear chosen time slot choice when calendar parameters alter
+      _isDayClosed = false; // Store is open, hourly options are populated
+    });
+  }
+
   List<String> _getAvailableWeightTiers() {
     return widget.variantsMatrix
         .map((v) => (v['weightTier'] ?? '').toString())
@@ -59,7 +157,6 @@ class _BookingFormPageState extends State<BookingFormPage> {
         .toList();
   }
 
-  // Dynamically pull coat types that exist in the DB records[cite: 4]
   List<String> _getAvailableCoatTypes() {
     return widget.variantsMatrix
         .map((v) => (v['coatType'] ?? '').toString())
@@ -102,6 +199,7 @@ class _BookingFormPageState extends State<BookingFormPage> {
     );
     if (picked != null) {
       setState(() => _selectedDate = picked);
+      _calculateAvailableTimeSlots(picked);
     }
   }
 
@@ -119,9 +217,9 @@ class _BookingFormPageState extends State<BookingFormPage> {
 
   void _submitBooking() {
     if (_formKey.currentState!.validate()) {
-      if (_selectedDate == null || _selectedTimeSlot == null || _dogDob == null) {
+      if (_selectedDate == null || _selectedTimeSlot == null || _selectedTimeSlot == "SHOP_CLOSED" || _dogDob == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please fill out booking date, time dropdown, and dog birthday.')),
+          const SnackBar(content: Text('Please select an open booking date and valid time slot.')),
         );
         return;
       }
@@ -186,231 +284,294 @@ class _BookingFormPageState extends State<BookingFormPage> {
           child: Container(color: Colors.grey.shade200, height: 1),
         ),
       ),
-      body: Form(
-        key: _formKey,
-        child: Column(
-          children: [
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(20.0),
-                children: [
-                  _buildSectionHeader('1. Pricing Matrix Factors'),
-                  
-                  DropdownButtonFormField<String>(
-                    decoration: const InputDecoration(labelText: 'Dog Weight Tier *', border: OutlineInputBorder()),
-                    value: _selectedWeightTier,
-                    items: weightTiers.map((t) {
-                      return DropdownMenuItem<String>(value: t, child: Text(t));
-                    }).toList(),
-                    onChanged: (val) => setState(() => _selectedWeightTier = val),
-                    validator: (v) => v == null ? 'Weight Tier is required' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  
-                  DropdownButtonFormField<String>(
-                    decoration: const InputDecoration(labelText: 'Coat Category *', border: OutlineInputBorder()),
-                    value: _selectedCoatType,
-                    items: coatTypes.map((c) {
-                      return DropdownMenuItem<String>(value: c, child: Text(c));
-                    }).toList(),
-                    onChanged: (val) => setState(() => _selectedCoatType = val),
-                    validator: (v) => v == null ? 'Coat Category is required' : null,
+      body: _buildPageBody(weightTiers, coatTypes, matchedVariant),
+    );
+  }
+
+  Widget _buildPageBody(List<String> weightTiers, List<String> coatTypes, Map<String, dynamic>? matchedVariant) {
+    if (_isLoadingHours) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_errorMessage != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, color: Colors.redAccent, size: 48),
+              const SizedBox(height: 16),
+              Text(_errorMessage!, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16)),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _fetchLiveOperationalHours,
+                child: const Text('Retry Connection'),
+              )
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Form(
+      key: _formKey,
+      child: Column(
+        children: [
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(20.0),
+              children: [
+                _buildSectionHeader('1. Pricing Matrix Factors'),
+                
+                DropdownButtonFormField<String>(
+                  decoration: const InputDecoration(labelText: 'Dog Weight Tier *', border: OutlineInputBorder()),
+                  value: _selectedWeightTier,
+                  items: weightTiers.map((t) {
+                    return DropdownMenuItem<String>(value: t, child: Text(t));
+                  }).toList(),
+                  onChanged: (val) => setState(() => _selectedWeightTier = val),
+                  validator: (v) => v == null ? 'Weight Tier is required' : null,
+                ),
+                const SizedBox(height: 12),
+                
+                DropdownButtonFormField<String>(
+                  decoration: const InputDecoration(labelText: 'Coat Category *', border: OutlineInputBorder()),
+                  value: _selectedCoatType,
+                  items: coatTypes.map((c) {
+                    return DropdownMenuItem<String>(value: c, child: Text(c));
+                  }).toList(),
+                  onChanged: (val) => setState(() => _selectedCoatType = val),
+                  validator: (v) => v == null ? 'Coat Category is required' : null,
+                ),
+                const SizedBox(height: 16),
+
+                if (matchedVariant != null) ...[
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: widget.themeColor.withAlpha(20),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: widget.themeColor, width: 1)
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Est. Duration', style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
+                            Text('${matchedVariant['durationMinutes'] ?? 0} Mins', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text('Matrix Base Fee', style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
+                            Text(
+                              '\$${((matchedVariant['priceCentsAud'] ?? matchedVariant['priceCents'] ?? 0) / 100).toStringAsFixed(2)} AUD', 
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: widget.themeColor)
+                            ),
+                          ],
+                        )
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 16),
-
-                  // Displays Duration and Pricing together when a complete matrix match occurs[cite: 4]
-                  if (matchedVariant != null) ...[
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: widget.themeColor.withAlpha(20),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: widget.themeColor, width: 1)
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Est. Duration', style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
-                              Text('${matchedVariant['durationMinutes'] ?? 0} Mins', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                            ],
-                          ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text('Matrix Base Fee', style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
-                              Text(
-                                '\$${((matchedVariant['priceCentsAud'] ?? matchedVariant['priceCents'] ?? 0) / 100).toStringAsFixed(2)} AUD', 
-                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: widget.themeColor)
-                              ),
-                            ],
-                          )
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-
-                  _buildSectionHeader('2. Appointment Schedule Time'),
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 54),
-                      alignment: Alignment.centerLeft,
-                      side: BorderSide(color: Colors.grey.shade400)
-                    ),
-                    onPressed: _pickBookingDate,
-                    icon: const Icon(Icons.calendar_month, size: 20),
-                    label: Text(
-                      _selectedDate == null 
-                          ? 'Select Appointment Date *' 
-                          : 'Date: ${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}',
-                      style: const TextStyle(fontSize: 14, color: Colors.black87),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  
-                  DropdownButtonFormField<String>(
-                    decoration: const InputDecoration(
-                      labelText: 'Select Appointment Time *', 
-                      prefixIcon: Icon(Icons.access_time, size: 20),
-                      border: OutlineInputBorder()
-                    ),
-                    value: _selectedTimeSlot,
-                    items: _availableTimeSlots.map((timeSlot) {
-                      return DropdownMenuItem<String>(value: timeSlot, child: Text(timeSlot));
-                    }).toList(),
-                    onChanged: (val) => setState(() => _selectedTimeSlot = val),
-                    validator: (v) => v == null ? 'Please choose an operational time slot' : null,
-                  ),
-                  const SizedBox(height: 16),
-
-                  _buildSectionHeader('3. Owner Contact Profile Details'),
-                  TextFormField(
-                    controller: _ownerNameCtrl,
-                    decoration: const InputDecoration(labelText: 'Full Owner Name *', border: OutlineInputBorder()),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Owner Name is required' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _ownerEmailCtrl,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(labelText: 'Email Address *', border: OutlineInputBorder()),
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) return 'Email Address is required';
-                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(v)) return 'Enter valid email formatting';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  
-                  // CHANGED: Limits input length to 10 digits and strictly enforces standard Australian phone length
-                  TextFormField(
-                    controller: _ownerPhoneCtrl,
-                    keyboardType: TextInputType.phone,
-                    maxLength: 10,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: const InputDecoration(
-                      labelText: 'Australian Contact Number *', 
-                      hintText: 'e.g. 0412345678', 
-                      border: OutlineInputBorder(),
-                      counterText: "", // Hides the default counter string UI
-                    ),
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) return 'Contact details required';
-                      if (v.length < 8 || v.length > 10) return 'Enter a valid Australian number (max 10 digits)';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-
-                  _buildSectionHeader('4. Companion Dog Information'),
-                  TextFormField(
-                    controller: _dogNameCtrl,
-                    decoration: const InputDecoration(labelText: 'Dog Name *', border: OutlineInputBorder()),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Dog Name is required' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 54), 
-                      alignment: Alignment.centerLeft,
-                      side: BorderSide(color: Colors.grey.shade400)
-                    ),
-                    onPressed: _pickDogDob,
-                    icon: const Icon(Icons.cake, size: 18),
-                    label: Text(
-                      _dogDob == null 
-                          ? 'Dog Date of Birth *' 
-                          : 'DOB: ${_dogDob!.day}/${_dogDob!.month}/${_dogDob!.year}',
-                      style: const TextStyle(fontSize: 14, color: Colors.black87),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    decoration: const InputDecoration(labelText: 'Biological Sex *', border: OutlineInputBorder()),
-                    value: _selectedSex,
-                    items: const [
-                      DropdownMenuItem(value: 'Male', child: Text('Male')),
-                      DropdownMenuItem(value: 'Female', child: Text('Female'))
-                    ],
-                    onChanged: (val) => setState(() => _selectedSex = val),
-                    validator: (v) => v == null ? 'Required Field' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _dogBreedCtrl,
-                    decoration: const InputDecoration(labelText: 'Dog Breed Category *', border: OutlineInputBorder()),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Breed specification required' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    decoration: const InputDecoration(labelText: 'Desexed Status *', border: OutlineInputBorder()),
-                    value: _selectedDesexed,
-                    items: const [
-                      DropdownMenuItem(value: 'Yes', child: Text('Yes (Neutered / Spayed)')),
-                      DropdownMenuItem(value: 'No', child: Text('No (Intact)'))
-                    ],
-                    onChanged: (val) => setState(() => _selectedDesexed = val),
-                    validator: (v) => v == null ? 'Required Field' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  
-                  // CHANGED: Form field is no longer marked with an asterisk (*) and its validator is removed (Optional field)
-                  TextFormField(
-                    controller: _dogTagsCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Special Medical / Behavior Tags', 
-                      hintText: 'e.g. None, Aggressive, Sensitive Skin',
-                      border: OutlineInputBorder()
-                    ),
-                  ),
                 ],
+
+                _buildSectionHeader('2. Appointment Schedule Time'),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 54),
+                    alignment: Alignment.centerLeft,
+                    side: BorderSide(color: Colors.grey.shade400)
+                  ),
+                  onPressed: _pickBookingDate,
+                  icon: const Icon(Icons.calendar_month, size: 20),
+                  label: Text(
+                    _selectedDate == null 
+                        ? 'Select Appointment Date *' 
+                        : 'Date: ${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}',
+                    style: const TextStyle(fontSize: 14, color: Colors.black87),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                
+                DropdownButtonFormField<String>(
+                  key: ValueKey('${_dynamicAvailableSlots.length}_${_isDayClosed}_$_selectedTimeSlot'), // Complete unique state recalculation key
+                  decoration: InputDecoration(
+                    labelText: 'Select Appointment Time *', 
+                    prefixIcon: const Icon(Icons.access_time, size: 20),
+                    border: const OutlineInputBorder(),
+                    errorStyle: const TextStyle(color: Colors.redAccent),
+                  ),
+                  value: _selectedTimeSlot,
+                  // When the day is closed, we inject an explicit disabled option tied to "SHOP_CLOSED"
+                  items: _isDayClosed
+                      ? [
+                          const DropdownMenuItem<String>(
+                            value: 'SHOP_CLOSED',
+                            enabled: false, // Prevents them from picking it
+                            child: Text(
+                              'Closed on this day',
+                              style: TextStyle(
+                                color: Colors.redAccent,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          )
+                        ]
+                      : (_dynamicAvailableSlots.isEmpty
+                          ? [
+                              DropdownMenuItem<String>(
+                                value: null,
+                                enabled: false,
+                                child: Text(
+                                  'Please select a date first',
+                                  style: TextStyle(color: Colors.grey.shade500),
+                                ),
+                              )
+                            ]
+                          : _dynamicAvailableSlots.map((timeSlot) {
+                              return DropdownMenuItem<String>(value: timeSlot, child: Text(timeSlot));
+                            }).toList()),
+                  onChanged: (_isDayClosed || _dynamicAvailableSlots.isEmpty) ? null : (val) => setState(() => _selectedTimeSlot = val),
+                  validator: (v) {
+                    if (_isDayClosed || v == 'SHOP_CLOSED') {
+                      return 'Store is closed on this date. Please pick another day.';
+                    }
+                    if (_selectedTimeSlot == null && _selectedDate != null) {
+                      return 'Please choose an operational hour slot';
+                    }
+                    if (_selectedDate == null) {
+                      return 'Please pick a booking date first';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                _buildSectionHeader('3. Owner Contact Profile Details'),
+                TextFormField(
+                  controller: _ownerNameCtrl,
+                  decoration: const InputDecoration(labelText: 'Full Owner Name *', border: OutlineInputBorder()),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Owner Name is required' : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _ownerEmailCtrl,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(labelText: 'Email Address *', border: OutlineInputBorder()),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return 'Email Address is required';
+                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(v)) return 'Enter valid email formatting';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _ownerPhoneCtrl,
+                  keyboardType: TextInputType.phone,
+                  maxLength: 10,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: const InputDecoration(
+                    labelText: 'Australian Contact Number *', 
+                    hintText: 'e.g. 0412345678', 
+                    border: OutlineInputBorder(),
+                    counterText: "",
+                  ),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return 'Contact details required';
+                    if (v.length < 8 || v.length > 10) return 'Enter a valid Australian number (8-10 digits)';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                _buildSectionHeader('4. Companion Dog Information'),
+                TextFormField(
+                  controller: _dogNameCtrl,
+                  decoration: const InputDecoration(labelText: 'Dog Name *', border: OutlineInputBorder()),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Dog Name is required' : null,
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 54), 
+                    alignment: Alignment.centerLeft,
+                    side: BorderSide(color: Colors.grey.shade400)
+                  ),
+                  onPressed: _pickDogDob,
+                  icon: const Icon(Icons.cake, size: 18),
+                  label: Text(
+                    _dogDob == null 
+                        ? 'Dog Date of Birth *' 
+                        : 'DOB: ${_dogDob!.day}/${_dogDob!.month}/${_dogDob!.year}',
+                    style: const TextStyle(fontSize: 14, color: Colors.black87),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  decoration: const InputDecoration(labelText: 'Biological Sex *', border: OutlineInputBorder()),
+                  value: _selectedSex,
+                  items: const [
+                    DropdownMenuItem(value: 'Male', child: Text('Male')),
+                    DropdownMenuItem(value: 'Female', child: Text('Female'))
+                  ],
+                  onChanged: (val) => setState(() => _selectedSex = val),
+                  validator: (v) => v == null ? 'Required Field' : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _dogBreedCtrl,
+                  decoration: const InputDecoration(labelText: 'Dog Breed Category *', border: OutlineInputBorder()),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Breed specification required' : null,
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  decoration: const InputDecoration(labelText: 'Desexed Status *', border: OutlineInputBorder()),
+                  value: _selectedDesexed,
+                  items: const [
+                    DropdownMenuItem(value: 'Yes', child: Text('Yes (Neutered / Spayed)')),
+                    DropdownMenuItem(value: 'No', child: Text('No (Intact)'))
+                  ],
+                  onChanged: (val) => setState(() => _selectedDesexed = val),
+                  validator: (v) => v == null ? 'Required Field' : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _dogTagsCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Special Medical / Behavior Tags', 
+                    hintText: 'e.g. None, Aggressive, Sensitive Skin',
+                    border: OutlineInputBorder()
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [BoxShadow(color: Colors.black.withAlpha(13), blurRadius: 4, offset: const Offset(0, -2))],
+            ),
+            child: SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: widget.themeColor,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: _submitBooking,
+                child: const Text('Confirm Booking Appointment', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
               ),
             ),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [BoxShadow(color: Colors.black.withAlpha(13), blurRadius: 4, offset: const Offset(0, -2))],
-              ),
-              child: SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: widget.themeColor,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: _submitBooking,
-                  child: const Text('Confirm Booking Appointment', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                ),
-              ),
-            )
-          ],
-        ),
+          )
+        ],
       ),
     );
   }

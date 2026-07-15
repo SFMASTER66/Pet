@@ -5,11 +5,13 @@ import 'booking_form_page.dart'; // Import your new booking form page
 class CustomerPortalPage extends StatefulWidget {
   final MerchantConfig config;
   final List<Map<String, dynamic>> activeServices; // Acts as your ServicePricingMatrix records
+  final String baseUrl; // Added to receive the dynamic URL
 
   const CustomerPortalPage({
     super.key, 
     required this.config, 
-    required this.activeServices
+    required this.activeServices,
+    required this.baseUrl, // Required in constructor
   });
 
   @override
@@ -159,6 +161,7 @@ class _CustomerPortalPageState extends State<CustomerPortalPage> {
                                         variantsMatrix: variants,
                                         themeColor: themeColor,
                                         config: widget.config,
+                                        baseUrl: widget.baseUrl, // Injected the URL dynamically here
                                       ),
                                     ),
                                   ),

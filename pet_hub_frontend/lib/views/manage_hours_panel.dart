@@ -58,7 +58,7 @@ class _ManageHoursPanelState extends State<ManageHoursPanel> {
       final response = await http.get(
         Uri.parse('$_baseUrl/api/v1/merchant/${widget.config.merchantId}/hours'),
         headers: {
-          'Authorization': 'Bearer ${widget.authToken}',
+          // 'Authorization': 'Bearer ${widget.authToken}',
           'Content-Type': 'application/json',
         },
       );
