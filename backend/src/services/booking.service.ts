@@ -371,5 +371,143 @@ export const BookingService = {
     } catch (error: any) {
       throw new Error(error.message);
     }
+  },
+
+  async getAvailableSlots(merchantId: string, dateStr: string, duration: number): Promise<string[]> {
+    const targetDate = new Date(`${dateStr}T00:00:00`);
+    if (isNaN(targetDate.getTime())) {
+      throw new Error('Invalid date format provided.');
+    }
+
+    // 1. DYNAMIC BUSINESS HOURS FETCHING & SEEDING LOGIC
+    let businessHours = await prisma.businessHours.findMany({
+      where: { merchantId },
+      orderBy: { dayOfWeek: 'asc' },
+    });
+
+    if (businessHours.length === 0) {
+      const defaults = Array.from({ length: 7 }, (_, i) => ({
+        merchantId,
+        dayOfWeek: i + 1,
+        openTime: '09:00',
+        closeTime: '17:00',
+        isClosed: (i + 1) > 5, // Sat & Sun closed by default
+      }));
+
+      await prisma.businessHours.createMany({ data: defaults });
+      
+      businessHours = await prisma.businessHours.findMany({
+        where: { merchantId },
+        orderBy: { dayOfWeek: 'asc' },
+      });
+    }
+
+    const currentDayOfWeek = targetDate.getDay() === 0 ? 7 : targetDate.getDay();
+    const todayHours = businessHours.find(bh => bh.dayOfWeek === currentDayOfWeek);
+
+    if (!todayHours || todayHours.isClosed) {
+      return [];
+    }
+
+    // 2. CAPACITY & BOUNDARY SYSTEM SETUP
+    const totalStaff = await prisma.employee.count({
+          where: { 
+            merchantId: merchantId, 
+            isActive: true,
+            user: {
+              role: UserRole.MERCHANT_STAFF 
+            }
+          }
+        });
+
+    if (totalStaff === 0) {
+      return [];
+    }
+
+    const businessStart = new Date(`${dateStr}T${todayHours.openTime}:00`);
+    const businessEnd = new Date(`${dateStr}T${todayHours.closeTime}:00`);
+    const durationMs = duration * 60000;
+    
+    // 🔥 FIXED CHANGELOG: Shifted step from 30 minutes to 60 minutes (1-hour gap)
+    const stepMs = 60 * 60000; 
+
+    // 3. BULK FETCH BOOKINGS FOR PERFORMANCE
+    const activeBookings = await prisma.appointment.findMany({
+      where: {
+        merchantId,
+        status: { in: [AppointmentStatus.PENDING, AppointmentStatus.PAID, AppointmentStatus.COMPLETED] },
+        startTime: { lt: businessEnd },
+        endTime: { gt: businessStart }
+      }
+    });
+
+    const availableSlots: string[] = [];
+    let currentSlotStart = new Date(businessStart.getTime());
+
+    // 4. TIMELINE CONCURRENCY ENGINE (Checks 9, 10, 11... until 4)
+    while (currentSlotStart.getTime() + durationMs <= businessEnd.getTime()) {
+      const slotStartTime = new Date(currentSlotStart.getTime());
+      const slotEndTime = new Date(currentSlotStart.getTime() + durationMs);
+
+      // Filter appointments overlapping this specific hourly window
+      const overlappingBookings = activeBookings.filter(appt => {
+        const apptStart = new Date(appt.startTime);
+        const apptEnd = new Date(appt.endTime);
+        return apptStart < slotEndTime && apptEnd > slotStartTime;
+      });
+
+      // Break down the window into sub-intervals based on overlap transitions
+      const timePointsSet = new Set<number>();
+      timePointsSet.add(slotStartTime.getTime());
+      timePointsSet.add(slotEndTime.getTime());
+
+      for (const appt of overlappingBookings) {
+        const apptStartMs = new Date(appt.startTime).getTime();
+        const apptEndMs = new Date(appt.endTime).getTime();
+        
+        if (apptStartMs > slotStartTime.getTime() && apptStartMs < slotEndTime.getTime()) {
+          timePointsSet.add(apptStartMs);
+        }
+        if (apptEndMs > slotStartTime.getTime() && apptEndMs < slotEndTime.getTime()) {
+          timePointsSet.add(apptEndMs);
+        }
+      }
+
+      const sortedTimePoints = Array.from(timePointsSet).sort((a, b) => a - b);
+      let isSlotAvailable = true;
+
+      // Validate capacity inside every sub-interval segment
+      for (let i = 0; i < sortedTimePoints.length - 1; i++) {
+        const t1 = sortedTimePoints[i];
+        const t2 = sortedTimePoints[i + 1];
+        const midpoint = (t1 + t2) / 2;
+
+        let concurrentLoad = 0;
+        for (const appt of overlappingBookings) {
+          const apptStartMs = new Date(appt.startTime).getTime();
+          const apptEndMs = new Date(appt.endTime).getTime();
+          if (apptStartMs <= midpoint && apptEndMs >= midpoint) {
+            concurrentLoad++;
+          }
+        }
+
+        // If load reaches or exceeds staff limits at any point in the hour, block it
+        if (concurrentLoad >= totalStaff) {
+          isSlotAvailable = false;
+          break;
+        }
+      }
+
+      if (isSlotAvailable) {
+        const hoursStr = String(slotStartTime.getHours()).padStart(2, '0');
+        const minsStr = String(slotStartTime.getMinutes()).padStart(2, '0');
+        availableSlots.push(`${hoursStr}:${minsStr}`);
+      }
+
+      // Step forward by exactly 1 hour
+      currentSlotStart = new Date(currentSlotStart.getTime() + stepMs);
+    }
+
+    return availableSlots;
   }
 };

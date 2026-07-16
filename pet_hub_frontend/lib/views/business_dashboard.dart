@@ -366,7 +366,21 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                 });
 
                 try {
-                  final String targetUrl = '$_baseUrl/api/v1/merchant/${widget.config.merchantId}/hours';
+                  // 1. Format the selected date to YYYY-MM-DD string required by the backend
+                  final String formattedDate = "${selectedBookingDate.year}-"
+                      "${selectedBookingDate.month.toString().padLeft(2, '0')}-"
+                      "${selectedBookingDate.day.toString().padLeft(2, '0')}";
+                  
+                  // 2. Dynamic duration value (Fallback to 60 if your state/matrix selection isn't loaded yet)
+                  // Replace this with your actual state variable (e.g., selectedServiceMatrix.durationMinutes)
+                  final int durationMinutes = selectedMatrixRow?['durationMinutes'] ?? 60;
+                  
+
+                  // 3. Updated URL targeting the new bookings slots endpoint with query parameters
+                  final String targetUrl = '$_baseUrl/api/v1/bookings/available-slots'
+                      '?merchantId=${widget.config.merchantId}'
+                      '&date=$formattedDate'
+                      '&duration=$durationMinutes';
                   
                   final response = await http.get(
                     Uri.parse(targetUrl),
@@ -378,42 +392,31 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                   if (response.statusCode == 200) {
                     final Map<String, dynamic> parsedBody = json.decode(response.body);
                     if (parsedBody['success'] == true && parsedBody['data'] is List) {
-                      final List<dynamic> operationalHours = parsedBody['data'];
-                      
-                      final dayRecord = operationalHours.firstWhere(
-                        (element) => element['dayOfWeek'] == selectedBookingDate.weekday,
-                        orElse: () => null,
-                      );
+                      final List<dynamic> backendSlots = parsedBody['data'];
 
                       setDialogState(() {
-                        isDayClosed = dayRecord != null && dayRecord['isClosed'] == true;
-                        
-                        if (dayRecord != null && !isDayClosed) {
-                          final String openStr = dayRecord['openTime'] ?? '09:00';
-                          final String closeStr = dayRecord['closeTime'] ?? '17:00';
-
-                          // Extract numerical hour components from structural string 'HH:mm'
-                          final int startHour = int.parse(openStr.split(':')[0]);
-                          final int endHour = int.parse(closeStr.split(':')[0]);
-
-                          final List<String> generatedSlots = [];
+                        if (backendSlots.isNotEmpty) {
+                          isDayClosed = false;
                           
-                          // Generate full hourly slots from startHour up to an hour before endHour
-                          for (int hour = startHour; hour < endHour; hour++) {
+                          // 4. Map the 24h backend slots (e.g., "14:30") into the "02:30 PM" UI display format
+                          operationalHoursTimeOptions = backendSlots.map<String>((slot) {
+                            final parts = slot.toString().split(':');
+                            final int hour = int.parse(parts[0]);
+                            final String minute = parts[1]; // Dynamically preserves :00 or :30 from backend
+                            
                             final int displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
                             final String amPm = hour >= 12 ? 'PM' : 'AM';
                             final String paddedHour = displayHour.toString().padLeft(2, '0');
                             
-                            // Generates formatted options like "09:00 AM", "12:00 PM", "04:00 PM"
-                            generatedSlots.add('$paddedHour:00 $amPm');
-                          }
-
-                          operationalHoursTimeOptions = generatedSlots;
+                            return '$paddedHour:$minute $amPm';
+                          }).toList();
                         } else {
+                          // If no slots are returned, the merchant is either closed or completely fully booked
+                          isDayClosed = true;
                           operationalHoursTimeOptions = [];
                         }
 
-                        // Assign initial default selection value
+                        // Assign initial default selection value safely
                         if (operationalHoursTimeOptions.isNotEmpty) {
                           selectedOperationalTime = operationalHoursTimeOptions.first;
                         } else {
@@ -492,8 +495,22 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                                         isLoadingSlots = true;
                                       });
 
-                                      try {
-                                        final String targetUrl = '$_baseUrl/api/v1/merchant/${widget.config.merchantId}/hours';
+                                     try {
+                                        // 1. Format the selected date to YYYY-MM-DD string required by the backend
+                                        final String formattedDate = "${selectedBookingDate.year}-"
+                                            "${selectedBookingDate.month.toString().padLeft(2, '0')}-"
+                                            "${selectedBookingDate.day.toString().padLeft(2, '0')}";
+                                        
+                                        // 2. Dynamic duration value (Fallback to 60 if your state/matrix selection isn't loaded yet)
+                                        // Replace this with your actual state variable (e.g., selectedServiceMatrix.durationMinutes)
+                                        final int durationMinutes = selectedMatrixRow?['durationMinutes'] ?? 60;
+                                        
+
+                                        // 3. Updated URL targeting the new bookings slots endpoint with query parameters
+                                        final String targetUrl = '$_baseUrl/api/v1/bookings/available-slots'
+                                            '?merchantId=${widget.config.merchantId}'
+                                            '&date=$formattedDate'
+                                            '&duration=$durationMinutes';
                                         
                                         final response = await http.get(
                                           Uri.parse(targetUrl),
@@ -505,42 +522,31 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                                         if (response.statusCode == 200) {
                                           final Map<String, dynamic> parsedBody = json.decode(response.body);
                                           if (parsedBody['success'] == true && parsedBody['data'] is List) {
-                                            final List<dynamic> operationalHours = parsedBody['data'];
-                                            
-                                            final dayRecord = operationalHours.firstWhere(
-                                              (element) => element['dayOfWeek'] == pickedDate.weekday,
-                                              orElse: () => null,
-                                            );
+                                            final List<dynamic> backendSlots = parsedBody['data'];
 
                                             setDialogState(() {
-                                              isDayClosed = dayRecord != null && dayRecord['isClosed'] == true;
-                                              
-                                              if (dayRecord != null && !isDayClosed) {
-                                                final String openStr = dayRecord['openTime'] ?? '09:00';
-                                                final String closeStr = dayRecord['closeTime'] ?? '17:00';
-
-                                                // Extract numerical hour components from structural string 'HH:mm'
-                                                final int startHour = int.parse(openStr.split(':')[0]);
-                                                final int endHour = int.parse(closeStr.split(':')[0]);
-
-                                                final List<String> generatedSlots = [];
+                                              if (backendSlots.isNotEmpty) {
+                                                isDayClosed = false;
                                                 
-                                                // Generate full hourly slots from startHour up to an hour before endHour
-                                                for (int hour = startHour; hour < endHour; hour++) {
+                                                // 4. Map the 24h backend slots (e.g., "14:30") into the "02:30 PM" UI display format
+                                                operationalHoursTimeOptions = backendSlots.map<String>((slot) {
+                                                  final parts = slot.toString().split(':');
+                                                  final int hour = int.parse(parts[0]);
+                                                  final String minute = parts[1]; // Dynamically preserves :00 or :30 from backend
+                                                  
                                                   final int displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
                                                   final String amPm = hour >= 12 ? 'PM' : 'AM';
                                                   final String paddedHour = displayHour.toString().padLeft(2, '0');
                                                   
-                                                  // Generates formatted options like "09:00 AM", "12:00 PM", "04:00 PM"
-                                                  generatedSlots.add('$paddedHour:00 $amPm');
-                                                }
-
-                                                operationalHoursTimeOptions = generatedSlots;
+                                                  return '$paddedHour:$minute $amPm';
+                                                }).toList();
                                               } else {
+                                                // If no slots are returned, the merchant is either closed or completely fully booked
+                                                isDayClosed = true;
                                                 operationalHoursTimeOptions = [];
                                               }
 
-                                              // Assign initial default selection value
+                                              // Assign initial default selection value safely
                                               if (operationalHoursTimeOptions.isNotEmpty) {
                                                 selectedOperationalTime = operationalHoursTimeOptions.first;
                                               } else {
@@ -549,10 +555,10 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                                             });
                                           }
                                         } else {
-                                          setDialogState(() => isDayClosed = _checkIsDayClosed(pickedDate));
+                                          setDialogState(() => isDayClosed = _checkIsDayClosed(selectedBookingDate));
                                         }
                                       } catch (_) {
-                                        setDialogState(() => isDayClosed = _checkIsDayClosed(pickedDate));
+                                        setDialogState(() => isDayClosed = _checkIsDayClosed(selectedBookingDate));
                                       } finally {
                                         setDialogState(() => isLoadingSlots = false);
                                       }
