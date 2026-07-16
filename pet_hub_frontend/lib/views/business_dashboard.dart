@@ -1372,46 +1372,250 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
   Widget _buildDailyTimelineGrid(Color col) {
     final targetDate = _selectedDay ?? DateTime.now();
     final dailyFilteredApps = mockAppointments.where((app) => isSameDay(app['rawStartTime'], targetDate)).toList();
-    final List<String> operationalHoursSlots = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00'];
+
+    final dayRecord = _businessHoursConfig.firstWhere(
+      (element) => element['dayOfWeek'] == targetDate.weekday,
+      orElse: () => null,
+    );
+
+    bool isClosed = true;
+    int startHour = 9;
+    int endHour = 17;
+
+    if (dayRecord != null && dayRecord['isClosed'] != true) {
+      isClosed = false;
+      final String startStr = dayRecord['openTime'] ?? '09:00';
+      final String endStr = dayRecord['closeTime'] ?? '17:00';
+      
+      startHour = int.tryParse(startStr.split(':')[0]) ?? 9;
+      endHour = int.tryParse(endStr.split(':')[0]) ?? 17;
+    }
+
+    if (isClosed) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+        child: const Center(child: Text('Closed Today', style: TextStyle(color: Colors.grey))),
+      );
+    }
+
+    // --- NEW CONFIGURATION FOR SPANNING LAYOUT ---
+    const double slotHeight = 70.0; // Height allocated per hour row
+    final int totalHours = endHour - startHour + 1;
 
     return Container(
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
+      decoration: BoxDecoration(
+        color: Colors.white, 
+        borderRadius: BorderRadius.circular(12), 
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Timeline Lane Distribution Tracker', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+          const Text(
+            'Timeline Lane Distribution Tracker', 
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+          ),
           const SizedBox(height: 16),
-          ...operationalHoursSlots.map((hourStr) {
-            final int slotHour = int.parse(hourStr.split(':')[0]);
-            
-            final matches = dailyFilteredApps.where((a) => a['rawStartTime'].hour == slotHour).toList();
-            
-            return Container(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade100))),
-              child: Row(
-                children: [
-                  SizedBox(width: 60, child: Text(hourStr, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey))),
-                  Expanded(
-                    child: matches.isEmpty
-                        ? Text('Slot Available', style: TextStyle(color: Colors.grey.shade400, fontSize: 12))
-                        : Wrap(
-                            spacing: 8,
-                            runSpacing: 4,
-                            children: matches.map((m) => ActionChip(
-                              label: Text('Dog: ${m['petName']} (${m['breed']}) - ${m['rawStartTime'].minute.toString().padLeft(2, '0')} mins past'),
-                              onPressed: () => _showUpdateBookingOptionsDialog(m),
-                            )).toList(),
-                          ),
-                  )
-                ],
+          
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 1. Left Axis: Fixed Time Slots Columns (e.g., 9 AM, 10 AM)
+              Column(
+                children: List.generate(totalHours, (index) {
+                  final hour = startHour + index;
+                  final displayHour = hour > 12 
+                      ? '${hour - 12} PM' 
+                      : hour == 12 ? '12 PM' : '$hour AM';
+                  return SizedBox(
+                    height: slotHeight,
+                    width: 65,
+                    child: Text(
+                      displayHour, 
+                      style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.blueGrey, fontSize: 13),
+                    ),
+                  );
+                }),
               ),
-            );
-          }),
+              
+              // 2. Right Axis: Interactive Calendar Stack Area
+              Expanded(
+                child: SizedBox(
+                  height: totalHours * slotHeight,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final totalWidth = constraints.maxWidth;
+                      
+                      // Sort appointments by start time chronologically
+                      final sortedApps = List.from(dailyFilteredApps)
+                        ..sort((a, b) => a['rawStartTime'].compareTo(b['rawStartTime']));
+
+                      // Distribute overlapping items into columns side-by-side
+                      List<List<Map<String, dynamic>>> columns = [];
+                      for (var app in sortedApps) {
+                        bool placed = false;
+                        for (var column in columns) {
+                          final lastApp = column.last;
+                          final lastStart = lastApp['rawStartTime'] as DateTime;
+                          // Assumes m['rawEndTime'] exists, falls back to 1 hour duration if null
+                          final lastEnd = lastApp['rawEndTime'] as DateTime? ?? lastStart.add(const Duration(hours: 1));
+                          final appStart = app['rawStartTime'] as DateTime;
+
+                          if (appStart.isAfter(lastEnd) || appStart.isAtSameMomentAs(lastEnd)) {
+                            column.add(app);
+                            placed = true;
+                            break;
+                          }
+                        }
+                        if (!placed) {
+                          columns.add([app]);
+                        }
+                      }
+
+                      final int totalCols = columns.isEmpty ? 1 : columns.length;
+                      final double itemWidth = totalWidth / totalCols;
+
+                      return Stack(
+                        children: [
+                          // Background Grid Separator Lines
+                          ...List.generate(totalHours, (index) {
+                            return Positioned(
+                              top: index * slotHeight,
+                              left: 0,
+                              right: 0,
+                              child: Container(
+                                height: slotHeight,
+                                decoration: BoxDecoration(
+                                  border: Border(top: BorderSide(color: Colors.grey.shade100, width: 1)),
+                                ),
+                              ),
+                            );
+                          }),
+
+                          // Foreground Rendered Spanned Booking Blocks
+                          ...List.generate(columns.length, (colIndex) {
+                            final currentColumnApps = columns[colIndex];
+                            return currentColumnApps.map((app) {
+                              final start = app['rawStartTime'] as DateTime;
+                              final end = app['rawEndTime'] as DateTime? ?? start.add(const Duration(hours: 2)); // Dynamic fallback duration
+
+                              // Compute positions relative to the timeline structure 
+                              final double startMinutes = (start.hour - startHour) * 60.0 + start.minute;
+                              final double endMinutes = (end.hour - startHour) * 60.0 + end.minute;
+
+                              final double topPosition = (startMinutes / 60.0) * slotHeight;
+                              final double blockHeight = ((endMinutes - startMinutes) / 60.0) * slotHeight;
+                              
+                              // Visual cosmetics setup
+                              final cardColor = _getPastelColor(app['breed'] ?? '');
+
+                              return Positioned(
+                                top: topPosition,
+                                left: colIndex * itemWidth,
+                                width: itemWidth - 4,
+                                height: blockHeight - 2, 
+                                // 🌟 ADDED: Tooltip widget wraps the item to display full info on hover
+                                child: Tooltip(
+                                  richMessage: TextSpan(
+                                    style: const TextStyle(color: Colors.white, fontSize: 12, height: 1.4),
+                                    children: [
+                                      TextSpan(text: '🐾 Dog: ${app['petName']} (${app['breed']})\n', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                      TextSpan(text: '👤 Owner: ${app['ownerName'] ?? 'Unknown Owner'}\n'),
+                                      TextSpan(text: '📞 Phone: ${app['ownerPhone'] ?? 'No Phone'}\n'),
+                                      TextSpan(text: '✉️ Email: ${app['ownerEmail'] ?? 'No Email'}'),
+                                    ],
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade900.withOpacity(0.95),
+                                    borderRadius: BorderRadius.circular(8),
+                                    boxShadow: [
+                                      BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 6, offset: const Offset(0, 3))
+                                    ],
+                                  ),
+                                  padding: const EdgeInsets.all(12),
+                                  preferBelow: true,
+                                  waitDuration: const Duration(milliseconds: 200), // Quick response on mouse hover
+                                  child: GestureDetector(
+                                    onTap: () => _showUpdateBookingOptionsDialog(app),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: cardColor.withOpacity(0.25),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: cardColor, width: 1.5),
+                                      ),
+                                      // 🌟 CHANGED: SingleChildScrollView prevents the "BOTTOM OVERFLOWED" red screen crash completely
+                                      child: SingleChildScrollView(
+                                        physics: const NeverScrollableScrollPhysics(), // Disables tiny inner scrollbars to keep UI clean
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              '🐾 ${app['petName']} (${app['breed']})',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 12,
+                                                color: cardColor.withRed(30).withGreen(30),
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              '👤 ${app['ownerName'] ?? 'Unknown Owner'}',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 11,
+                                                color: Colors.grey.shade800,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              '📞 ${app['ownerPhone'] ?? 'No Phone'}',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                color: Colors.grey.shade700,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            Text(
+                                              '✉️ ${app['ownerEmail'] ?? 'No Email'}',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                color: Colors.grey.shade600,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }).toList();
+                          }).expand((element) => element).toList(),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
+  }
+
+  // Helper method to assign distinct theme colors based on the data block
+  Color _getPastelColor(String seed) {
+    final int hash = seed.hashCode;
+    final List<Color> colors = [Colors.green.shade600, Colors.purple.shade400, Colors.orange.shade600, Colors.blue.shade600];
+    return colors[hash.abs() % colors.length];
   }
 
   Widget _buildWeeklyScheduleGrid(Color col) {
