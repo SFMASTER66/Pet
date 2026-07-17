@@ -290,53 +290,56 @@ export const BookingService = {
    * 🔄 Modifies an existing booking state matrix parameter layout row
    */
   async updateBooking(id: string, input: AdminUpdateBookingInput) {
-    // ... unchanged code
     try {
       const existingAppointment = await prisma.appointment.findUnique({ where: { id } });
       if (!existingAppointment) throw new Error(`❌ Appointment [${id}] not found.`);
 
       const updateData: any = { ...input };
 
+      // ==========================================
+      // 🔥 CAPACITY GUARD RUNS ONLY ON TIME CHANGE
+      // ==========================================
       if (input.startTime) {
         const parsedStartTime = new Date(input.startTime);
+        
+        // Only run capacity validation if the start time is actually changing
+        const isTimeChanging = existingAppointment.startTime.getTime() !== parsedStartTime.getTime();
+
         const duration = existingAppointment.durationMinutes || 60; 
         const calculatedEndTime = new Date(parsedStartTime.getTime() + duration * 60000);
 
-        // ==========================================
-        // 🔥 START CODE CHANGE: UPDATE CAPACITY GUARD
-        // ==========================================
-        const totalStaffCount = await prisma.employee.count({
-          where: { 
-            merchantId: existingAppointment.merchantId, 
-            isActive: true,
-            user: {
-              role: UserRole.MERCHANT_STAFF 
+        if (isTimeChanging) {
+          const totalStaffCount = await prisma.employee.count({
+            where: { 
+              merchantId: existingAppointment.merchantId, 
+              isActive: true,
+              user: {
+                role: UserRole.MERCHANT_STAFF 
+              }
+             }
+          });
+
+          const concurrentBookings = await prisma.appointment.count({
+            where: {
+              id: { not: id },
+              merchantId: existingAppointment.merchantId,
+              status: { in: [AppointmentStatus.PENDING, AppointmentStatus.PAID, AppointmentStatus.COMPLETED] },
+              OR: [
+                { startTime: { lte: parsedStartTime }, endTime: { gt: parsedStartTime } },
+                { startTime: { lt: calculatedEndTime }, endTime: { gte: calculatedEndTime } }
+              ]
             }
-           }
-        });
+          });
 
-        const concurrentBookings = await prisma.appointment.count({
-          where: {
-            id: { not: id },
-            merchantId: existingAppointment.merchantId,
-            status: { in: [AppointmentStatus.PENDING, AppointmentStatus.PAID, AppointmentStatus.COMPLETED] },
-            OR: [
-              { startTime: { lte: parsedStartTime }, endTime: { gt: parsedStartTime } },
-              { startTime: { lt: calculatedEndTime }, endTime: { gte: calculatedEndTime } }
-            ]
+          if (concurrentBookings >= totalStaffCount) {
+            throw new Error(`❌ Rescheduling rejected. No staff capacity during this period.`);
           }
-        });
-
-        if (concurrentBookings >= totalStaffCount) {
-          throw new Error(`❌ Rescheduling rejected. No staff capacity during this period.`);
         }
-        // ==========================================
-        // 🛑 END CODE CHANGE
-        // ==========================================
 
         updateData.startTime = parsedStartTime;
         updateData.endTime = calculatedEndTime;
       }
+      // ==========================================
 
       const updatedAppointment = await prisma.appointment.update({
         where: { id },
