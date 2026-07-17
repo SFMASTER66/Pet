@@ -1683,18 +1683,88 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     String currentStatus = app['status'] ?? 'PENDING';
     
     final tagsController = TextEditingController(text: (app['staffTags'] as List).join(', '));
-    
-    DateTime updatedBookingDate = app['rawStartTime'] ?? DateTime.now();
+
+    // 1. Parse the raw DateTime object or fallback safely
+    DateTime updatedBookingDate = app['rawStartTime'] is DateTime 
+        ? app['rawStartTime'] 
+        : (DateTime.tryParse(app['rawStartTime']?.toString() ?? '') ?? DateTime.now());
+
+    // 2. Format to 24-hour style (e.g., "14:30") as requested
     String updatedBookingTimeSlot = "${updatedBookingDate.hour.toString().padLeft(2, '0')}:${updatedBookingDate.minute.toString().padLeft(2, '0')}";
-    
-    if (!_timePresetSlots.contains(updatedBookingTimeSlot)) {
-      updatedBookingTimeSlot = '09:00';
+
+    // 3. Initialize the options array with our initial 24h slot string
+    List<String> operationalHoursTimeOptions = [updatedBookingTimeSlot];
+
+    bool isLoadingSlots = false;
+    bool isDayClosed = false;
+    bool hasInitialFetched = false;
+
+    // 4. Dedicated dynamic slot fetch function to pull from backend immediately on launch
+    Future<void> loadInitialSlots(StateSetter setModalState) async {
+      if (hasInitialFetched) return;
+      hasInitialFetched = true;
+
+      setModalState(() {
+        isLoadingSlots = true;
+        isDayClosed = false;
+      });
+
+      try {
+        final String formattedDate = "${updatedBookingDate.year}-"
+            "${updatedBookingDate.month.toString().padLeft(2, '0')}-"
+            "${updatedBookingDate.day.toString().padLeft(2, '0')}";
+        
+        final int durationMinutes = app['durationMinutes'] ?? 60;
+        final String targetUrl = '$_baseUrl/api/v1/bookings/available-slots'
+            '?merchantId=${widget.config.merchantId}'
+            '&date=$formattedDate'
+            '&duration=$durationMinutes';
+        
+        final response = await http.get(
+          Uri.parse(targetUrl),
+          headers: {'Content-Type': 'application/json'},
+        );
+
+        if (response.statusCode == 200) {
+          final Map<String, dynamic> parsedBody = json.decode(response.body);
+          if (parsedBody['success'] == true && parsedBody['data'] is List) {
+            final List<dynamic> backendSlots = parsedBody['data'];
+
+            setModalState(() {
+              isLoadingSlots = false;
+              if (backendSlots.isNotEmpty) {
+                isDayClosed = false;
+                // Map pure backend 24h strings
+                operationalHoursTimeOptions = backendSlots.map<String>((slot) => slot.toString()).toList();
+
+                // Keep original slot selected if it's still available, otherwise auto-select the first one
+                if (!operationalHoursTimeOptions.contains(updatedBookingTimeSlot)) {
+                  updatedBookingTimeSlot = operationalHoursTimeOptions.first;
+                }
+              } else {
+                isDayClosed = true;
+                operationalHoursTimeOptions = [];
+              }
+            });
+            return;
+          }
+        }
+        setModalState(() => isLoadingSlots = false);
+      } catch (e) {
+        setModalState(() => isLoadingSlots = false);
+      }
     }
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) {
+
+          // Add this line here to trigger the backend request on opening!
+          if (!hasInitialFetched) {
+            Future.delayed(Duration.zero, () => loadInitialSlots(setModalState));
+          }
+
           return AlertDialog(
             title: Row(
               children: [
@@ -1713,44 +1783,156 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                     Text('Owner Account: ${app['ownerName']} (${app['ownerPhone']})', style: const TextStyle(color: Colors.grey, fontSize: 13)),
                     const Divider(height: 24),
                     
-                    const Text('Reschedule Date & Time Layout', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569))),
+                    const Text(
+                      'Reschedule Date & Time Layout', 
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569)),
+                    ),
                     const SizedBox(height: 6),
                     Row(
                       children: [
+                        // ==========================================
+                        // 1. DATE PICKER BUTTON BLOCK
+                        // ==========================================
                         Expanded(
-                          child: OutlinedButton.icon(
-                            icon: const Icon(Icons.calendar_today, size: 14),
-                            label: Text('${updatedBookingDate.day}/${updatedBookingDate.month}/${updatedBookingDate.year}'),
-                            onPressed: () async {
-                              final pickedDate = await showDatePicker(
-                                context: context,
-                                initialDate: updatedBookingDate,
-                                firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                                lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
-                              );
-                              if (pickedDate != null) {
-                                setModalState(() => updatedBookingDate = pickedDate);
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.calendar_today, size: 14),
+                          label: Text('${updatedBookingDate.day}/${updatedBookingDate.month}/${updatedBookingDate.year}'),
+                          onPressed: () async {
+                            final pickedDate = await showDatePicker(
+                              context: context,
+                              initialDate: updatedBookingDate,
+                              firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                              lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                            );
+                            
+                            if (pickedDate != null) {
+                              // Turn on loader and set date
+                              setModalState(() {
+                                updatedBookingDate = pickedDate;
+                                isLoadingSlots = true;
+                                isDayClosed = false;
+                              });
+
+                              try {
+                                // Format date to YYYY-MM-DD for backend
+                                final String formattedDate = "${pickedDate.year}-"
+                                    "${pickedDate.month.toString().padLeft(2, '0')}-"
+                                    "${pickedDate.day.toString().padLeft(2, '0')}";
+                                
+                                final int durationMinutes = app['durationMinutes'] ?? 60;
+                                final String targetUrl = '$_baseUrl/api/v1/bookings/available-slots'
+                                    '?merchantId=${widget.config.merchantId}'
+                                    '&date=$formattedDate'
+                                    '&duration=$durationMinutes';
+                                
+                                final response = await http.get(
+                                  Uri.parse(targetUrl),
+                                  headers: {'Content-Type': 'application/json'},
+                                );
+
+                                if (response.statusCode == 200) {
+                                  final Map<String, dynamic> parsedBody = json.decode(response.body);
+                                  if (parsedBody['success'] == true && parsedBody['data'] is List) {
+                                    final List<dynamic> backendSlots = parsedBody['data'];
+
+                                    setModalState(() {
+                                      isLoadingSlots = false;
+                                      if (backendSlots.isNotEmpty) {
+                                        isDayClosed = false;
+                                        
+                                        // Keep options strictly as 24-hour strings (e.g., "14:30") to match your state logic
+                                        operationalHoursTimeOptions = backendSlots.map<String>((slot) => slot.toString()).toList();
+
+                                        // Update value safely if available
+                                        if (operationalHoursTimeOptions.isNotEmpty) {
+                                          updatedBookingTimeSlot = operationalHoursTimeOptions.first;
+                                        }
+                                      } else {
+                                        isDayClosed = true;
+                                        operationalHoursTimeOptions = [];
+                                      }
+                                    });
+                                  } else {
+                                    setModalState(() => isLoadingSlots = false);
+                                  }
+                                } else {
+                                  setModalState(() => isLoadingSlots = false);
+                                }
+                              } catch (e) {
+                                setModalState(() => isLoadingSlots = false);
                               }
-                            },
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+
+                      // ==========================================
+                      // 2. DYNAMIC TIME SLOTS DROPDOWN BLOCK
+                      // ==========================================
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: isDayClosed ? Colors.red.shade300 : Colors.grey.shade300), 
+                            borderRadius: BorderRadius.circular(4),
+                            color: isDayClosed ? Colors.red.shade50 : (isLoadingSlots ? Colors.grey.shade100 : Colors.white),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: isDayClosed 
+                                ? const Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 12.0),
+                                    child: Text(
+                                      'SHOP CLOSED', 
+                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.redAccent),
+                                    ),
+                                  )
+                                : (isLoadingSlots
+                                    ? const SizedBox(
+                                        height: 20, 
+                                        width: 20, 
+                                        child: Center(
+                                          child: SizedBox(
+                                            height: 16,
+                                            width: 16,
+                                            child: CircularProgressIndicator(strokeWidth: 2),
+                                          ),
+                                        ),
+                                      )
+                                    : DropdownButton<String>(
+                                        isExpanded: true,
+                                        hint: const Text('No slots', style: TextStyle(fontSize: 12, color: Colors.redAccent)),
+                                        // Prevents crash by safely checking constraints against the exact 24h keys
+                                        value: operationalHoursTimeOptions.contains(updatedBookingTimeSlot) ? updatedBookingTimeSlot : null,
+                                        items: operationalHoursTimeOptions.map((raw24hTime) {
+                                          // Convert 24h string ("14:30") to readable UI layout string ("02:30 PM") inline here
+                                          String displayTime = raw24hTime;
+                                          try {
+                                            final parts = raw24hTime.split(':');
+                                            final int hour = int.parse(parts[0]);
+                                            final String minute = parts[1];
+                                            
+                                            final int displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+                                            final String amPm = hour >= 12 ? 'PM' : 'AM';
+                                            final String paddedHour = displayHour.toString().padLeft(2, '0');
+                                            
+                                            displayTime = '$paddedHour:$minute $amPm';
+                                          } catch (_) {}
+
+                                          return DropdownMenuItem<String>(
+                                            value: raw24hTime, 
+                                            child: Text('Time: $displayTime'),
+                                          );
+                                        }).toList(),
+                                        onChanged: (val) {
+                                          if (val != null) {
+                                            setModalState(() => updatedBookingTimeSlot = val);
+                                          }
+                                        },
+                                      )),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(4)),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                isExpanded: true,
-                                value: updatedBookingTimeSlot,
-                                items: _timePresetSlots.map((time) {
-                                  return DropdownMenuItem<String>(value: time, child: Text('Time: $time'));
-                                }).toList(),
-                                onChanged: (val) => setModalState(() => updatedBookingTimeSlot = val!),
-                              ),
-                            ),
-                          ),
-                        ),
+                      ),
                       ],
                     ),
                     const Divider(height: 24),
