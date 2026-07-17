@@ -1781,6 +1781,21 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Owner Account: ${app['ownerName']} (${app['ownerPhone']})', style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                    const SizedBox(height: 4),
+                    // ==========================================
+                    // ADDED: SERVICE NAME AND DURATION VISUAL LAYER
+                    // ==========================================
+                    Row(
+                      children: [
+                        Icon(Icons.layers_outlined, size: 14, color: Colors.grey.shade600),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Service: ${app['service'] ?? 'General'} [${app['time']}]',
+                          style: TextStyle(color: Colors.grey.shade700, fontSize: 13, fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                    ),
+                    
                     const Divider(height: 24),
                     
                     const Text(
