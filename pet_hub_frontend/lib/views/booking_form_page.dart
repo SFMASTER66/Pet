@@ -68,9 +68,32 @@ class _BookingFormPageState extends State<BookingFormPage> {
       _errorMessage = null;
     });
 
+    // Safeguard check: If no date is selected yet (e.g., during initState), 
+    // we drop down into a resting state until the user picks a date.
+    if (_selectedDate == null) {
+      setState(() {
+        _isLoadingHours = false;
+        _dynamicAvailableSlots = [];
+        _selectedTimeSlot = null;
+      });
+      return;
+    }
+
     try {
-      // FIXED: URL structure now cleanly inherits widget.baseUrl matching customer_info_panel.dart rules
-      final String targetUrl = '${widget.baseUrl}/api/v1/merchant/${widget.config.merchantId}/hours';
+      // 1. Format the selected date to YYYY-MM-DD string required by the backend
+      final String formattedDate = "${_selectedDate!.year}-"
+          "${_selectedDate!.month.toString().padLeft(2, '0')}-"
+          "${_selectedDate!.day.toString().padLeft(2, '0')}";
+      
+      // 2. Dynamic duration value (Fallback to 60 if your state/matrix selection isn't loaded yet)
+      final matchedVariant = _lookupMatchedVariant();
+      final int durationMinutes = matchedVariant?['durationMinutes'] ?? 60;
+
+      // 3. Updated URL targeting the new bookings slots endpoint with query parameters
+      final String targetUrl = '${widget.baseUrl}/api/v1/bookings/available-slots'
+          '?merchantId=${widget.config.merchantId}'
+          '&date=$formattedDate'
+          '&duration=$durationMinutes';
       
       final response = await http.get(
         Uri.parse(targetUrl),
@@ -84,24 +107,58 @@ class _BookingFormPageState extends State<BookingFormPage> {
       if (response.statusCode == 200) {
         final Map<String, dynamic> parsedBody = json.decode(response.body);
         if (parsedBody['success'] == true && parsedBody['data'] is List) {
+          final List<dynamic> backendSlots = parsedBody['data'];
+
           setState(() {
-            _merchantHours = parsedBody['data'];
-            _isLoadingHours = false;
+            if (backendSlots.isNotEmpty) {
+              _isDayClosed = false;
+              
+              // 4. Map the 24h backend slots (e.g., "14:30") into the "02:30 PM" UI display format
+              _dynamicAvailableSlots = backendSlots.map<String>((slot) {
+                final parts = slot.toString().split(':');
+                final int hour = int.parse(parts[0]);
+                final String minute = parts[1]; // Dynamically preserves :00 or :30 from backend
+                
+                final int displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+                final String amPm = hour >= 12 ? 'PM' : 'AM';
+                final String paddedHour = displayHour.toString().padLeft(2, '0');
+                
+                return '$paddedHour:$minute $amPm';
+              }).toList();
+            } else {
+              // If no slots are returned, the merchant is either closed or completely fully booked
+              _isDayClosed = true;
+              _dynamicAvailableSlots = [];
+            }
+
+            // Assign initial default selection value safely
+            if (_dynamicAvailableSlots.isNotEmpty) {
+              _selectedTimeSlot = _dynamicAvailableSlots.first;
+            } else {
+              _selectedTimeSlot = _isDayClosed ? "SHOP_CLOSED" : null;
+            }
           });
-          return;
         }
+      } else {
+        setState(() {
+          _errorMessage = 'Failed to download updated business operating hours from servers.';
+          _dynamicAvailableSlots = [];
+          _selectedTimeSlot = null;
+        });
       }
-      
-      setState(() {
-        _errorMessage = 'Failed to download updated business operating hours from servers.';
-        _isLoadingHours = false;
-      });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _errorMessage = 'Network connection failed: Unable to fetch live scheduling rules.';
-        _isLoadingHours = false;
+        _dynamicAvailableSlots = [];
+        _selectedTimeSlot = null;
       });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingHours = false;
+        });
+      }
     }
   }
 
@@ -199,7 +256,8 @@ class _BookingFormPageState extends State<BookingFormPage> {
     );
     if (picked != null) {
       setState(() => _selectedDate = picked);
-      _calculateAvailableTimeSlots(picked);
+      // Trigger live updates directly using your updated async fetch logic
+      _fetchLiveOperationalHours();
     }
   }
 
@@ -330,7 +388,11 @@ class _BookingFormPageState extends State<BookingFormPage> {
                   items: weightTiers.map((t) {
                     return DropdownMenuItem<String>(value: t, child: Text(t));
                   }).toList(),
-                  onChanged: (val) => setState(() => _selectedWeightTier = val),
+                  onChanged: (val) {
+                    setState(() => _selectedWeightTier = val);
+                    // Re-fetch dynamic time slots if the variant duration drops or shifts
+                    if (_selectedDate != null) _fetchLiveOperationalHours();
+                  },
                   validator: (v) => v == null ? 'Weight Tier is required' : null,
                 ),
                 const SizedBox(height: 12),
@@ -341,7 +403,11 @@ class _BookingFormPageState extends State<BookingFormPage> {
                   items: coatTypes.map((c) {
                     return DropdownMenuItem<String>(value: c, child: Text(c));
                   }).toList(),
-                  onChanged: (val) => setState(() => _selectedCoatType = val),
+                  onChanged: (val) {
+                    setState(() => _selectedCoatType = val);
+                    // Re-fetch dynamic time slots if the variant duration drops or shifts
+                    if (_selectedDate != null) _fetchLiveOperationalHours();
+                  },
                   validator: (v) => v == null ? 'Coat Category is required' : null,
                 ),
                 const SizedBox(height: 16),
@@ -428,7 +494,7 @@ class _BookingFormPageState extends State<BookingFormPage> {
                                 value: null,
                                 enabled: false,
                                 child: Text(
-                                  'Please select a date first',
+                                  _selectedDate == null ? 'Please select a date first' : 'No available slots found',
                                   style: TextStyle(color: Colors.grey.shade500),
                                 ),
                               )
