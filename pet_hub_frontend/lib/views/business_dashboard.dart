@@ -10,6 +10,7 @@ import 'customer_portal.dart';
 import 'manage_team_panel.dart';
 import 'manage_hours_panel.dart'; 
 import 'customer_info_panel.dart'; // New separation file layout layer integration
+import 'staff_scheduling_page.dart'; // New separation file layout layer integration
 
 class UnifiedMerchantDashboard extends StatefulWidget {
   final MerchantConfig config;
@@ -883,6 +884,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
           ],
         ),
         actions: [
+          // 1. Customer Portal Button (Primary Action Style Retained)
           OutlinedButton.icon(
             icon: const Icon(Icons.launch, size: 16),
             label: const Text('Customer Portal'),
@@ -898,7 +900,9 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
               )
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
+
+          // 2. Manual Booking Button (Primary Action Style Retained)
           ElevatedButton.icon(
             icon: const Icon(Icons.add, size: 16),
             label: Text(widget.config.getTxt('btn_book', 'Manual Booking')),
@@ -910,61 +914,87 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
             ),
             onPressed: _showCreateBookingDialog,
           ),
+          
+          // Clean layout separation line before utility configurations
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+            child: VerticalDivider(color: Color(0xFFE2E8F0), width: 1),
+          ),
+
+          // 3. Admin Configuration Utilities (Refactored to Smart IconButtons)
           if (widget.isAdmin) ...[
-            const SizedBox(width: 10),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.people_outline, size: 16),
-              label: const Text('Customer Info'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF0F172A),
-                side: const BorderSide(color: Color(0xFFCBD5E1)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+            Tooltip(
+              message: 'Customer Info',
+              child: IconButton(
+                icon: const Icon(Icons.people_outline, color: Color(0xFF475569)),
+                onPressed: () {
+                  setState(() => _drawerTabController.index = 3); 
+                  _scaffoldKey.currentState!.openEndDrawer();
+                },
               ),
-              onPressed: () {
-                setState(() => _drawerTabController.index = 3); 
-                _scaffoldKey.currentState!.openEndDrawer();
-              },
             ),
-            const SizedBox(width: 10),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.schedule_outlined, size: 16),
-              label: const Text('Business Hours'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF0F172A),
-                side: const BorderSide(color: Color(0xFFCBD5E1)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+            Tooltip(
+              message: 'Business Hours',
+              child: IconButton(
+                icon: const Icon(Icons.schedule_outlined, color: Color(0xFF475569)),
+                onPressed: () {
+                  setState(() => _drawerTabController.index = 1); 
+                  _scaffoldKey.currentState!.openEndDrawer();
+                },
               ),
-              onPressed: () {
-                setState(() => _drawerTabController.index = 1); 
-                _scaffoldKey.currentState!.openEndDrawer();
-              },
             ),
-            const SizedBox(width: 10),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.group_outlined, size: 16),
-              label: const Text('Manage Team'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF0F172A),
-                side: const BorderSide(color: Color(0xFFCBD5E1)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+            Tooltip(
+              message: 'Manage Team',
+              child: IconButton(
+                icon: const Icon(Icons.group_outlined, color: Color(0xFF475569)),
+                onPressed: () {
+                  setState(() => _drawerTabController.index = 2); 
+                  _scaffoldKey.currentState!.openEndDrawer();
+                },
               ),
-              onPressed: () {
-                setState(() => _drawerTabController.index = 2); 
-                _scaffoldKey.currentState!.openEndDrawer();
-              },
+            ),
+            Tooltip(
+              message: 'Schedule Staff',
+              child: IconButton(
+                icon: const Icon(Icons.edit_calendar_rounded, color: Color(0xFF475569)),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => StaffSchedulingPage(
+                        config: widget.config,
+                        authToken: widget.authToken,
+                        businessHoursConfig: _businessHoursConfig,
+                      ),
+                    ),
+                  );
+                },
+              ),
             ),
           ],
-          const SizedBox(width: 10),
-          IconButton(
-            icon: const Icon(Icons.tune, color: Color(0xFF475569)),
-            tooltip: 'Configure UI Text',
-            onPressed: () {
-              setState(() => _drawerTabController.index = 0); 
-              _scaffoldKey.currentState!.openEndDrawer();
-            },
+          
+          // 4. Configure UI Text Button
+          Tooltip(
+            message: 'Configure UI Text',
+            child: IconButton(
+              icon: const Icon(Icons.tune, color: Color(0xFF475569)),
+              onPressed: () {
+                setState(() => _drawerTabController.index = 0); 
+                _scaffoldKey.currentState!.openEndDrawer();
+              },
+            ),
           ),
+          
           const VerticalDivider(width: 24, indent: 12, endIndent: 12),
-          IconButton(icon: const Icon(Icons.logout_rounded, color: Colors.redAccent), onPressed: widget.onLogout),
+          
+          // 5. System Logout Button
+          Tooltip(
+            message: 'Logout',
+            child: IconButton(
+              icon: const Icon(Icons.logout_rounded, color: Colors.redAccent), 
+              onPressed: widget.onLogout,
+            ),
+          ),
           const SizedBox(width: 16),
         ],
       ),
