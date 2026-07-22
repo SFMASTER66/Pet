@@ -377,4 +377,125 @@ export class MerchantService {
       },
     });
   }
+  // =========================================================================
+  // 🔥 INITIAL STATE GENERATION ENGINE: SEEDS ROSTER DATA DIRECTLY TO DB
+  // =========================================================================
+  async seedInitialMerchantShifts(merchantId: string): Promise<void> {
+    // 1. Fetch active staff belonging to this workspace instance location
+    const activeStaff = await this.getMerchantStaff(merchantId);
+    if (activeStaff.length === 0) {
+      console.log(`⚠️ Skip shift initialization for ${merchantId}: No active employee profiles found.`);
+      return;
+    }
+
+    // 2. Pull operational rules matching businessHours configs
+    const businessHours = await this.getBusinessHours(merchantId);
+    const hoursMap = new Map<number, any>();
+    businessHours.forEach(bh => {
+      hoursMap.set(bh.dayOfWeek, bh); // 1 = Monday, 7 = Sunday
+    });
+
+    const shiftsToInitialize: Array<{ employeeId: string; date: string; startTime: string; endTime: string }> = [];
+    const today = new Date();
+
+    // 3. Cycle forward 90 days to establish future booking capacity pipelines
+    for (let i = 0; i < 90; i++) {
+      const targetDate = new Date();
+      targetDate.setDate(today.getDate() + i);
+
+      // Map JavaScript Sunday(0)-Saturday(6) to Database Monday(1)-Sunday(7)
+      let dayOfWeekIdx = targetDate.getDay();
+      if (dayOfWeekIdx === 0) dayOfWeekIdx = 7; 
+
+      const dayConfig = hoursMap.get(dayOfWeekIdx);
+
+      // Skip populating shifts if the day is closed
+      if (dayConfig && dayConfig.isClosed) {
+        continue;
+      }
+
+      const startTime = dayConfig?.openTime || "09:00";
+      const endTime = dayConfig?.closeTime || "17:00";
+      const formattedDate = targetDate.toISOString().split('T')[0]; // "YYYY-MM-DD"
+
+      // Allocate every active team member to run execution routines during business uptime windows
+      for (const staff of activeStaff) {
+        shiftsToInitialize.push({
+          employeeId: staff.id,
+          date: formattedDate,
+          startTime: startTime,
+          endTime: endTime,
+        });
+      }
+    }
+
+    // 4. Hand off array data packages straight into our batch synchronization engine
+    if (shiftsToInitialize.length > 0) {
+      await this.synchronizeMerchantShifts(merchantId, shiftsToInitialize);
+      console.log(`🚀 Initialized default operational matrix state for merchant ${merchantId}.`);
+    }
+  }
+
+  // =========================================================================
+  // 🔥 ATOMIC BATCH SYNCHRONIZATION FOR SHIFT CONFIGURATIONS
+  // =========================================================================
+  async synchronizeMerchantShifts(
+    merchantId: string, 
+    shiftsPayload: Array<{ employeeId: string; date: string; startTime: string; endTime: string }>
+  ) {
+    if (!shiftsPayload || shiftsPayload.length === 0) {
+      await prisma.shift.deleteMany({
+        where: { merchantId }
+      });
+      return [];
+    }
+
+    // Safely transform dates into standardized JS ISO midnight values for the DB engine
+    const parsedShifts = shiftsPayload.map(shift => {
+      const parsedDate = new Date(shift.date);
+      const normalizedDate = new Date(Date.UTC(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate()));
+      
+      return {
+        merchantId,
+        employeeId: shift.employeeId,
+        date: normalizedDate, // Safely maps to 'timestamp without time zone'
+        startTime: shift.startTime || "09:00",
+        endTime: shift.endTime || "17:00"
+      };
+    });
+
+    // Determine the starting boundary (today) to clear old future schedules cleanly
+    const datesArray = parsedShifts.map(s => s.date.getTime());
+    const minDate = new Date(Math.min(...datesArray));
+
+    // Run within an isolated, atomic transaction block
+    return await prisma.$transaction(async (tx) => {
+      // FIX: Purge ALL existing schedules from today forward to clean up obsolete look-ahead dates
+      await tx.shift.deleteMany({
+        where: {
+          merchantId,
+          date: {
+            gte: minDate // Wipes out everything from today onwards
+          }
+        }
+      });
+
+      // 2. Perform mass writeback execution mapping to the updated structural matrix layout
+      await tx.shift.createMany({
+        data: parsedShifts,
+        skipDuplicates: true
+      });
+
+      // Return newly written configurations back to caller
+      return await tx.shift.findMany({
+        where: {
+          merchantId,
+          date: {
+            gte: minDate
+          }
+        },
+        orderBy: { date: 'asc' }
+      });
+    });
+  }
 }

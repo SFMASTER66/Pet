@@ -13,7 +13,10 @@ import {
   getMerchantDashboard,
   fetchMerchantHours, 
   updateMerchantHoursDay,
-  getPaginatedCustomersList
+  getPaginatedCustomersList,
+  // getActiveStaffDirectory,
+  batchSyncShifts,
+  // initializeDefaultShifts
 } from '../controllers/merchant.controller';
 import { requestLogger, LoggedRequest } from '../middlewares/activity-log.middleware';
 
@@ -50,5 +53,12 @@ router.delete('/merchant/staff/:staffId', requireAdmin, deleteStaffProfile);
 
 router.get('/merchant/:merchantId/hours', fetchMerchantHours as any);
 router.put('/merchant/:merchantId/hours', requireAdmin as any, updateMerchantHoursDay as any);
+
+// =========================================================================
+// 🔥 ROSTER SCHEDULING MANAGEMENT ENDPOINTS
+// =========================================================================
+// router.get('/merchant/:merchantId/active-staff', requireAdmin as any, getActiveStaffDirectory as any);
+router.post('/merchant/:merchantId/shifts/batch', requireAdmin as any, batchSyncShifts as any);
+// router.post('/merchant/:merchantId/shifts/initialize', requireAdmin as any, initializeDefaultShifts as any);
 
 export default router;

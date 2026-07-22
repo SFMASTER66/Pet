@@ -176,3 +176,71 @@ export const updateMerchantHoursDay = async (req: AuthenticatedRequest, res: Res
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// =========================================================================
+// 🔥 GET ACTIVE RECONCILED STAFF POOL
+// =========================================================================
+// export const getActiveStaffDirectory = async (req: AuthenticatedRequest, res: Response) => {
+//   try {
+//     const { merchantId } = req.params;
+    
+//     if (!req.user || req.user.merchantId !== merchantId) {
+//       return res.status(401).json({ success: false, message: 'Unauthorized merchant domain boundary context.' });
+//     }
+
+//     const activeStaff = await merchantService.getMerchantStaff(merchantId);
+//     return res.status(200).json({ success: true, data: activeStaff });
+//   } catch (error: any) {
+//     return res.status(500).json({ success: false, message: error.message });
+//   }
+// };
+
+// =========================================================================
+// 🔥 POST BATCH SYNCHRONIZATION OVERWRITE
+// =========================================================================
+export const batchSyncShifts = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { merchantId } = req.params;
+    const { shifts } = req.body;
+
+    if (!req.user || req.user.merchantId !== merchantId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized operational modification frame.' });
+    }
+
+    if (!Array.isArray(shifts)) {
+      return res.status(400).json({ success: false, message: 'Invalid payload layout structural shape. Expected structural array map.' });
+    }
+
+    const syncedRecords = await merchantService.synchronizeMerchantShifts(merchantId, shifts);
+    
+    return res.status(200).json({ 
+      success: true, 
+      message: '🚀 Production roster adjustments successfully synchronized with cloud data clusters!',
+      data: syncedRecords 
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// =========================================================================
+// 🔥 TRIGGER INITIAL SHIFT GENERATION MANUALLY OR VIA SYSTEM ONBOARDING
+// =========================================================================
+// export const initializeDefaultShifts = async (req: AuthenticatedRequest, res: Response) => {
+//   try {
+//     const { merchantId } = req.params;
+
+//     if (!req.user || req.user.merchantId !== merchantId) {
+//       return res.status(401).json({ success: false, message: 'Unauthorized context scope.' });
+//     }
+
+//     await merchantService.seedInitialMerchantShifts(merchantId);
+
+//     return res.status(200).json({
+//       success: true,
+//       message: '🚀 Default initial 90-day shifts successfully seeded into system tables.'
+//     });
+//   } catch (error: any) {
+//     return res.status(500).json({ success: false, message: error.message });
+//   }
+// };
