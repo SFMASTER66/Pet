@@ -224,6 +224,24 @@ export const batchSyncShifts = async (req: AuthenticatedRequest, res: Response) 
 };
 
 // =========================================================================
+// 🟢 NEW: GET SCHEDULED SHIFTS CONTROLLER
+// =========================================================================
+export const getScheduledShifts = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { merchantId } = req.params;
+
+    if (!req.user || req.user.merchantId !== merchantId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized domain context.' });
+    }
+
+    const shifts = await merchantService.getScheduledShifts(merchantId);
+    return res.status(200).json({ success: true, data: shifts });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// =========================================================================
 // 🔥 TRIGGER INITIAL SHIFT GENERATION MANUALLY OR VIA SYSTEM ONBOARDING
 // =========================================================================
 // export const initializeDefaultShifts = async (req: AuthenticatedRequest, res: Response) => {

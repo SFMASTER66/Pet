@@ -16,7 +16,8 @@ import {
   getPaginatedCustomersList,
   // getActiveStaffDirectory,
   batchSyncShifts,
-  // initializeDefaultShifts
+  // initializeDefaultShifts,
+  getScheduledShifts
 } from '../controllers/merchant.controller';
 import { requestLogger, LoggedRequest } from '../middlewares/activity-log.middleware';
 
@@ -60,5 +61,7 @@ router.put('/merchant/:merchantId/hours', requireAdmin as any, updateMerchantHou
 // router.get('/merchant/:merchantId/active-staff', requireAdmin as any, getActiveStaffDirectory as any);
 router.post('/merchant/:merchantId/shifts/batch', requireAdmin as any, batchSyncShifts as any);
 // router.post('/merchant/:merchantId/shifts/initialize', requireAdmin as any, initializeDefaultShifts as any);
+// 🟢 NEW: Route to retrieve existing schedule assignments
+router.get('/merchant/:merchantId/shifts', requireAdmin as any, getScheduledShifts as any);
 
 export default router;

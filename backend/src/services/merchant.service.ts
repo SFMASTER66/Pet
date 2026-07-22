@@ -498,4 +498,27 @@ export class MerchantService {
       });
     });
   }
+  // =========================================================================
+  // 🟢 NEW: FETCH EXISTING SCHEDULED SHIFTS FOR MERCHANT
+  // =========================================================================
+  async getScheduledShifts(merchantId: string) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return await prisma.shift.findMany({
+      where: {
+        merchantId,
+        date: {
+          gte: today, // Fetch shifts from today onwards
+        },
+      },
+      select: {
+        employeeId: true,
+        date: true,
+        startTime: true,
+        endTime: true,
+      },
+      orderBy: { date: 'asc' },
+    });
+  }
 }

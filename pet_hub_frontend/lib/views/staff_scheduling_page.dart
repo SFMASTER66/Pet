@@ -59,7 +59,8 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
   Future<void> _fetchStaffAndInitialize() async {
     setState(() => _isLoadingStaff = true);
     try {
-      final response = await http.get(
+      // 1. Fetch active staff pool
+      final staffResponse = await http.get(
         Uri.parse('$_baseUrl/api/v1/merchant/staff'),
         headers: {
           'Authorization': 'Bearer ${widget.authToken}',
@@ -67,8 +68,8 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
         },
       );
 
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> responseData = jsonDecode(response.body);
+      if (staffResponse.statusCode == 200) {
+        final Map<String, dynamic> responseData = jsonDecode(staffResponse.body);
         if (responseData['success'] == true && responseData['data'] != null) {
           final List<dynamic> rawList = responseData['data'];
           
@@ -84,10 +85,40 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
           setState(() {
             _masterTeamMembersPool = loadedStaff;
           });
-
-          _prepopulateDefaultAssignments();
         }
       }
+
+      // 🟢 2. Fetch existing scheduled shifts from the DB
+      final shiftsResponse = await http.get(
+        Uri.parse('$_baseUrl/api/v1/merchant/${widget.config.merchantId}/shifts'),
+        headers: {
+          'Authorization': 'Bearer ${widget.authToken}',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      Map<DateTime, List<String>> existingShiftsMap = {};
+
+      if (shiftsResponse.statusCode == 200) {
+        final Map<String, dynamic> shiftsData = jsonDecode(shiftsResponse.body);
+        if (shiftsData['success'] == true && shiftsData['data'] != null) {
+          final List<dynamic> rawShifts = shiftsData['data'];
+
+          for (var shift in rawShifts) {
+            if (shift['date'] != null && shift['employeeId'] != null) {
+              final parsedDate = DateTime.parse(shift['date']);
+              final cleanDate = DateTime(parsedDate.year, parsedDate.month, parsedDate.day);
+              
+              existingShiftsMap.putIfAbsent(cleanDate, () => []);
+              existingShiftsMap[cleanDate]!.add(shift['employeeId']);
+            }
+          }
+        }
+      }
+
+      // 🟢 3. Pre-populate UI using DB shifts if available, or fall back to default active staff
+      _prepopulateDefaultAssignments(existingShiftsMap);
+
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('❌ Error communicating with active staff directory: $e')),
@@ -97,7 +128,8 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
     }
   }
 
-  void _prepopulateDefaultAssignments() {
+  // 🟢 UPDATED: Pre-populate logic checks existing DB records first
+  void _prepopulateDefaultAssignments([Map<DateTime, List<String>>? existingShiftsMap]) {
     if (_masterTeamMembersPool.isEmpty) return;
     
     _staffRosterAssignments.clear();
@@ -107,17 +139,21 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
     
     int scheduledDaysCount = 0;
 
-    // Loop continues until we successfully match the exact requested total of open, active days
     while (scheduledDaysCount < _rosterDaysLimit) {
       final cleanNormalizedDay = DateTime(loopDay.year, loopDay.month, loopDay.day);
       
       if (!_checkIsDayClosed(cleanNormalizedDay)) {
-        _staffRosterAssignments[cleanNormalizedDay] = 
-            _masterTeamMembersPool.map((e) => e.id).toList();
+        // 🟢 IF DB HAS SHIFTS FOR THIS DATE: Use them
+        if (existingShiftsMap != null && existingShiftsMap.containsKey(cleanNormalizedDay)) {
+          _staffRosterAssignments[cleanNormalizedDay] = List.from(existingShiftsMap[cleanNormalizedDay]!);
+        } else {
+          // 🟢 IF NO SHIFTS IN DB: Show all active staff by default
+          _staffRosterAssignments[cleanNormalizedDay] = 
+              _masterTeamMembersPool.map((e) => e.id).toList();
+        }
         scheduledDaysCount++;
       }
       
-      // Move to the next calendar day to process
       loopDay = loopDay.add(const Duration(days: 1));
     }
   }
