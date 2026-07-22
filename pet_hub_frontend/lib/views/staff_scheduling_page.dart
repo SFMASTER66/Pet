@@ -128,11 +128,17 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
     }
   }
 
-  // 🟢 UPDATED: Pre-populate logic checks existing DB records first
+  // ///////////////////////////////////////////////////////////////////////////
+  // 🟢 HIGHLIGHTED CHANGE: Preserves existing data & only adds to unscheduled open days
+  // ///////////////////////////////////////////////////////////////////////////
   void _prepopulateDefaultAssignments([Map<DateTime, List<String>>? existingShiftsMap]) {
     if (_masterTeamMembersPool.isEmpty) return;
     
-    _staffRosterAssignments.clear();
+    // Seed initial values from DB on first fetch if provided
+    if (existingShiftsMap != null) {
+      _staffRosterAssignments.clear();
+      _staffRosterAssignments.addAll(existingShiftsMap);
+    }
     
     final now = DateTime.now();
     DateTime loopDay = DateTime(now.year, now.month, now.day);
@@ -143,11 +149,8 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
       final cleanNormalizedDay = DateTime(loopDay.year, loopDay.month, loopDay.day);
       
       if (!_checkIsDayClosed(cleanNormalizedDay)) {
-        // 🟢 IF DB HAS SHIFTS FOR THIS DATE: Use them
-        if (existingShiftsMap != null && existingShiftsMap.containsKey(cleanNormalizedDay)) {
-          _staffRosterAssignments[cleanNormalizedDay] = List.from(existingShiftsMap[cleanNormalizedDay]!);
-        } else {
-          // 🟢 IF NO SHIFTS IN DB: Show all active staff by default
+        // If day has no roster entries at all, default to full active staff
+        if (!_staffRosterAssignments.containsKey(cleanNormalizedDay)) {
           _staffRosterAssignments[cleanNormalizedDay] = 
               _masterTeamMembersPool.map((e) => e.id).toList();
         }
@@ -156,6 +159,33 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
       
       loopDay = loopDay.add(const Duration(days: 1));
     }
+  }
+
+  // ///////////////////////////////////////////////////////////////////////////
+  // 🟢 HIGHLIGHTED CHANGE: Helper method to determine if a date is within open days limit
+  // ///////////////////////////////////////////////////////////////////////////
+  bool _isWithinOpenDaysLimit(DateTime date) {
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, now.day);
+    if (date.isBefore(start)) return false;
+
+    int openDaysCount = 0;
+    DateTime temp = start;
+
+    while (openDaysCount < _rosterDaysLimit) {
+      final cleanTemp = DateTime(temp.year, temp.month, temp.day);
+      if (!_checkIsDayClosed(cleanTemp)) {
+        if (cleanTemp.isAtSameMomentAs(date)) {
+          return true;
+        }
+        openDaysCount++;
+      }
+      if (cleanTemp.isAfter(date)) {
+        return false;
+      }
+      temp = temp.add(const Duration(days: 1));
+    }
+    return false;
   }
 
   bool _checkIsDayClosed(DateTime date) {
@@ -391,12 +421,19 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
                                 final now = DateTime.now();
                                 final todayMidnight = DateTime(now.year, now.month, now.day);
                                 
-                                // FIX: Fixed the recursive definition variable compile bug safely here
                                 if (checkDay.isBefore(todayMidnight)) {
                                   return const SizedBox();
                                 }
 
                                 if (_checkIsDayClosed(checkDay)) return const SizedBox();
+
+                                // ///////////////////////////////////////////////////////////////////////////
+                                // 🟢 HIGHLIGHTED CHANGE: Check if day falls within current slider limit
+                                // ///////////////////////////////////////////////////////////////////////////
+                                if (!_isWithinOpenDaysLimit(checkDay)) {
+                                  return const SizedBox();
+                                }
+
                                 final staffCount = _staffRosterAssignments[checkDay]?.length ?? 0;
                                 if (staffCount == 0) return const SizedBox();
                                 
