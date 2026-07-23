@@ -220,16 +220,52 @@ export const BookingService = {
         const parsedStartTime = new Date(input.serviceTime);
         const calculatedEndTime = new Date(parsedStartTime.getTime() + (matrixRow.durationMinutes * 60000));
 
-        // 5. STAFF CAPACITY GUARD
-        const totalStaffCount = await prisma.employee.count({
-          where: { 
-            merchantId: input.merchantId, 
-            isActive: true,
-            user: {
-              role: UserRole.MERCHANT_STAFF 
+        // ///////////////////////////////////////////////////////////////////////////
+        // 🟢 FIX: Query DateTime range using pure Date objects only
+        // ///////////////////////////////////////////////////////////////////////////
+        const startOfDay = new Date(parsedStartTime);
+        startOfDay.setHours(0, 0, 0, 0);
+
+        const endOfDay = new Date(parsedStartTime);
+        endOfDay.setHours(23, 59, 59, 999);
+
+        // Query shift records falling within the target date range
+        const shiftsOnDay = await prisma.shift.findMany({
+          where: {
+            date: {
+              gte: startOfDay,
+              lte: endOfDay
+            },
+            employee: {
+              merchantId: input.merchantId,
+              isActive: true,
+              user: {
+                role: UserRole.MERCHANT_STAFF
+              }
             }
-          }
+          },
+          select: { employeeId: true }
         });
+
+        let totalStaffCount = 0;
+
+        if (shiftsOnDay.length > 0) {
+          // Count distinct scheduled employees on this date
+          const uniqueEmployeeIds = new Set(shiftsOnDay.map((s) => s.employeeId));
+          totalStaffCount = uniqueEmployeeIds.size;
+        } else {
+          // Fallback: Default to all active MERCHANT_STAFF employees if no shifts are recorded
+          totalStaffCount = await prisma.employee.count({
+            where: { 
+              merchantId: input.merchantId, 
+              isActive: true,
+              user: {
+                role: UserRole.MERCHANT_STAFF 
+              }
+            }
+          });
+        }
+        // ///////////////////////////////////////////////////////////////////////////
 
         const concurrentBookings = await prisma.appointment.count({
           where: {
@@ -284,7 +320,7 @@ export const BookingService = {
       catch (error: any) {
         throw new Error(error.message);
       }
-  },
+    },
 
   /**
    * 🔄 Modifies an existing booking state matrix parameter layout row
@@ -309,15 +345,49 @@ export const BookingService = {
         const calculatedEndTime = new Date(parsedStartTime.getTime() + duration * 60000);
 
         if (isTimeChanging) {
-          const totalStaffCount = await prisma.employee.count({
-            where: { 
-              merchantId: existingAppointment.merchantId, 
-              isActive: true,
-              user: {
-                role: UserRole.MERCHANT_STAFF 
+          // ///////////////////////////////////////////////////////////////////////////
+          // 🟢 HIGHLIGHTED CHANGE: Check Shift records for capacity on update
+          // ///////////////////////////////////////////////////////////////////////////
+          const startOfDay = new Date(parsedStartTime);
+          startOfDay.setHours(0, 0, 0, 0);
+
+          const endOfDay = new Date(parsedStartTime);
+          endOfDay.setHours(23, 59, 59, 999);
+
+          const shiftsOnDay = await prisma.shift.findMany({
+            where: {
+              date: {
+                gte: startOfDay,
+                lte: endOfDay
+              },
+              employee: {
+                merchantId: existingAppointment.merchantId,
+                isActive: true,
+                user: {
+                  role: UserRole.MERCHANT_STAFF
+                }
               }
-             }
+            },
+            select: { employeeId: true }
           });
+
+          let totalStaffCount = 0;
+
+          if (shiftsOnDay.length > 0) {
+            const uniqueEmployeeIds = new Set(shiftsOnDay.map((s) => s.employeeId));
+            totalStaffCount = uniqueEmployeeIds.size;
+          } else {
+            totalStaffCount = await prisma.employee.count({
+              where: { 
+                merchantId: existingAppointment.merchantId, 
+                isActive: true,
+                user: {
+                  role: UserRole.MERCHANT_STAFF 
+                }
+              }
+            });
+          }
+          // ///////////////////////////////////////////////////////////////////////////
 
           const concurrentBookings = await prisma.appointment.count({
             where: {
@@ -412,16 +482,46 @@ export const BookingService = {
       return [];
     }
 
-    // 2. CAPACITY & BOUNDARY SYSTEM SETUP
-    const totalStaff = await prisma.employee.count({
-          where: { 
-            merchantId: merchantId, 
-            isActive: true,
-            user: {
-              role: UserRole.MERCHANT_STAFF 
-            }
+    // ///////////////////////////////////////////////////////////////////////////
+    // 🟢 HIGHLIGHTED CHANGE: Read Shift records to find active capacity for slot lookup
+    // ///////////////////////////////////////////////////////////////////////////
+    const startOfDay = new Date(`${dateStr}T00:00:00.000Z`);
+    const endOfDay = new Date(`${dateStr}T23:59:59.999Z`);
+
+    const shiftsOnDay = await prisma.shift.findMany({
+      where: {
+        date: {
+          gte: startOfDay,
+          lte: endOfDay
+        },
+        employee: {
+          merchantId: merchantId,
+          isActive: true,
+          user: {
+            role: UserRole.MERCHANT_STAFF
           }
-        });
+        }
+      },
+      select: { employeeId: true }
+    });
+
+    let totalStaff = 0;
+
+    if (shiftsOnDay.length > 0) {
+      const uniqueEmployeeIds = new Set(shiftsOnDay.map((s) => s.employeeId));
+      totalStaff = uniqueEmployeeIds.size;
+    } else {
+      totalStaff = await prisma.employee.count({
+        where: { 
+          merchantId: merchantId, 
+          isActive: true,
+          user: {
+            role: UserRole.MERCHANT_STAFF 
+          }
+        }
+      });
+    }
+    // ///////////////////////////////////////////////////////////////////////////
 
     if (totalStaff === 0) {
       return [];
