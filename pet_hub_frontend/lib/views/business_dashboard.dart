@@ -639,7 +639,8 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                                   controller: dogWeightCtrl,
                                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                   inputFormatters: [
-                                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')), // Regex ensuring numeric floating input restriction
+                                        // Permits integers or numbers with up to 2 decimal places (e.g. 14, 14.5, 14.52)
+                                        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
                                   ],
                                   decoration: const InputDecoration(
                                     labelText: 'Dog Weight (kg) *', 

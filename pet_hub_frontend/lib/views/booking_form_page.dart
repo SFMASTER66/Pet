@@ -236,9 +236,39 @@ class _BookingFormPageState extends State<BookingFormPage> {
   // =========================================================================
   Future<void> _submitBooking() async {
     if (_formKey.currentState!.validate()) {
-      if (_selectedDate == null || _selectedTimeSlot == null || _selectedTimeSlot == "SHOP_CLOSED" || _dogDob == null) {
+      // Check 1: Booking Date
+      if (_selectedDate == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please select an open booking date, valid time slot, and dog date of birth.')),
+          const SnackBar(
+            content: Text('Please select an appointment date.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+
+      // Check 2: Time Slot / Closed Day
+      if (_selectedTimeSlot == null || _selectedTimeSlot == "SHOP_CLOSED") {
+        final String message = _selectedTimeSlot == "SHOP_CLOSED"
+            ? 'The store is closed on the selected date. Please pick another day.'
+            : 'Please select a valid appointment time slot.';
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+
+      // Check 3: Dog Date of Birth
+      if (_dogDob == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please select your dog\'s date of birth.'),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
         return;
       }
@@ -571,7 +601,8 @@ class _BookingFormPageState extends State<BookingFormPage> {
                   controller: _dogWeightCtrl,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                    // Permits integers or numbers with up to 2 decimal places (e.g. 14, 14.5, 14.52)
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
                   ],
                   decoration: const InputDecoration(
                     labelText: 'Dog Weight (kg) *',

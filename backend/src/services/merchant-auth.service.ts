@@ -156,7 +156,9 @@ export class MerchantAuthService {
         // ========================================================
         userId: user.id,
         businessName: user.merchant.businessName,
+        tags: user.merchant.tags,
         logoIcon: user.merchant.logoIcon,
+        primaryColor: user.merchant.primaryColor,
         isActive: user.employee?.isActive ?? false,
       };
     }
