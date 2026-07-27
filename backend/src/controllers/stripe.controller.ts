@@ -1,20 +1,37 @@
-import path from 'path';
-import dotenv from 'dotenv';
 import { Request, Response } from 'express';
 import Stripe from 'stripe';
 import prisma from '../services/db';
+import { StripeService, stripe } from '../services/stripe.service';
 
+const stripeService = new StripeService();
 
-// Ensure environment variables are loaded for this file
-dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+export const createPaymentIntent = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { amountCents, currency, customerEmail, merchantId, appointmentId } = req.body;
 
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error("❌ CRITICAL ERROR: STRIPE_SECRET_KEY is missing from your .env file!");
-}
+    if (!amountCents || !customerEmail || !merchantId) {
+      res.status(400).json({ success: false, message: 'Missing required payment payload fields.' });
+      return;
+    }
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: '2025-10-16' as any, // Use your target API version
-});
+    const intent = await stripeService.createPaymentIntent({
+      amountCents,
+      currency: currency || 'aud',
+      customerEmail,
+      merchantId,
+      appointmentId,
+    });
+
+    res.status(200).json({
+      success: true,
+      clientSecret: intent.client_secret,
+      paymentIntentId: intent.id,
+    });
+  } catch (err: any) {
+    console.error(`❌ PaymentIntent Creation Failed: ${err.message}`);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
 
 export const handleStripeWebhook = async (req: Request, res: Response): Promise<void> => {
   const sig = req.headers['stripe-signature'];
@@ -23,7 +40,6 @@ export const handleStripeWebhook = async (req: Request, res: Response): Promise<
   let event: Stripe.Event;
 
   try {
-    // 1. Verify webhook signature using the raw body (req.body)
     event = stripe.webhooks.constructEvent(req.body, sig!, endpointSecret);
   } catch (err: any) {
     console.error(`❌ Webhook signature verification failed: ${err.message}`);
@@ -31,32 +47,29 @@ export const handleStripeWebhook = async (req: Request, res: Response): Promise<
     return;
   }
 
-  // 2. Handle business logic based on event type
   switch (event.type) {
-    case 'checkout.session.completed': {
-      const session = event.data.object as Stripe.Checkout.Session;
-      const appointmentId = session.metadata?.appointmentId;
+    case 'payment_intent.succeeded': {
+      const paymentIntent = event.data.object as Stripe.PaymentIntent;
+      const appointmentId = paymentIntent.metadata?.appointmentId;
+
+      console.log(`💰 Payment succeeded for PaymentIntent [${paymentIntent.id}], Appointment [${appointmentId}]`);
 
       if (appointmentId) {
-        console.log(`💰 Payment success received for appointment [${appointmentId}]. Updating database...`);
-
         await prisma.appointment.update({
           where: { id: appointmentId },
           data: { status: 'PAID' },
         });
-        
-        // 🚀 Future async tasks (e.g., push notifications, sending receipt H5) go here
       }
       break;
     }
 
-    case 'checkout.session.expired': {
-      const session = event.data.object as Stripe.Checkout.Session;
-      const appointmentId = session.metadata?.appointmentId;
+    case 'payment_intent.payment_failed': {
+      const paymentIntent = event.data.object as Stripe.PaymentIntent;
+      const appointmentId = paymentIntent.metadata?.appointmentId;
+
+      console.log(`❌ Payment failed for PaymentIntent [${paymentIntent.id}], Appointment [${appointmentId}]`);
 
       if (appointmentId) {
-        console.log(`❌ Appointment [${appointmentId}] payment expired/cancelled. Releasing timeslot.`);
-        
         await prisma.appointment.update({
           where: { id: appointmentId },
           data: { status: 'CANCELLED' },
@@ -69,6 +82,5 @@ export const handleStripeWebhook = async (req: Request, res: Response): Promise<
       console.log(`ℹ️ Unhandled Stripe event type: ${event.type}`);
   }
 
-  // 3. Return 200 OK swiftly to acknowledge receipt
   res.json({ received: true });
 };

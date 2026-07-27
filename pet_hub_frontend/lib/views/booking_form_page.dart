@@ -1,15 +1,17 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import '../models/merchant_config.dart';
+import 'card_payment_page.dart';
 
 class BookingFormPage extends StatefulWidget {
   final String serviceName;
   final List<Map<String, dynamic>> variantsMatrix;
   final Color themeColor;
   final MerchantConfig config;
-  final String baseUrl; // Added to standardise network domains with customer_info_panel.dart
+  final String baseUrl;
 
   const BookingFormPage({
     super.key,
@@ -17,7 +19,7 @@ class BookingFormPage extends StatefulWidget {
     required this.variantsMatrix,
     required this.themeColor,
     required this.config,
-    required this.baseUrl, // Ingest URL dynamically
+    required this.baseUrl,
   });
 
   @override
@@ -27,32 +29,28 @@ class BookingFormPage extends StatefulWidget {
 class _BookingFormPageState extends State<BookingFormPage> {
   final _formKey = GlobalKey<FormState>();
 
-  // Owner Form Controllers
   final _ownerNameCtrl = TextEditingController();
   final _ownerEmailCtrl = TextEditingController();
   final _ownerPhoneCtrl = TextEditingController();
 
-  // Dog Form Controllers & Selections
   final _dogNameCtrl = TextEditingController();
   final _dogBreedCtrl = TextEditingController();
-  final _dogWeightCtrl = TextEditingController(); // Added Dog Weight Controller
+  final _dogWeightCtrl = TextEditingController();
   final _dogTagsCtrl = TextEditingController();
-  
+
   DateTime? _selectedDate;
-  String? _selectedTimeSlot; 
+  String? _selectedTimeSlot;
   String? _selectedSex;
   String? _selectedDesexed;
   DateTime? _dogDob;
 
-  // Pricing Matrix Selection Elements
   String? _selectedWeightTier;
   String? _selectedCoatType;
 
-  // Live operational hours fetched from the backend API database records
-  List<dynamic> _merchantHours = [];
   List<String> _dynamicAvailableSlots = [];
-  bool _isLoadingHours = true;
-  bool _isDayClosed = false; // Track if the selected date falls on a closed business day
+  bool _isLoadingHours = false;
+  bool _isCreatingBooking = false;
+  bool _isDayClosed = false;
   String? _errorMessage;
 
   @override
@@ -61,7 +59,6 @@ class _BookingFormPageState extends State<BookingFormPage> {
     _fetchLiveOperationalHours();
   }
 
-  // Live backend database fetch execution
   Future<void> _fetchLiveOperationalHours() async {
     if (!mounted) return;
     setState(() {
@@ -69,8 +66,6 @@ class _BookingFormPageState extends State<BookingFormPage> {
       _errorMessage = null;
     });
 
-    // Safeguard check: If no date is selected yet (e.g., during initState), 
-    // we drop down into a resting state until the user picks a date.
     if (_selectedDate == null) {
       setState(() {
         _isLoadingHours = false;
@@ -81,26 +76,21 @@ class _BookingFormPageState extends State<BookingFormPage> {
     }
 
     try {
-      // 1. Format the selected date to YYYY-MM-DD string required by the backend
       final String formattedDate = "${_selectedDate!.year}-"
           "${_selectedDate!.month.toString().padLeft(2, '0')}-"
           "${_selectedDate!.day.toString().padLeft(2, '0')}";
-      
-      // 2. Dynamic duration value (Fallback to 60 if your state/matrix selection isn't loaded yet)
+
       final matchedVariant = _lookupMatchedVariant();
       final int durationMinutes = matchedVariant?['durationMinutes'] ?? 60;
 
-      // 3. Updated URL targeting the new bookings slots endpoint with query parameters
       final String targetUrl = '${widget.baseUrl}/api/v1/bookings/available-slots'
           '?merchantId=${widget.config.merchantId}'
           '&date=$formattedDate'
           '&duration=$durationMinutes';
-      
+
       final response = await http.get(
         Uri.parse(targetUrl),
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
       );
 
       if (!mounted) return;
@@ -113,26 +103,24 @@ class _BookingFormPageState extends State<BookingFormPage> {
           setState(() {
             if (backendSlots.isNotEmpty) {
               _isDayClosed = false;
-              
-              // 4. Map the 24h backend slots (e.g., "14:30") into the "02:30 PM" UI display format
               _dynamicAvailableSlots = backendSlots.map<String>((slot) {
                 final parts = slot.toString().split(':');
                 final int hour = int.parse(parts[0]);
-                final String minute = parts[1]; // Dynamically preserves :00 or :30 from backend
-                
-                final int displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+                final String minute = parts[1];
+
+                final int displayHour =
+                    hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
                 final String amPm = hour >= 12 ? 'PM' : 'AM';
-                final String paddedHour = displayHour.toString().padLeft(2, '0');
-                
+                final String paddedHour =
+                    displayHour.toString().padLeft(2, '0');
+
                 return '$paddedHour:$minute $amPm';
               }).toList();
             } else {
-              // If no slots are returned, the merchant is either closed or completely fully booked
               _isDayClosed = true;
               _dynamicAvailableSlots = [];
             }
 
-            // Assign initial default selection value safely
             if (_dynamicAvailableSlots.isNotEmpty) {
               _selectedTimeSlot = _dynamicAvailableSlots.first;
             } else {
@@ -142,7 +130,7 @@ class _BookingFormPageState extends State<BookingFormPage> {
         }
       } else {
         setState(() {
-          _errorMessage = 'Failed to download updated business operating hours from servers.';
+          _errorMessage = 'Failed to download updated operational hours.';
           _dynamicAvailableSlots = [];
           _selectedTimeSlot = null;
         });
@@ -150,15 +138,13 @@ class _BookingFormPageState extends State<BookingFormPage> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = 'Network connection failed: Unable to fetch live scheduling rules.';
+        _errorMessage = 'Network connection failed.';
         _dynamicAvailableSlots = [];
         _selectedTimeSlot = null;
       });
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoadingHours = false;
-        });
+        setState(() => _isLoadingHours = false);
       }
     }
   }
@@ -181,12 +167,14 @@ class _BookingFormPageState extends State<BookingFormPage> {
 
   Map<String, dynamic>? _lookupMatchedVariant() {
     if (_selectedWeightTier == null || _selectedCoatType == null) return null;
-    
+
     try {
       return widget.variantsMatrix.firstWhere((variant) {
-        final vWeight = (variant['weightTier'] ?? '').toString().toUpperCase();
+        final vWeight =
+            (variant['weightTier'] ?? '').toString().toUpperCase();
         final vCoat = (variant['coatType'] ?? '').toString().toUpperCase();
-        return vWeight == _selectedWeightTier!.toUpperCase() && vCoat == _selectedCoatType!.toUpperCase();
+        return vWeight == _selectedWeightTier!.toUpperCase() &&
+            vCoat == _selectedCoatType!.toUpperCase();
       });
     } catch (_) {
       return null;
@@ -200,7 +188,7 @@ class _BookingFormPageState extends State<BookingFormPage> {
     _ownerPhoneCtrl.dispose();
     _dogNameCtrl.dispose();
     _dogBreedCtrl.dispose();
-    _dogWeightCtrl.dispose(); // Clean up weight controller
+    _dogWeightCtrl.dispose();
     _dogTagsCtrl.dispose();
     super.dispose();
   }
@@ -214,7 +202,6 @@ class _BookingFormPageState extends State<BookingFormPage> {
     );
     if (picked != null) {
       setState(() => _selectedDate = picked);
-      // Trigger live updates directly using your updated async fetch logic
       _fetchLiveOperationalHours();
     }
   }
@@ -231,62 +218,41 @@ class _BookingFormPageState extends State<BookingFormPage> {
     }
   }
 
-  // =========================================================================
-  // Async HTTP Booking Submission aligned with UnifiedMerchantDashboard
-  // =========================================================================
-  Future<void> _submitBooking() async {
-    if (_formKey.currentState!.validate()) {
-      // Check 1: Booking Date
-      if (_selectedDate == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please select an appointment date.'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        return;
-      }
+  Future<void> _createBookingAndGoToPayment() async {
+    if (!_formKey.currentState!.validate()) return;
 
-      // Check 2: Time Slot / Closed Day
-      if (_selectedTimeSlot == null || _selectedTimeSlot == "SHOP_CLOSED") {
-        final String message = _selectedTimeSlot == "SHOP_CLOSED"
-            ? 'The store is closed on the selected date. Please pick another day.'
-            : 'Please select a valid appointment time slot.';
+    if (_selectedDate == null) {
+      _showSnackBar('Please select an appointment date.');
+      return;
+    }
+    if (_selectedTimeSlot == null || _selectedTimeSlot == "SHOP_CLOSED") {
+      _showSnackBar(_selectedTimeSlot == "SHOP_CLOSED"
+          ? 'Store is closed on the selected date.'
+          : 'Please select a valid time slot.');
+      return;
+    }
+    if (_dogDob == null) {
+      _showSnackBar('Please select your dog\'s date of birth.');
+      return;
+    }
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        return;
-      }
+    final matchedRecord = _lookupMatchedVariant();
+    if (matchedRecord == null) {
+      _showSnackBar('Selected variant combination is invalid.');
+      return;
+    }
 
-      // Check 3: Dog Date of Birth
-      if (_dogDob == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please select your dog\'s date of birth.'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        return;
-      }
+    setState(() => _isCreatingBooking = true);
 
-      final matchedRecord = _lookupMatchedVariant();
-
-      // Parse 12h display time (e.g. "02:30 PM") into 24h DateTime values
-      final parts = _selectedTimeSlot!.split(' '); // ["02:30", "PM"]
-      final timeParts = parts[0].split(':');        // ["02", "30"]
+    try {
+      final parts = _selectedTimeSlot!.split(' ');
+      final timeParts = parts[0].split(':');
       int hour = int.parse(timeParts[0]);
       final int minute = int.parse(timeParts[1]);
       final String amPm = parts.length > 1 ? parts[1] : 'AM';
 
-      if (amPm == 'PM' && hour < 12) {
-        hour += 12;
-      } else if (amPm == 'AM' && hour == 12) {
-        hour = 0;
-      }
+      if (amPm == 'PM' && hour < 12) hour += 12;
+      if (amPm == 'AM' && hour == 12) hour = 0;
 
       final targetDateTime = DateTime(
         _selectedDate!.year,
@@ -296,13 +262,13 @@ class _BookingFormPageState extends State<BookingFormPage> {
         minute,
       );
 
-      final payload = {
+      final bookingPayload = {
         'merchantId': widget.config.merchantId,
         'bookedById': widget.config.userId,
-        'servicePricingMatrixId': matchedRecord?['id'],
+        'servicePricingMatrixId': matchedRecord['id'],
         'dogName': _dogNameCtrl.text.trim(),
         'dogBreed': _dogBreedCtrl.text.trim(),
-        'dogWeight': double.tryParse(_dogWeightCtrl.text.trim()) ?? 0.0, // Included dog weight in payload
+        'dogWeight': double.tryParse(_dogWeightCtrl.text.trim()) ?? 0.0,
         'dogGender': (_selectedSex ?? 'MALE').toUpperCase(),
         'isDesexed': _selectedDesexed == 'Yes',
         'dogDob': _dogDob!.toIso8601String(),
@@ -310,48 +276,65 @@ class _BookingFormPageState extends State<BookingFormPage> {
         'ownerPhone': _ownerPhoneCtrl.text.trim(),
         'ownerEmail': _ownerEmailCtrl.text.trim(),
         'serviceTime': targetDateTime.toIso8601String(),
-        'groomerId': null,
         'note': _dogTagsCtrl.text.trim(),
       };
 
-      try {
-        final response = await http.post(
-          Uri.parse('${widget.baseUrl}/api/v1/bookings/add'),
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: jsonEncode(payload),
-        );
+      final bookingResponse = await http.post(
+        Uri.parse('${widget.baseUrl}/api/v1/bookings/add'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(bookingPayload),
+      );
 
-        final responseData = jsonDecode(response.body);
-        if (!mounted) return;
-
-        if (response.statusCode == 200 || response.statusCode == 201) {
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('🚀 Administrative appointment successfully recorded.'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('❌ Submission Rejected: ${responseData['message'] ?? 'Check input parameters.'}'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-      } catch (err) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('❌ Error: Could not connect to target administrative cluster route.'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      final bookingData = jsonDecode(bookingResponse.body);
+      if (bookingResponse.statusCode != 200 && bookingResponse.statusCode != 201) {
+        throw Exception(bookingData['message'] ?? 'Failed to register appointment.');
       }
+
+      final String appointmentId = bookingData['data']['id'].toString();
+
+      final int priceCents = matchedRecord['priceCentsAud'] ?? matchedRecord['priceCents'] ?? 0;
+      final double totalAmount = (priceCents / 100).toDouble();
+      final double depositAmount = matchedRecord['depositCents'] != null
+          ? (matchedRecord['depositCents'] / 100).toDouble()
+          : 30.00;
+
+      final payload = CardCheckoutPayload(
+        appointmentId: appointmentId,
+        serviceName: widget.serviceName,
+        variantTitle: "$_selectedWeightTier, $_selectedCoatType dogs",
+        totalAmount: totalAmount,
+        depositAmount: depositAmount,
+        serviceTime: targetDateTime,
+        merchantId: widget.config.merchantId,
+        ownerName: _ownerNameCtrl.text.trim(),
+        ownerPhone: _ownerPhoneCtrl.text.trim(),
+        ownerEmail: _ownerEmailCtrl.text.trim(),
+        dogName: _dogNameCtrl.text.trim(),
+        dogBreed: _dogBreedCtrl.text.trim(),
+        baseUrl: widget.baseUrl,
+        businessName: widget.config.businessName,
+      );
+
+      if (!mounted) return;
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => CardPaymentPage(checkoutPayload: payload),
+        ),
+      );
+    } catch (err) {
+      if (!mounted) return;
+      _showSnackBar('❌ Error: ${err.toString()}');
+    } finally {
+      if (mounted) setState(() => _isCreatingBooking = false);
     }
+  }
+
+  void _showSnackBar(String text) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(text), behavior: SnackBarBehavior.floating),
+    );
   }
 
   @override
@@ -417,13 +400,10 @@ class _BookingFormPageState extends State<BookingFormPage> {
               padding: const EdgeInsets.all(20.0),
               children: [
                 _buildSectionHeader('1. Pricing Matrix Factors'),
-                
                 DropdownButtonFormField<String>(
                   decoration: const InputDecoration(labelText: 'Dog Weight Tier *', border: OutlineInputBorder()),
                   value: _selectedWeightTier,
-                  items: weightTiers.map((t) {
-                    return DropdownMenuItem<String>(value: t, child: Text(t));
-                  }).toList(),
+                  items: weightTiers.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
                   onChanged: (val) {
                     setState(() => _selectedWeightTier = val);
                     if (_selectedDate != null) _fetchLiveOperationalHours();
@@ -431,13 +411,10 @@ class _BookingFormPageState extends State<BookingFormPage> {
                   validator: (v) => v == null ? 'Weight Tier is required' : null,
                 ),
                 const SizedBox(height: 12),
-                
                 DropdownButtonFormField<String>(
                   decoration: const InputDecoration(labelText: 'Coat Category *', border: OutlineInputBorder()),
                   value: _selectedCoatType,
-                  items: coatTypes.map((c) {
-                    return DropdownMenuItem<String>(value: c, child: Text(c));
-                  }).toList(),
+                  items: coatTypes.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
                   onChanged: (val) {
                     setState(() => _selectedCoatType = val);
                     if (_selectedDate != null) _fetchLiveOperationalHours();
@@ -445,15 +422,13 @@ class _BookingFormPageState extends State<BookingFormPage> {
                   validator: (v) => v == null ? 'Coat Category is required' : null,
                 ),
                 const SizedBox(height: 16),
-
                 if (matchedVariant != null) ...[
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: widget.themeColor.withAlpha(20),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: widget.themeColor, width: 1)
-                    ),
+                        color: widget.themeColor.withAlpha(20),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: widget.themeColor, width: 1)),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -469,9 +444,8 @@ class _BookingFormPageState extends State<BookingFormPage> {
                           children: [
                             Text('Matrix Base Fee', style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
                             Text(
-                              '\$${((matchedVariant['priceCentsAud'] ?? matchedVariant['priceCents'] ?? 0) / 100).toStringAsFixed(2)} AUD', 
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: widget.themeColor)
-                            ),
+                                '\$${((matchedVariant['priceCentsAud'] ?? matchedVariant['priceCents'] ?? 0) / 100).toStringAsFixed(2)} AUD',
+                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: widget.themeColor)),
                           ],
                         )
                       ],
@@ -479,29 +453,26 @@ class _BookingFormPageState extends State<BookingFormPage> {
                   ),
                   const SizedBox(height: 16),
                 ],
-
                 _buildSectionHeader('2. Appointment Schedule Time'),
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 54),
-                    alignment: Alignment.centerLeft,
-                    side: BorderSide(color: Colors.grey.shade400)
-                  ),
+                      minimumSize: const Size(double.infinity, 54),
+                      alignment: Alignment.centerLeft,
+                      side: BorderSide(color: Colors.grey.shade400)),
                   onPressed: _pickBookingDate,
                   icon: const Icon(Icons.calendar_month, size: 20),
                   label: Text(
-                    _selectedDate == null 
-                        ? 'Select Appointment Date *' 
+                    _selectedDate == null
+                        ? 'Select Appointment Date *'
                         : 'Date: ${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}',
                     style: const TextStyle(fontSize: 14, color: Colors.black87),
                   ),
                 ),
                 const SizedBox(height: 12),
-                
                 DropdownButtonFormField<String>(
                   key: ValueKey('${_dynamicAvailableSlots.length}_${_isDayClosed}_$_selectedTimeSlot'),
                   decoration: const InputDecoration(
-                    labelText: 'Select Appointment Time *', 
+                    labelText: 'Select Appointment Time *',
                     prefixIcon: Icon(Icons.access_time, size: 20),
                     border: OutlineInputBorder(),
                     errorStyle: TextStyle(color: Colors.redAccent),
@@ -512,13 +483,7 @@ class _BookingFormPageState extends State<BookingFormPage> {
                           const DropdownMenuItem<String>(
                             value: 'SHOP_CLOSED',
                             enabled: false,
-                            child: Text(
-                              'Closed on this day',
-                              style: TextStyle(
-                                color: Colors.redAccent,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
+                            child: Text('Closed on this day', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
                           )
                         ]
                       : (_dynamicAvailableSlots.isEmpty
@@ -526,31 +491,19 @@ class _BookingFormPageState extends State<BookingFormPage> {
                               DropdownMenuItem<String>(
                                 value: null,
                                 enabled: false,
-                                child: Text(
-                                  _selectedDate == null ? 'Please select a date first' : 'No available slots found',
-                                  style: TextStyle(color: Colors.grey.shade500),
-                                ),
+                                child: Text(_selectedDate == null ? 'Please select a date first' : 'No available slots found', style: TextStyle(color: Colors.grey.shade500)),
                               )
                             ]
-                          : _dynamicAvailableSlots.map((timeSlot) {
-                              return DropdownMenuItem<String>(value: timeSlot, child: Text(timeSlot));
-                            }).toList()),
+                          : _dynamicAvailableSlots.map((timeSlot) => DropdownMenuItem<String>(value: timeSlot, child: Text(timeSlot))).toList()),
                   onChanged: (_isDayClosed || _dynamicAvailableSlots.isEmpty) ? null : (val) => setState(() => _selectedTimeSlot = val),
                   validator: (v) {
-                    if (_isDayClosed || v == 'SHOP_CLOSED') {
-                      return 'Store is closed on this date. Please pick another day.';
-                    }
-                    if (_selectedTimeSlot == null && _selectedDate != null) {
-                      return 'Please choose an operational hour slot';
-                    }
-                    if (_selectedDate == null) {
-                      return 'Please pick a booking date first';
-                    }
+                    if (_isDayClosed || v == 'SHOP_CLOSED') return 'Store is closed on this date.';
+                    if (_selectedTimeSlot == null && _selectedDate != null) return 'Please choose an operational hour slot';
+                    if (_selectedDate == null) return 'Please pick a booking date first';
                     return null;
                   },
                 ),
                 const SizedBox(height: 16),
-
                 _buildSectionHeader('3. Owner Contact Profile Details'),
                 TextFormField(
                   controller: _ownerNameCtrl,
@@ -575,8 +528,8 @@ class _BookingFormPageState extends State<BookingFormPage> {
                   maxLength: 10,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   decoration: const InputDecoration(
-                    labelText: 'Australian Contact Number *', 
-                    hintText: 'e.g. 0412345678', 
+                    labelText: 'Australian Contact Number *',
+                    hintText: 'e.g. 0412345678',
                     border: OutlineInputBorder(),
                     counterText: "",
                   ),
@@ -587,7 +540,6 @@ class _BookingFormPageState extends State<BookingFormPage> {
                   },
                 ),
                 const SizedBox(height: 16),
-
                 _buildSectionHeader('4. Companion Dog Information'),
                 TextFormField(
                   controller: _dogNameCtrl,
@@ -595,15 +547,10 @@ class _BookingFormPageState extends State<BookingFormPage> {
                   validator: (v) => (v == null || v.trim().isEmpty) ? 'Dog Name is required' : null,
                 ),
                 const SizedBox(height: 12),
-                
-                // Added Dog Weight Field
                 TextFormField(
                   controller: _dogWeightCtrl,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  inputFormatters: [
-                    // Permits integers or numbers with up to 2 decimal places (e.g. 14, 14.5, 14.52)
-                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
-                  ],
+                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))],
                   decoration: const InputDecoration(
                     labelText: 'Dog Weight (kg) *',
                     hintText: 'e.g. 12.5',
@@ -618,18 +565,16 @@ class _BookingFormPageState extends State<BookingFormPage> {
                   },
                 ),
                 const SizedBox(height: 12),
-
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 54), 
-                    alignment: Alignment.centerLeft,
-                    side: BorderSide(color: Colors.grey.shade400)
-                  ),
+                      minimumSize: const Size(double.infinity, 54),
+                      alignment: Alignment.centerLeft,
+                      side: BorderSide(color: Colors.grey.shade400)),
                   onPressed: _pickDogDob,
                   icon: const Icon(Icons.cake, size: 18),
                   label: Text(
-                    _dogDob == null 
-                        ? 'Dog Date of Birth *' 
+                    _dogDob == null
+                        ? 'Dog Date of Birth *'
                         : 'DOB: ${_dogDob!.day}/${_dogDob!.month}/${_dogDob!.year}',
                     style: const TextStyle(fontSize: 14, color: Colors.black87),
                   ),
@@ -666,9 +611,9 @@ class _BookingFormPageState extends State<BookingFormPage> {
                 TextFormField(
                   controller: _dogTagsCtrl,
                   decoration: const InputDecoration(
-                    labelText: 'Special Medical / Behavior Tags', 
+                    labelText: 'Special Medical / Behavior Tags',
                     hintText: 'e.g. None, Aggressive, Sensitive Skin',
-                    border: OutlineInputBorder()
+                    border: OutlineInputBorder(),
                   ),
                 ),
               ],
@@ -689,8 +634,14 @@ class _BookingFormPageState extends State<BookingFormPage> {
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                onPressed: _submitBooking,
-                child: const Text('Confirm Booking Appointment', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                onPressed: _isCreatingBooking ? null : _createBookingAndGoToPayment,
+                child: _isCreatingBooking
+                    ? const SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      )
+                    : const Text('Proceed to Card Details', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
               ),
             ),
           )
@@ -708,4 +659,40 @@ class _BookingFormPageState extends State<BookingFormPage> {
       ),
     );
   }
+}
+
+class CardCheckoutPayload {
+  final String appointmentId;
+  final String serviceName;
+  final String variantTitle;
+  final double totalAmount;
+  final double depositAmount;
+  final DateTime serviceTime;
+
+  final String merchantId;
+  final String ownerName;
+  final String ownerPhone;
+  final String ownerEmail;
+  final String dogName;
+  final String dogBreed;
+
+  final String baseUrl;
+  final String businessName;
+
+  CardCheckoutPayload({
+    required this.appointmentId,
+    required this.serviceName,
+    required this.variantTitle,
+    required this.totalAmount,
+    required this.depositAmount,
+    required this.serviceTime,
+    required this.merchantId,
+    required this.ownerName,
+    required this.ownerPhone,
+    required this.ownerEmail,
+    required this.dogName,
+    required this.dogBreed,
+    required this.baseUrl,
+    required this.businessName,
+  });
 }

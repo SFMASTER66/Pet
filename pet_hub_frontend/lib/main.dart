@@ -6,6 +6,11 @@ import 'dart:convert';
 import 'views/auth_wrapper.dart'; 
 import 'models/merchant_config.dart';
 import 'views/business_dashboard.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
+import 'config/app_config.dart';
 
 String? jwtToken;
 bool isAdmin = false; // 👈 Track dashboard permission context globally
@@ -114,13 +119,27 @@ Future<void> _handleAuthUpdate(String token, String role, Map<String, dynamic> c
 void main() async {
   usePathUrlStrategy(); 
   WidgetsFlutterBinding.ensureInitialized(); 
-  
+
+  // ⚡ Configure Stripe synchronously without dotenv load issues
+  Stripe.publishableKey = AppConfig.stripePublishableKey;
+
+  if (!kIsWeb) {
+    Stripe.merchantIdentifier = AppConfig.merchantIdentifier;
+    Stripe.urlScheme = AppConfig.urlScheme;
+  }
+
+  // Safe apply settings call with fallback
+  try {
+    await Stripe.instance.applySettings();
+  } catch (e) {
+    debugPrint("⚠️ Stripe applySettings notice: $e");
+  }
+
   prefs = await SharedPreferences.getInstance();
 
   final String? cachedConfigJson = prefs.getString('cached_config');
   if (cachedConfigJson != null) {
     try {
-      // Changed to .fromJson() 👇
       globalMerchantConfig = MerchantConfig.fromJson(jsonDecode(cachedConfigJson));
     } catch (_) {
       _loadDefaultConfig();

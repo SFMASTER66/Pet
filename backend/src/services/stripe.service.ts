@@ -1,44 +1,45 @@
+import path from 'path';
+import dotenv from 'dotenv';
 import Stripe from 'stripe';
 
-// 这里的私钥以后存放在 .env 文件中
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2026-06-24.dahlia', // 建议锁定版本，保证全球化稳定性
-});
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+
+if (!process.env.STRIPE_SECRET_KEY) {
+  throw new Error("❌ CRITICAL ERROR: STRIPE_SECRET_KEY is missing from your .env file!");
+}
+
+// ⚡ Recommended: Let the SDK manage its own API versioning
+export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 export class StripeService {
   /**
-   * 核心功能：创建 Stripe Checkout 会话
-   * 这里的关键是：我们需要把商家的 Stripe Account ID 传进去，实现自动分账
+   * Creates a PaymentIntent for native mobile Flutter Integration
    */
-  async createCheckoutSession(params: {
-    amount: number;
+  async createPaymentIntent(params: {
+    amountCents: number;
     currency: string;
-    merchantStripeAccountId: string; // 核心：多租户分账的目标账户
-    appointmentId: string;
     customerEmail: string;
+    merchantId: string;
+    appointmentId?: string;
   }) {
-    return await stripe.checkout.sessions.create({
-      payment_method_types: ['card'], // 澳洲常用，也可加 apple_pay
-      customer_email: params.customerEmail,
-      line_items: [{
-        price_data: {
-          currency: params.currency,
-          product_data: { name: '宠物洗护预约服务' },
-          unit_amount: params.amount * 100, // Stripe 以“分”为单位，如果是 $120 需传 12000
+    try {
+      const paymentIntentOptions: Stripe.PaymentIntentCreateParams = {
+        amount: params.amountCents,
+        currency: params.currency.toLowerCase(),
+        receipt_email: params.customerEmail,
+        automatic_payment_methods: {
+          enabled: true,
         },
-        quantity: 1,
-      }],
-      mode: 'payment',
-      // 🌟 核心：Stripe Connect 分账逻辑
-      // 这里会自动扣除你作为平台的佣金，并把剩下的钱打给商家
-      payment_intent_data: {
-        application_fee_amount: params.amount * 100 * 0.1, // 比如你收 10% 平台手续费
-        transfer_data: {
-          destination: params.merchantStripeAccountId, // 钱最终流向哪家店
+        metadata: {
+          merchantId: params.merchantId,
+          customerEmail: params.customerEmail,
+          appointmentId: params.appointmentId || '',
         },
-      },
-      success_url: `${process.env.FRONTEND_URL}/booking/success?id=${params.appointmentId}`,
-      cancel_url: `${process.env.FRONTEND_URL}/booking/cancel`,
-    });
+      };
+
+      return await stripe.paymentIntents.create(paymentIntentOptions);
+    } catch (error: any) {
+      throw new Error(`Payment processing failed: ${error.message || 'Unknown error'}`);
+    }
   }
 }

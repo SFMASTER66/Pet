@@ -30,6 +30,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_stripe: ^11.0.0
+  flutter_stripe_web: ^6.5.1 # 👈 Add this for Web support
   flutter_web_plugins:
     sdk: flutter
 
