@@ -261,6 +261,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     required String weightTier,
     required int duration,
     required int priceCents,
+    required int depositCents,
   }) async {
     setState(() => _isServiceLoading = true);
     final String verifiedMerchantId = widget.config.merchantId;
@@ -273,6 +274,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
       'weightTier': weightTier,
       'durationMinutes': duration,
       'priceCentsAud': priceCents,
+      'depositCentsAud': depositCents,
     };
 
     try {
@@ -2166,6 +2168,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
   void _showAddServiceMatrixDialog() {
     final nameCtrl = TextEditingController();
     final priceCtrl = TextEditingController();
+    final depositCtrl = TextEditingController();
     String selectedCoat = 'SHORT';
     String selectedSize = 'M';
     int selectedDuration = 45;
@@ -2194,26 +2197,42 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                   children: [
                     TextField(
                       controller: nameCtrl,
-                      decoration: const InputDecoration(labelText: 'Service Matrix Name Line Label Identifier', border: OutlineInputBorder()),
+                      decoration: const InputDecoration(
+                        labelText: 'Service Matrix Name Line Label Identifier',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                     const SizedBox(height: 16),
-                    const Text('Target Coat Attribute Configuration Variant Matrix Layer', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    const Text(
+                      'Target Coat Attribute Configuration Variant Matrix Layer',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
                     DropdownButton<String>(
                       value: selectedCoat,
                       isExpanded: true,
-                      items: coatOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                      items: coatOptions
+                          .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                          .toList(),
                       onChanged: (v) => setModalState(() => selectedCoat = v!),
                     ),
                     const SizedBox(height: 16),
-                    const Text('Target Weight Profile Tier Matrix Layer Filter Option Type Descriptor', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    const Text(
+                      'Target Weight Profile Tier Matrix Layer Filter Option Type Descriptor',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
                     DropdownButton<String>(
                       value: selectedSize,
                       isExpanded: true,
-                      items: sizeOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                      items: sizeOptions
+                          .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                          .toList(),
                       onChanged: (v) => setModalState(() => selectedSize = v!),
                     ),
                     const SizedBox(height: 16),
-                    const Text('Allocated Operational Handling Execution Window Span Duration Minutes', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    const Text(
+                      'Allocated Operational Handling Execution Window Span Duration Minutes',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
                     Wrap(
                       spacing: 6,
                       children: durationOptions.map((d) {
@@ -2232,7 +2251,24 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                     TextField(
                       controller: priceCtrl,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(labelText: 'Price Target Rate (\$ AUD)', prefixText: '\$ ', border: OutlineInputBorder())
+                      decoration: const InputDecoration(
+                        labelText: 'Price Target Rate (\$ AUD)',
+                        prefixText: '\$ ',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: depositCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                      ],
+                      decoration: const InputDecoration(
+                        labelText: 'Deposit Amount (\$ AUD)',
+                        prefixText: '\$ ',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                   ],
                 ),
@@ -2243,7 +2279,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F172A), foregroundColor: Colors.white),
                 onPressed: _isServiceLoading ? null : () async {
-                  if (nameCtrl.text.isEmpty || priceCtrl.text.isEmpty) return;
+                  if (nameCtrl.text.isEmpty || priceCtrl.text.isEmpty || depositCtrl.text.isEmpty) return;
                   final double parsedPrice = double.tryParse(priceCtrl.text) ?? 0.0;
                   final int calculatedCents = (parsedPrice * 100).round();
                   final String finalName = nameCtrl.text.trim();
@@ -2254,6 +2290,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                     weightTier: selectedSize,
                     duration: selectedDuration,
                     priceCents: calculatedCents,
+                    depositCents: (double.tryParse(depositCtrl.text) ?? 0.0 * 100).round(),
                   );
                 },
                 child: _isServiceLoading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Confirm Provision'),

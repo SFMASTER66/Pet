@@ -75,6 +75,7 @@ model ServicePricingMatrix {
   coatType              CoatType?
   durationMinutes       Int
   priceCentsAud         Int
+  depositCentsAud       Int                @default(30) //
   name                  String
   isActive              Boolean            @default(true)
   appointments          Appointment[]

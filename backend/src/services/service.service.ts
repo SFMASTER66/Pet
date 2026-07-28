@@ -25,6 +25,7 @@ export class ServiceService {
     coatType?: CoatType;
     durationMinutes: number;
     priceCentsAud: number;
+    depositCentsAud: number;
   }) {
     return prisma.servicePricingMatrix.create({
       data: {
@@ -35,6 +36,7 @@ export class ServiceService {
         coatType: data.coatType,
         durationMinutes: data.durationMinutes,
         priceCentsAud: data.priceCentsAud,
+        depositCentsAud: data.depositCentsAud
       }
     });
   }

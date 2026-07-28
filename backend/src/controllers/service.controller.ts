@@ -24,7 +24,8 @@ export class ServiceController {
         weightTier, 
         coatType, 
         durationMinutes, 
-        priceCentsAud 
+        priceCentsAud,
+        depositCentsAud
       } = req.body;
 
       const matrix = await serviceService.createPricingMatrix({
@@ -34,7 +35,8 @@ export class ServiceController {
         weightTier: weightTier ? (String(weightTier) as WeightTier) : undefined,
         coatType: coatType ? (String(coatType) as CoatType) : undefined,
         durationMinutes: Number(durationMinutes),
-        priceCentsAud: Number(priceCentsAud)
+        priceCentsAud: Number(priceCentsAud),
+        depositCentsAud: Number(depositCentsAud)
       });
 
       res.status(201).json({ success: true, data: matrix });
