@@ -2282,6 +2282,8 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                   if (nameCtrl.text.isEmpty || priceCtrl.text.isEmpty || depositCtrl.text.isEmpty) return;
                   final double parsedPrice = double.tryParse(priceCtrl.text) ?? 0.0;
                   final int calculatedCents = (parsedPrice * 100).round();
+                  final double parsedDeposit = double.tryParse(depositCtrl.text) ?? 0.0;
+                  final int calculatedDepositCents = (parsedDeposit * 100).round();
                   final String finalName = nameCtrl.text.trim();
                   Navigator.pop(context);
                   await _createServiceMatrixTier(
@@ -2290,7 +2292,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                     weightTier: selectedSize,
                     duration: selectedDuration,
                     priceCents: calculatedCents,
-                    depositCents: (double.tryParse(depositCtrl.text) ?? 0.0 * 100).round(),
+                    depositCents: calculatedDepositCents,
                   );
                 },
                 child: _isServiceLoading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Confirm Provision'),

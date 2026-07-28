@@ -294,9 +294,9 @@ class _BookingFormPageState extends State<BookingFormPage> {
 
       final int priceCents = matchedRecord['priceCentsAud'] ?? matchedRecord['priceCents'] ?? 0;
       final double totalAmount = (priceCents / 100).toDouble();
-      final double depositAmount = matchedRecord['depositCents'] != null
-          ? (matchedRecord['depositCents'] / 100).toDouble()
-          : 30.00;
+
+      final int depositCents = matchedRecord['depositCentsAud'] ?? matchedRecord['depositCentsAud'] ?? 30.00;
+      final double depositAmount = (depositCents / 100).toDouble();
 
       final payload = CardCheckoutPayload(
         appointmentId: appointmentId,
