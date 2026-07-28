@@ -7,7 +7,16 @@ const stripeService = new StripeService();
 
 export const createPaymentIntent = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { amountCents, currency, customerEmail, merchantId, appointmentId } = req.body;
+    const { 
+      amountCents, 
+      currency, 
+      customerEmail, 
+      customerName, 
+      customerPhone, 
+      customerCountry, 
+      merchantId, 
+      appointmentId 
+    } = req.body;
 
     if (!amountCents || !customerEmail || !merchantId) {
       res.status(400).json({ success: false, message: 'Missing required payment payload fields.' });
@@ -18,6 +27,9 @@ export const createPaymentIntent = async (req: Request, res: Response): Promise<
       amountCents,
       currency: currency || 'aud',
       customerEmail,
+      customerName,
+      customerPhone,
+      customerCountry,
       merchantId,
       appointmentId,
     });

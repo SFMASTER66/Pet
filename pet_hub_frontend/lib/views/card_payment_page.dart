@@ -25,12 +25,6 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
 
   PaymentMethodType _selectedMethod = PaymentMethodType.creditCard;
 
-  // Card input fields
-  final _cardNumberCtrl = TextEditingController();
-  final _expiryCtrl = TextEditingController();
-  final _cvvCtrl = TextEditingController();
-  final _cardHolderNameCtrl = TextEditingController();
-
   // Billing address fields
   final _firstNameCtrl = TextEditingController();
   final _lastNameCtrl = TextEditingController();
@@ -43,6 +37,14 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
 
   final List<String> _countries = ['Australia', 'New Zealand', 'United States', 'United Kingdom', 'Canada'];
 
+  final Map<String, String> _countryIsoCodes = {
+    'Australia': 'AU',
+    'New Zealand': 'NZ',
+    'United States': 'US',
+    'United Kingdom': 'GB',
+    'Canada': 'CA',
+  };
+
   @override
   void initState() {
     super.initState();
@@ -54,10 +56,6 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
 
   @override
   void dispose() {
-    _cardNumberCtrl.dispose();
-    _expiryCtrl.dispose();
-    _cvvCtrl.dispose();
-    _cardHolderNameCtrl.dispose();
     _firstNameCtrl.dispose();
     _lastNameCtrl.dispose();
     _phoneCtrl.dispose();
@@ -74,8 +72,11 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
 
     try {
       final int depositCents = (widget.checkoutPayload.depositAmount * 100).round();
+      final fullName = '${_firstNameCtrl.text.trim()} ${_lastNameCtrl.text.trim()}';
+      final phone = _phoneCtrl.text.trim();
+      final countryIso = _countryIsoCodes[_selectedCountry] ?? 'AU';
 
-      // 1. Create PaymentIntent passing the generated appointmentId
+      // 1. Create PaymentIntent passing customer info to backend
       final intentResponse = await http.post(
         Uri.parse('${widget.checkoutPayload.baseUrl}/api/v1/payments/create-intent'),
         headers: {'Content-Type': 'application/json'},
@@ -83,6 +84,9 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
           'amountCents': depositCents,
           'currency': 'aud',
           'customerEmail': widget.checkoutPayload.ownerEmail,
+          'customerName': fullName,
+          'customerPhone': phone,
+          'customerCountry': _selectedCountry,
           'merchantId': widget.checkoutPayload.merchantId,
           'appointmentId': widget.checkoutPayload.appointmentId,
         }),
@@ -95,22 +99,32 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
 
       final String clientSecret = intentData['clientSecret'];
 
+      final billingDetails = BillingDetails(
+        name: fullName,
+        phone: phone,
+        email: widget.checkoutPayload.ownerEmail,
+        address: Address(
+          country: countryIso,
+          city: '',
+          line1: '',
+          line2: '',
+          postalCode: '',
+          state: '',
+        ),
+      );
+
       if (kIsWeb) {
-        // Confirm Payment directly using the CardField contents
+        // Web flow
         await Stripe.instance.confirmPayment(
           paymentIntentClientSecret: clientSecret,
           data: PaymentMethodParams.card(
             paymentMethodData: PaymentMethodData(
-              billingDetails: BillingDetails(
-                name: '${_firstNameCtrl.text.trim()} ${_lastNameCtrl.text.trim()}',
-                phone: _phoneCtrl.text.trim(),
-                email: widget.checkoutPayload.ownerEmail,
-              ),
+              billingDetails: billingDetails,
             ),
           ),
         );
-      }else {
-        // --- NATIVE MOBILE FLOW (iOS & Android) ---
+      } else {
+        // Native Mobile flow
         await Stripe.instance.initPaymentSheet(
           paymentSheetParameters: SetupPaymentSheetParameters(
             paymentIntentClientSecret: clientSecret,
@@ -119,11 +133,7 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
             appearance: const PaymentSheetAppearance(
               colors: PaymentSheetAppearanceColors(primary: Colors.black),
             ),
-            billingDetails: BillingDetails(
-              name: '${_firstNameCtrl.text.trim()} ${_lastNameCtrl.text.trim()}',
-              phone: _phoneCtrl.text.trim(),
-              email: widget.checkoutPayload.ownerEmail,
-            ),
+            billingDetails: billingDetails,
           ),
         );
 
@@ -424,12 +434,7 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
         children: [
           const Text('Card details', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
           const SizedBox(height: 8),
-
-          // Native PCI-Compliant Stripe Card Field (Works on Web & Mobile)
           CardField(
-            onCardChanged: (cardDetails) {
-              // Optional: check if card is complete
-            },
             decoration: InputDecoration(
               fillColor: Colors.white,
               filled: true,
@@ -438,24 +443,6 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
                 borderSide: BorderSide(color: Colors.grey.shade300),
               ),
             ),
-          ),
-
-          const SizedBox(height: 12),
-          const Text('Cardholder name', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-          const SizedBox(height: 6),
-          TextFormField(
-            controller: _cardHolderNameCtrl,
-            decoration: InputDecoration(
-              hintText: 'Enter full name',
-              fillColor: Colors.white,
-              filled: true,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(6),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            ),
-            validator: (v) => (v == null || v.trim().isEmpty) ? 'Cardholder name is required' : null,
           ),
         ],
       ),
