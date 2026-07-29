@@ -99,6 +99,8 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
 
       final String clientSecret = intentData['clientSecret'];
 
+      final String paymentIntentId = intentData['paymentIntentId'] ?? intentData['id'] ?? '';
+
       final billingDetails = BillingDetails(
         name: fullName,
         phone: phone,
@@ -138,6 +140,21 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
         );
 
         await Stripe.instance.presentPaymentSheet();
+      }
+
+      final updateResponse = await http.put(
+        Uri.parse('${widget.checkoutPayload.baseUrl}/api/v1/bookings/update/${widget.checkoutPayload.appointmentId}'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'paymentIntentId': paymentIntentId,
+          'depositPaid': true,
+          'status': 'PAID',
+        }),
+      );
+
+      if (updateResponse.statusCode != 200) {
+        final updateData = jsonDecode(updateResponse.body);
+        throw Exception(updateData['message'] ?? 'Failed to update appointment payment status.');
       }
 
       if (!mounted) return;

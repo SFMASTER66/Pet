@@ -51,6 +51,7 @@ model Appointment {
   durationMinutes        Int
   isLoyaltyWaived        Boolean              @default(false)
   depositPaid            Boolean              @default(false)
+  paymentIntentId        String?
   internalTags           String[]
   isCheckedIn            Boolean              @default(false)
   isReadyToPickup        Boolean              @default(false)

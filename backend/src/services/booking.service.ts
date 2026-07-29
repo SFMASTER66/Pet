@@ -42,6 +42,7 @@ interface AdminUpdateBookingInput {
   isReadyToPickup?: boolean;
   isLoyaltyWaived?: boolean;
   internalTags?: string[];
+  paymentIntentId?: string;
 }
 
 export const BookingService = {
