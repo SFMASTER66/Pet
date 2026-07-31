@@ -9,8 +9,8 @@ import '../models/merchant_config.dart';
 import 'customer_portal.dart';
 import 'manage_team_panel.dart';
 import 'manage_hours_panel.dart'; 
-import 'customer_info_panel.dart'; // New separation file layout layer integration
-import 'staff_scheduling_page.dart'; // New separation file layout layer integration
+import 'customer_info_panel.dart';
+import 'staff_scheduling_page.dart';
 
 class UnifiedMerchantDashboard extends StatefulWidget {
   final MerchantConfig config;
@@ -55,20 +55,6 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
   bool _isServiceMatrixVisible = true;
   bool _isServiceLoading = false; 
   bool _isAppointmentsLoading = false;
-
-  // Preset slots for simple dropdown pickers
-  final List<String> _timePresetSlots = [
-    '08:00', '08:15', '08:30', '08:45',
-    '09:00', '09:15', '09:30', '09:45',
-    '10:00', '10:15', '10:30', '10:45',
-    '11:00', '11:15', '11:30', '11:45',
-    '12:00', '12:15', '12:30', '12:45',
-    '13:00', '13:15', '13:30', '13:45',
-    '14:00', '14:15', '14:30', '14:45',
-    '15:00', '15:15', '15:30', '15:45',
-    '16:00', '16:15', '16:30', '16:45',
-    '17:00'
-  ];
 
   String get _baseUrl {
     if (kIsWeb) return 'http://localhost:3000';
@@ -134,12 +120,12 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
           });
         }
       } else {
-        _showSnackBar('❌ Failed to fetch backend service options matrix schema models.');
+        _showSnackBar('❌ Failed to fetch backend service options matrix.');
       }
-    } catch (networkError) {
-      _showSnackBar('❌ Transport layer connection fault during background matrix synchronization.');
+    } catch (_) {
+      _showSnackBar('❌ Transport layer connection fault.');
     } finally {
-      setState(() => _isServiceLoading = false);
+      if (mounted) setState(() => _isServiceLoading = false);
     }
   }
 
@@ -147,10 +133,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     try {
       final response = await http.get(
         Uri.parse('$_baseUrl/api/v1/merchant/${widget.config.merchantId}/hours'),
-        headers: {
-          // 'Authorization': 'Bearer ${widget.authToken}',
-          'Content-Type': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
       );
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = jsonDecode(response.body);
@@ -215,12 +198,12 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
           });
         }
       } else {
-        _showSnackBar('❌ Failed to fetch real-time production appointment records.');
+        _showSnackBar('❌ Failed to fetch appointment records.');
       }
-    } catch (e) {
-      _showSnackBar('❌ Connection error querying core administrative dashboard data.');
+    } catch (_) {
+      _showSnackBar('❌ Connection error querying dashboard data.');
     } finally {
-      setState(() => _isAppointmentsLoading = false);
+      if (mounted) setState(() => _isAppointmentsLoading = false);
     }
   }
 
@@ -252,7 +235,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     if (_scaffoldKey.currentState!.isEndDrawerOpen) {
       Navigator.pop(context);
     }
-    _showSnackBar('💾 System settings synchronized globally across clusters.');
+    _showSnackBar('💾 System settings synchronized globally.');
   }
 
   Future<void> _createServiceMatrixTier({
@@ -264,10 +247,8 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     required int depositCents,
   }) async {
     setState(() => _isServiceLoading = true);
-    final String verifiedMerchantId = widget.config.merchantId;
-
     final Map<String, dynamic> payload = {
-      'merchantId': verifiedMerchantId, 
+      'merchantId': widget.config.merchantId, 
       'name': name,    
       'speciesId': 1,                     
       'coatType': coatType,
@@ -291,14 +272,14 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
 
       if ((response.statusCode == 200 || response.statusCode == 201) && responseData['success'] == true) {
         await _fetchServiceMatrices();
-        _showSnackBar('🚀 New pricing matrix synchronized with backend production database.');
+        _showSnackBar('🚀 New pricing matrix synchronized.');
       } else {
-        _showSnackBar('❌ Sync failed: ${responseData['message'] ?? 'Unknown controller validation error.'}');
+        _showSnackBar('❌ Sync failed: ${responseData['message'] ?? 'Error'}');
       }
-    } catch (networkError) {
-      _showSnackBar('❌ Transport Layer Failure: Unable to locate target backend API cluster routes.');
+    } catch (_) {
+      _showSnackBar('❌ Transport Layer Failure.');
     } finally {
-      setState(() => _isServiceLoading = false);
+      if (mounted) setState(() => _isServiceLoading = false);
     }
   }
 
@@ -314,560 +295,523 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
   void _showCreateBookingDialog() {
     final dogNameCtrl = TextEditingController();
     final dogBreedCtrl = TextEditingController();
-    final dogWeightCtrl = TextEditingController(); // Added controller for dog weight
+    final dogWeightCtrl = TextEditingController();
     final ownerNameCtrl = TextEditingController();
     final ownerPhoneCtrl = TextEditingController();
     final ownerEmailCtrl = TextEditingController();
     final dogDescCtrl = TextEditingController();
 
-    Map<String, dynamic>? selectedMatrixRow;
+    Map<String, dynamic>? selectedMatrixRow = liveServiceMatrices.isNotEmpty ? liveServiceMatrices.first : null;
     String selectedGender = 'MALE';
     bool isDesexed = false;
-    DateTime? selectedDogDob; // Added state tracker for dog date of birth
+    DateTime? selectedDogDob;
     
     DateTime selectedBookingDate = _selectedDay ?? DateTime.now();
     bool isDayClosed = _checkIsDayClosed(selectedBookingDate);
     
-    // List<String> dynamicAvailableSlots = [];
-    // String? selectedBookingTimeSlot;
     List<String> operationalHoursTimeOptions = [];
     String? selectedOperationalTime;
     bool isLoadingSlots = false;
     bool hasFetchedInitialSlots = false;
 
-    if (liveServiceMatrices.isNotEmpty) {
-      selectedMatrixRow = liveServiceMatrices.first;
-    }
-
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.add_task_outlined, color: Colors.blueAccent),
-            SizedBox(width: 10),
-            Text('Create New Booking Instance', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          ],
-        ),
-        content: SizedBox(
-          width: 600,
-          child: StatefulBuilder(
-            builder: (context, setDialogState) {
-              bool isDayClosed = _checkIsDayClosed(selectedBookingDate);
+      builder: (context) {
+        final screenWidth = MediaQuery.of(context).size.width;
+        final isMobileDialog = screenWidth < 600;
 
-              Future<void> updateCapacityAvailableSlots() async {
-                if (selectedMatrixRow == null || isDayClosed) {
-                  // setDialogState(() {
-                  //   dynamicAvailableSlots = [];
-                  //   selectedBookingTimeSlot = null;
-                  // });
-                  return;
-                }
-                
-                setDialogState(() {
-                  isLoadingSlots = true;
-                });
-
-                try {
-                  // 1. Format the selected date to YYYY-MM-DD string required by the backend
-                  final String formattedDate = "${selectedBookingDate.year}-"
-                      "${selectedBookingDate.month.toString().padLeft(2, '0')}-"
-                      "${selectedBookingDate.day.toString().padLeft(2, '0')}";
+        return AlertDialog(
+          insetPadding: const EdgeInsets.all(16),
+          title: const Row(
+            children: [
+              Icon(Icons.add_task_outlined, color: Colors.blueAccent),
+              SizedBox(width: 10),
+              Expanded(child: Text('Create New Booking Instance', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+            ],
+          ),
+          content: SizedBox(
+            width: isMobileDialog ? screenWidth : 600,
+            child: StatefulBuilder(
+              builder: (context, setDialogState) {
+                Future<void> updateCapacityAvailableSlots() async {
+                  if (selectedMatrixRow == null || isDayClosed) return;
                   
-                  // 2. Dynamic duration value (Fallback to 60 if your state/matrix selection isn't loaded yet)
-                  // Replace this with your actual state variable (e.g., selectedServiceMatrix.durationMinutes)
-                  final int durationMinutes = selectedMatrixRow?['durationMinutes'] ?? 60;
-                  
+                  setDialogState(() => isLoadingSlots = true);
 
-                  // 3. Updated URL targeting the new bookings slots endpoint with query parameters
-                  final String targetUrl = '$_baseUrl/api/v1/bookings/available-slots'
-                      '?merchantId=${widget.config.merchantId}'
-                      '&date=$formattedDate'
-                      '&duration=$durationMinutes';
-                  
-                  final response = await http.get(
-                    Uri.parse(targetUrl),
-                    headers: {
-                      'Content-Type': 'application/json',
-                    },
-                  );
+                  try {
+                    final String formattedDate = "${selectedBookingDate.year}-"
+                        "${selectedBookingDate.month.toString().padLeft(2, '0')}-"
+                        "${selectedBookingDate.day.toString().padLeft(2, '0')}";
+                    
+                    final int durationMinutes = selectedMatrixRow?['durationMinutes'] ?? 60;
 
-                  if (response.statusCode == 200) {
-                    final Map<String, dynamic> parsedBody = json.decode(response.body);
-                    if (parsedBody['success'] == true && parsedBody['data'] is List) {
-                      final List<dynamic> backendSlots = parsedBody['data'];
+                    final String targetUrl = '$_baseUrl/api/v1/bookings/available-slots'
+                        '?merchantId=${widget.config.merchantId}'
+                        '&date=$formattedDate'
+                        '&duration=$durationMinutes';
+                    
+                    final response = await http.get(
+                      Uri.parse(targetUrl),
+                      headers: {'Content-Type': 'application/json'},
+                    );
 
-                      setDialogState(() {
-                        if (backendSlots.isNotEmpty) {
-                          isDayClosed = false;
-                          
-                          // 4. Map the 24h backend slots (e.g., "14:30") into the "02:30 PM" UI display format
-                          operationalHoursTimeOptions = backendSlots.map<String>((slot) {
-                            final parts = slot.toString().split(':');
-                            final int hour = int.parse(parts[0]);
-                            final String minute = parts[1]; // Dynamically preserves :00 or :30 from backend
-                            
-                            final int displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
-                            final String amPm = hour >= 12 ? 'PM' : 'AM';
-                            final String paddedHour = displayHour.toString().padLeft(2, '0');
-                            
-                            return '$paddedHour:$minute $amPm';
-                          }).toList();
-                        } else {
-                          // If no slots are returned, the merchant is either closed or completely fully booked
-                          isDayClosed = true;
-                          operationalHoursTimeOptions = [];
-                        }
+                    if (response.statusCode == 200) {
+                      final Map<String, dynamic> parsedBody = json.decode(response.body);
+                      if (parsedBody['success'] == true && parsedBody['data'] is List) {
+                        final List<dynamic> backendSlots = parsedBody['data'];
 
-                        // Assign initial default selection value safely
-                        if (operationalHoursTimeOptions.isNotEmpty) {
-                          selectedOperationalTime = operationalHoursTimeOptions.first;
-                        } else {
-                          selectedOperationalTime = null;
-                        }
-                      });
+                        setDialogState(() {
+                          if (backendSlots.isNotEmpty) {
+                            isDayClosed = false;
+                            operationalHoursTimeOptions = backendSlots.map<String>((slot) {
+                              final parts = slot.toString().split(':');
+                              final int hour = int.parse(parts[0]);
+                              final String minute = parts[1];
+                              
+                              final int displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+                              final String amPm = hour >= 12 ? 'PM' : 'AM';
+                              final String paddedHour = displayHour.toString().padLeft(2, '0');
+                              
+                              return '$paddedHour:$minute $amPm';
+                            }).toList();
+                          } else {
+                            isDayClosed = true;
+                            operationalHoursTimeOptions = [];
+                          }
+
+                          selectedOperationalTime = operationalHoursTimeOptions.isNotEmpty ? operationalHoursTimeOptions.first : null;
+                        });
+                      }
+                    } else {
+                      setDialogState(() => isDayClosed = _checkIsDayClosed(selectedBookingDate));
                     }
-                  } else {
+                  } catch (_) {
                     setDialogState(() => isDayClosed = _checkIsDayClosed(selectedBookingDate));
+                  } finally {
+                    setDialogState(() => isLoadingSlots = false);
                   }
-                } catch (_) {
-                  setDialogState(() => isDayClosed = _checkIsDayClosed(selectedBookingDate));
-                } finally {
-                  setDialogState(() => isLoadingSlots = false);
                 }
-              }
 
-              if (!hasFetchedInitialSlots) {
-                hasFetchedInitialSlots = true;
-                if (!isDayClosed) {
-                  Future.delayed(Duration.zero, () => updateCapacityAvailableSlots());
+                if (!hasFetchedInitialSlots) {
+                  hasFetchedInitialSlots = true;
+                  if (!isDayClosed) {
+                    Future.delayed(Duration.zero, () => updateCapacityAvailableSlots());
+                  }
                 }
-              }
 
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Expanded(
-                    child: SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Select Service Matrix Tier', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569))),
-                          const SizedBox(height: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400), borderRadius: BorderRadius.circular(4)),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<Map<String, dynamic>>(
-                                isExpanded: true,
-                                value: selectedMatrixRow,
-                                items: liveServiceMatrices.map((matrix) {
-                                  return DropdownMenuItem<Map<String, dynamic>>(
-                                    value: matrix,
-                                    child: Text('${matrix['name']} (${matrix['weightTier']} / ${matrix['coatType']}) - \$${((matrix['priceCentsAud'] ?? 0) / 100).toStringAsFixed(2)}'),
-                                  );
-                                }).toList(),
-                                onChanged: (val) {
-                                  setDialogState(() => selectedMatrixRow = val);
-                                  updateCapacityAvailableSlots(); 
-                                },
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Select Service Matrix Tier', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569))),
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400), borderRadius: BorderRadius.circular(4)),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<Map<String, dynamic>>(
+                                  isExpanded: true,
+                                  value: selectedMatrixRow,
+                                  items: liveServiceMatrices.map((matrix) {
+                                    return DropdownMenuItem<Map<String, dynamic>>(
+                                      value: matrix,
+                                      child: Text('${matrix['name']} (${matrix['weightTier']} / ${matrix['coatType']}) - \$${((matrix['priceCentsAud'] ?? 0) / 100).toStringAsFixed(2)}', overflow: TextOverflow.ellipsis),
+                                    );
+                                  }).toList(),
+                                  onChanged: (val) {
+                                    setDialogState(() => selectedMatrixRow = val);
+                                    updateCapacityAvailableSlots(); 
+                                  },
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 16),
-                          
-                          const Text('Appointment Date & Time Selection', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569))),
-                          const SizedBox(height: 6),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  icon: const Icon(Icons.calendar_today, size: 16),
-                                  label: Text('Date: ${selectedBookingDate.day}/${selectedBookingDate.month}/${selectedBookingDate.year}'),
-                                  // Locate this part within _showCreateBookingDialog -> StatefulBuilder -> OutlinedButton.icon
-                                  onPressed: () async {
-                                    final pickedDate = await showDatePicker(
-                                      context: context,
-                                      initialDate: selectedBookingDate,
-                                      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                                      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
-                                    );
-                                    if (pickedDate != null) {
-                                      setDialogState(() {
-                                        selectedBookingDate = pickedDate;
-                                        isLoadingSlots = true;
-                                      });
-
-                                     try {
-                                        // 1. Format the selected date to YYYY-MM-DD string required by the backend
-                                        final String formattedDate = "${selectedBookingDate.year}-"
-                                            "${selectedBookingDate.month.toString().padLeft(2, '0')}-"
-                                            "${selectedBookingDate.day.toString().padLeft(2, '0')}";
-                                        
-                                        // 2. Dynamic duration value (Fallback to 60 if your state/matrix selection isn't loaded yet)
-                                        // Replace this with your actual state variable (e.g., selectedServiceMatrix.durationMinutes)
-                                        final int durationMinutes = selectedMatrixRow?['durationMinutes'] ?? 60;
-                                        
-
-                                        // 3. Updated URL targeting the new bookings slots endpoint with query parameters
-                                        final String targetUrl = '$_baseUrl/api/v1/bookings/available-slots'
-                                            '?merchantId=${widget.config.merchantId}'
-                                            '&date=$formattedDate'
-                                            '&duration=$durationMinutes';
-                                        
-                                        final response = await http.get(
-                                          Uri.parse(targetUrl),
-                                          headers: {
-                                            'Content-Type': 'application/json',
-                                          },
-                                        );
-
-                                        if (response.statusCode == 200) {
-                                          final Map<String, dynamic> parsedBody = json.decode(response.body);
-                                          if (parsedBody['success'] == true && parsedBody['data'] is List) {
-                                            final List<dynamic> backendSlots = parsedBody['data'];
-
+                            const SizedBox(height: 16),
+                            
+                            const Text('Appointment Date & Time Selection', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569))),
+                            const SizedBox(height: 6),
+                            
+                            isMobileDialog
+                                ? Column(
+                                    children: [
+                                      OutlinedButton.icon(
+                                        style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(45)),
+                                        icon: const Icon(Icons.calendar_today, size: 16),
+                                        label: Text('Date: ${selectedBookingDate.day}/${selectedBookingDate.month}/${selectedBookingDate.year}'),
+                                        onPressed: () async {
+                                          final pickedDate = await showDatePicker(
+                                            context: context,
+                                            initialDate: selectedBookingDate,
+                                            firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                                            lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                                          );
+                                          if (pickedDate != null) {
                                             setDialogState(() {
-                                              if (backendSlots.isNotEmpty) {
-                                                isDayClosed = false;
-                                                
-                                                // 4. Map the 24h backend slots (e.g., "14:30") into the "02:30 PM" UI display format
-                                                operationalHoursTimeOptions = backendSlots.map<String>((slot) {
-                                                  final parts = slot.toString().split(':');
-                                                  final int hour = int.parse(parts[0]);
-                                                  final String minute = parts[1]; // Dynamically preserves :00 or :30 from backend
-                                                  
-                                                  final int displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
-                                                  final String amPm = hour >= 12 ? 'PM' : 'AM';
-                                                  final String paddedHour = displayHour.toString().padLeft(2, '0');
-                                                  
-                                                  return '$paddedHour:$minute $amPm';
-                                                }).toList();
-                                              } else {
-                                                // If no slots are returned, the merchant is either closed or completely fully booked
-                                                isDayClosed = true;
-                                                operationalHoursTimeOptions = [];
-                                              }
-
-                                              // Assign initial default selection value safely
-                                              if (operationalHoursTimeOptions.isNotEmpty) {
-                                                selectedOperationalTime = operationalHoursTimeOptions.first;
-                                              } else {
-                                                selectedOperationalTime = null;
-                                              }
+                                              selectedBookingDate = pickedDate;
+                                              isDayClosed = _checkIsDayClosed(pickedDate);
+                                              isLoadingSlots = true;
                                             });
+                                            updateCapacityAvailableSlots();
                                           }
-                                        } else {
-                                          setDialogState(() => isDayClosed = _checkIsDayClosed(selectedBookingDate));
-                                        }
-                                      } catch (_) {
-                                        setDialogState(() => isDayClosed = _checkIsDayClosed(selectedBookingDate));
-                                      } finally {
-                                        setDialogState(() => isLoadingSlots = false);
-                                      }
-                                    }
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                                  decoration: BoxDecoration(
-                                    border: Border.all(color: isDayClosed ? Colors.red.shade300 : Colors.grey.shade300), 
-                                    borderRadius: BorderRadius.circular(4),
-                                    color: isDayClosed ? Colors.red.shade50 : (isLoadingSlots ? Colors.grey.shade100 : Colors.white),
+                                        },
+                                      ),
+                                      const SizedBox(height: 10),
+                                      _buildTimeSlotDropdown(isDayClosed, isLoadingSlots, operationalHoursTimeOptions, selectedOperationalTime, (val) => setDialogState(() => selectedOperationalTime = val)),
+                                    ],
+                                  )
+                                : Row(
+                                    children: [
+                                      Expanded(
+                                        child: OutlinedButton.icon(
+                                          icon: const Icon(Icons.calendar_today, size: 16),
+                                          label: Text('Date: ${selectedBookingDate.day}/${selectedBookingDate.month}/${selectedBookingDate.year}'),
+                                          onPressed: () async {
+                                            final pickedDate = await showDatePicker(
+                                              context: context,
+                                              initialDate: selectedBookingDate,
+                                              firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                                              lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                                            );
+                                            if (pickedDate != null) {
+                                              setDialogState(() {
+                                                selectedBookingDate = pickedDate;
+                                                isDayClosed = _checkIsDayClosed(pickedDate);
+                                                isLoadingSlots = true;
+                                              });
+                                              updateCapacityAvailableSlots();
+                                            }
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: _buildTimeSlotDropdown(isDayClosed, isLoadingSlots, operationalHoursTimeOptions, selectedOperationalTime, (val) => setDialogState(() => selectedOperationalTime = val)),
+                                      ),
+                                    ],
                                   ),
-                                  child: DropdownButtonHideUnderline(
-                                    child: isDayClosed 
-                                        ? const Padding(
-                                            padding: EdgeInsets.symmetric(vertical: 12.0),
-                                            child: Text('SHOP CLOSED', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.redAccent)),
-                                          )
-                                        : (isLoadingSlots
-                                            ? const SizedBox(
-                                                height: 20, 
-                                                width: 20, 
-                                                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                                              )
-                                            : DropdownButton<String>(
-                                                isExpanded: true,
-                                                hint: const Text('No available slots', style: TextStyle(fontSize: 13, color: Colors.redAccent)),
-                                                value: selectedOperationalTime,
-                                                items: operationalHoursTimeOptions.map((time) {
-                                                  return DropdownMenuItem<String>(value: time, child: Text(time));
-                                                }).toList(),
-                                                onChanged: (val) => setDialogState(() => selectedOperationalTime = val),
-                                              )),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const Divider(height: 32),
+                            const Divider(height: 32),
 
-                          Row(
-                            children: [
-                              Expanded(child: TextField(controller: dogNameCtrl, decoration: const InputDecoration(labelText: 'Dog Name *', border: OutlineInputBorder()))),
-                              const SizedBox(width: 12),
-                              Expanded(child: TextField(controller: dogBreedCtrl, decoration: const InputDecoration(labelText: 'Dog Breed Variant *', border: OutlineInputBorder()))),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  icon: const Icon(Icons.cake_outlined, size: 16),
-                                  label: Text(selectedDogDob == null 
-                                      ? 'Select Dog DOB *' 
-                                      : 'DOB: ${selectedDogDob!.day}/${selectedDogDob!.month}/${selectedDogDob!.year}'),
-                                  onPressed: () async {
-                                    final pickedDob = await showDatePicker(
-                                      context: context,
-                                      initialDate: selectedDogDob ?? DateTime.now().subtract(const Duration(days: 365 * 2)),
-                                      firstDate: DateTime(2000),
-                                      lastDate: DateTime.now(),
-                                    );
-                                    if (pickedDob != null) {
-                                      setDialogState(() => selectedDogDob = pickedDob);
-                                    }
-                                  },
-                                ),
+                            if (isMobileDialog) ...[
+                              TextField(controller: dogNameCtrl, decoration: const InputDecoration(labelText: 'Dog Name *', border: OutlineInputBorder())),
+                              const SizedBox(height: 12),
+                              TextField(controller: dogBreedCtrl, decoration: const InputDecoration(labelText: 'Dog Breed Variant *', border: OutlineInputBorder())),
+                              const SizedBox(height: 12),
+                              OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                                icon: const Icon(Icons.cake_outlined, size: 16),
+                                label: Text(selectedDogDob == null 
+                                    ? 'Select Dog DOB *' 
+                                    : 'DOB: ${selectedDogDob!.day}/${selectedDogDob!.month}/${selectedDogDob!.year}'),
+                                onPressed: () async {
+                                  final pickedDob = await showDatePicker(
+                                    context: context,
+                                    initialDate: selectedDogDob ?? DateTime.now().subtract(const Duration(days: 365 * 2)),
+                                    firstDate: DateTime(2000),
+                                    lastDate: DateTime.now(),
+                                  );
+                                  if (pickedDob != null) setDialogState(() => selectedDogDob = pickedDob);
+                                },
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: TextField(
-                                  controller: dogWeightCtrl,
-                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                  inputFormatters: [
-                                        // Permits integers or numbers with up to 2 decimal places (e.g. 14, 14.5, 14.52)
-                                        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
-                                  ],
-                                  decoration: const InputDecoration(
-                                    labelText: 'Dog Weight (kg) *', 
-                                    border: OutlineInputBorder(),
-                                    hintText: 'e.g., 14.5'
-                                  ),
-                                ),
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: dogWeightCtrl,
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))],
+                                decoration: const InputDecoration(labelText: 'Dog Weight (kg) *', border: OutlineInputBorder(), hintText: 'e.g., 14.5'),
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                                  decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400), borderRadius: BorderRadius.circular(4)),
-                                  child: DropdownButtonHideUnderline(
-                                    child: DropdownButton<String>(
-                                      value: selectedGender,
-                                      items: const [
-                                        DropdownMenuItem(value: 'MALE', child: Text('Male')),
-                                        DropdownMenuItem(value: 'FEMALE', child: Text('Female')),
-                                        DropdownMenuItem(value: 'UNKNOWN', child: Text('Unknown')),
-                                      ],
-                                      onChanged: (v) => setDialogState(() => selectedGender = v!),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
+                            ] else ...[
                               Row(
                                 children: [
-                                  Checkbox(
-                                    value: isDesexed,
-                                    onChanged: (v) => setDialogState(() => isDesexed = v!),
+                                  Expanded(child: TextField(controller: dogNameCtrl, decoration: const InputDecoration(labelText: 'Dog Name *', border: OutlineInputBorder()))),
+                                  const SizedBox(width: 12),
+                                  Expanded(child: TextField(controller: dogBreedCtrl, decoration: const InputDecoration(labelText: 'Dog Breed Variant *', border: OutlineInputBorder()))),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      icon: const Icon(Icons.cake_outlined, size: 16),
+                                      label: Text(selectedDogDob == null 
+                                          ? 'Select Dog DOB *' 
+                                          : 'DOB: ${selectedDogDob!.day}/${selectedDogDob!.month}/${selectedDogDob!.year}'),
+                                      onPressed: () async {
+                                        final pickedDob = await showDatePicker(
+                                          context: context,
+                                          initialDate: selectedDogDob ?? DateTime.now().subtract(const Duration(days: 365 * 2)),
+                                          firstDate: DateTime(2000),
+                                          lastDate: DateTime.now(),
+                                        );
+                                        if (pickedDob != null) setDialogState(() => selectedDogDob = pickedDob);
+                                      },
+                                    ),
                                   ),
-                                  const Text('Desexed / Neutered'),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: TextField(
+                                      controller: dogWeightCtrl,
+                                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))],
+                                      decoration: const InputDecoration(labelText: 'Dog Weight (kg) *', border: OutlineInputBorder(), hintText: 'e.g., 14.5'),
+                                    ),
+                                  ),
                                 ],
                               ),
                             ],
-                          ),
-                          const SizedBox(height: 16),
-                          TextField(controller: ownerNameCtrl, decoration: const InputDecoration(labelText: 'Owner Full Name *', border: OutlineInputBorder())),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: TextField(
-                                  controller: ownerPhoneCtrl, 
-                                  keyboardType: TextInputType.number, 
-                                  maxLength: 10, 
-                                  inputFormatters: [FilteringTextInputFormatter.digitsOnly], 
-                                  decoration: const InputDecoration(
-                                    labelText: 'Owner Phone * (04..)', 
-                                    hintText: '0412345678',
-                                    counterText: '', 
-                                    border: OutlineInputBorder()
-                                  )
-                                )
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: TextField(
-                                  controller: ownerEmailCtrl, 
-                                  keyboardType: TextInputType.emailAddress,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Owner Email *', 
-                                    hintText: 'example@domain.com',
-                                    border: OutlineInputBorder()
-                                  )
-                                )
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          TextField(
-                            controller: dogDescCtrl,
-                            maxLines: 2,
-                            decoration: const InputDecoration(
-                              labelText: 'Dog Special Notes / Interaction Requests',
-                              alignLabelWithHint: true,
-                              border: OutlineInputBorder()
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                                    decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400), borderRadius: BorderRadius.circular(4)),
+                                    child: DropdownButtonHideUnderline(
+                                      child: DropdownButton<String>(
+                                        value: selectedGender,
+                                        items: const [
+                                          DropdownMenuItem(value: 'MALE', child: Text('Male')),
+                                          DropdownMenuItem(value: 'FEMALE', child: Text('Female')),
+                                          DropdownMenuItem(value: 'UNKNOWN', child: Text('Unknown')),
+                                        ],
+                                        onChanged: (v) => setDialogState(() => selectedGender = v!),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Row(
+                                  children: [
+                                    Checkbox(value: isDesexed, onChanged: (v) => setDialogState(() => isDesexed = v!)),
+                                    const Text('Desexed', style: TextStyle(fontSize: 13)),
+                                  ],
+                                ),
+                              ],
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 16),
+                            TextField(controller: ownerNameCtrl, decoration: const InputDecoration(labelText: 'Owner Full Name *', border: OutlineInputBorder())),
+                            const SizedBox(height: 16),
+                            
+                            isMobileDialog
+                                ? Column(
+                                    children: [
+                                      TextField(
+                                        controller: ownerPhoneCtrl, 
+                                        keyboardType: TextInputType.number, 
+                                        maxLength: 10, 
+                                        inputFormatters: [FilteringTextInputFormatter.digitsOnly], 
+                                        decoration: const InputDecoration(labelText: 'Owner Phone * (04..)', hintText: '0412345678', counterText: '', border: OutlineInputBorder())
+                                      ),
+                                      const SizedBox(height: 12),
+                                      TextField(
+                                        controller: ownerEmailCtrl, 
+                                        keyboardType: TextInputType.emailAddress,
+                                        decoration: const InputDecoration(labelText: 'Owner Email *', hintText: 'example@domain.com', border: OutlineInputBorder())
+                                      ),
+                                    ],
+                                  )
+                                : Row(
+                                    children: [
+                                      Expanded(
+                                        child: TextField(
+                                          controller: ownerPhoneCtrl, 
+                                          keyboardType: TextInputType.number, 
+                                          maxLength: 10, 
+                                          inputFormatters: [FilteringTextInputFormatter.digitsOnly], 
+                                          decoration: const InputDecoration(labelText: 'Owner Phone * (04..)', hintText: '0412345678', counterText: '', border: OutlineInputBorder())
+                                        )
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: TextField(
+                                          controller: ownerEmailCtrl, 
+                                          keyboardType: TextInputType.emailAddress,
+                                          decoration: const InputDecoration(labelText: 'Owner Email *', hintText: 'example@domain.com', border: OutlineInputBorder())
+                                        )
+                                      ),
+                                    ],
+                                  ),
+                            const SizedBox(height: 16),
+                            TextField(
+                              controller: dogDescCtrl,
+                              maxLines: 2,
+                              decoration: const InputDecoration(labelText: 'Dog Special Notes / Requests', alignLabelWithHint: true, border: OutlineInputBorder()),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context), 
-                        child: const Text('Abort'),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: isDayClosed ? Colors.grey : widget.config.primaryColor, 
-                          foregroundColor: Colors.white
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context), 
+                          child: const Text('Abort'),
                         ),
-                        onPressed: isDayClosed ? null : () async {
-                          final cleanPhone = ownerPhoneCtrl.text.trim();
-                          final cleanEmail = ownerEmailCtrl.text.trim();
-                          final weightText = dogWeightCtrl.text.trim();
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: isDayClosed ? Colors.grey : widget.config.primaryColor, 
+                            foregroundColor: Colors.white
+                          ),
+                          onPressed: isDayClosed ? null : () async {
+                            final cleanPhone = ownerPhoneCtrl.text.trim();
+                            final cleanEmail = ownerEmailCtrl.text.trim();
+                            final weightText = dogWeightCtrl.text.trim();
 
-                          if (dogNameCtrl.text.isEmpty || 
-                              dogBreedCtrl.text.isEmpty || 
-                              weightText.isEmpty ||
-                              selectedDogDob == null ||
-                              ownerNameCtrl.text.isEmpty || 
-                              cleanPhone.isEmpty || 
-                              cleanEmail.isEmpty) {
-                            _showSnackBar('⚠️ Please complete all mandatory fields marked with an asterisk (*).');
-                            return;
-                          }
-
-                          if (selectedOperationalTime == null || selectedOperationalTime!.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('⚠️ Please pick a generated business hour time slot.')),
-                            );
-                            return;
-                          }
-
-                          final String digitsOnlyPhone = cleanPhone.replaceAll(RegExp(r'\D'), '');
-                          if (digitsOnlyPhone.length != 10 || !digitsOnlyPhone.startsWith('04')) {
-                            _showSnackBar('⚠️ Invalid Phone number. Must be a valid 10-digit Australian mobile number starting with 04.');
-                            return;
-                          }
-
-                          final RegExp emailRegex = RegExp(r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+");
-                          if (!emailRegex.hasMatch(cleanEmail)) {
-                            _showSnackBar('⚠️ Invalid Email pattern structure detected.');
-                            return;
-                          }
-
-                          final double? parsedWeight = double.tryParse(weightText);
-                          if (parsedWeight == null) {
-                            _showSnackBar('⚠️ Invalid Weight value. Must be a valid decimal number.');
-                            return;
-                          }
-
-                          final parts = selectedOperationalTime!.split(' '); // Splits "02:00" and "PM"
-                          final timeParts = parts[0].split(':');             // Splits "02" and "00"
-                          int hour = int.parse(timeParts[0]);
-                          final int minute = int.parse(timeParts[1]);
-                          final String amPm = parts[1];
-
-                          if (amPm == 'PM' && hour < 12) {
-                            hour += 12;
-                          } else if (amPm == 'AM' && hour == 12) {
-                            hour = 0;
-                          }
-
-                          // 3. Construct your final targetDateTime variable used by the API payload
-                          final targetDateTime = DateTime(
-                            selectedBookingDate.year, 
-                            selectedBookingDate.month, 
-                            selectedBookingDate.day, 
-                            hour, 
-                            minute
-                          );
-
-                          final payload = {
-                            'merchantId': widget.config.merchantId,
-                            'bookedById': widget.config.userId,
-                            'servicePricingMatrixId': selectedMatrixRow?['id'],
-                            'dogName': dogNameCtrl.text.trim(),
-                            'dogBreed': dogBreedCtrl.text.trim(),
-                            'dogGender': selectedGender,
-                            'isDesexed': isDesexed,
-                            'dogWeight': parsedWeight, // Included weight field in upstream transmission mapping
-                            'dogDob': selectedDogDob!.toIso8601String(), // Included structured ISO 8601 DOB entry
-                            'ownerName': ownerNameCtrl.text.trim(),
-                            'ownerPhone': digitsOnlyPhone, 
-                            'ownerEmail': cleanEmail,
-                            'serviceTime': targetDateTime.toIso8601String(),
-                            'groomerId': null,
-                            'note': dogDescCtrl.text.trim(),
-                          };
-
-                          try {
-                            final response = await http.post(
-                              Uri.parse('$_baseUrl/api/v1/bookings/add'),
-                              headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': 'Bearer ${widget.authToken}',
-                              },
-                              body: jsonEncode(payload),
-                            );
-
-                            final responseData = jsonDecode(response.body);
-                            if (response.statusCode == 200 || response.statusCode == 201) {
-                              Navigator.pop(context);
-                              _showSnackBar('🚀 Administrative appointment successfully recorded.');
-                              _fetchDashboardAppointments();
-                            } else {
-                              _showSnackBar('❌ Submission Rejected: ${responseData['message'] ?? 'Check input parameters.'}');
+                            if (dogNameCtrl.text.isEmpty || 
+                                dogBreedCtrl.text.isEmpty || 
+                                weightText.isEmpty ||
+                                selectedDogDob == null ||
+                                ownerNameCtrl.text.isEmpty || 
+                                cleanPhone.isEmpty || 
+                                cleanEmail.isEmpty) {
+                              _showSnackBar('⚠️ Please complete all mandatory fields marked with an asterisk (*).');
+                              return;
                             }
-                          } catch (err) {
-                            _showSnackBar('❌ Error: Could not connect to target administrative cluster route.');
-                          }
-                        },
-                        child: const Text('Place Booking'),
-                      ),
-                    ],
-                  ),
-                ],
-              );
-            },
+
+                            if (selectedOperationalTime == null || selectedOperationalTime!.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('⚠️ Please pick a generated business hour time slot.')),
+                              );
+                              return;
+                            }
+
+                            final String digitsOnlyPhone = cleanPhone.replaceAll(RegExp(r'\D'), '');
+                            if (digitsOnlyPhone.length != 10 || !digitsOnlyPhone.startsWith('04')) {
+                              _showSnackBar('⚠️ Invalid Phone number. Must be a valid 10-digit Australian mobile number starting with 04.');
+                              return;
+                            }
+
+                            final RegExp emailRegex = RegExp(r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+");
+                            if (!emailRegex.hasMatch(cleanEmail)) {
+                              _showSnackBar('⚠️ Invalid Email pattern structure detected.');
+                              return;
+                            }
+
+                            final double? parsedWeight = double.tryParse(weightText);
+                            if (parsedWeight == null) {
+                              _showSnackBar('⚠️ Invalid Weight value. Must be a valid decimal number.');
+                              return;
+                            }
+
+                            final parts = selectedOperationalTime!.split(' '); // Splits "02:00" and "PM"
+                            final timeParts = parts[0].split(':');             // Splits "02" and "00"
+                            int hour = int.parse(timeParts[0]);
+                            final int minute = int.parse(timeParts[1]);
+                            final String amPm = parts[1];
+
+                            if (amPm == 'PM' && hour < 12) {
+                              hour += 12;
+                            } else if (amPm == 'AM' && hour == 12) {
+                              hour = 0;
+                            }
+
+                            // 3. Construct your final targetDateTime variable used by the API payload
+                            final targetDateTime = DateTime(
+                              selectedBookingDate.year, 
+                              selectedBookingDate.month, 
+                              selectedBookingDate.day, 
+                              hour, 
+                              minute
+                            );
+
+                            final payload = {
+                              'merchantId': widget.config.merchantId,
+                              'bookedById': widget.config.userId,
+                              'servicePricingMatrixId': selectedMatrixRow?['id'],
+                              'dogName': dogNameCtrl.text.trim(),
+                              'dogBreed': dogBreedCtrl.text.trim(),
+                              'dogGender': selectedGender,
+                              'isDesexed': isDesexed,
+                              'dogWeight': parsedWeight, // Included weight field in upstream transmission mapping
+                              'dogDob': selectedDogDob!.toIso8601String(), // Included structured ISO 8601 DOB entry
+                              'ownerName': ownerNameCtrl.text.trim(),
+                              'ownerPhone': digitsOnlyPhone, 
+                              'ownerEmail': cleanEmail,
+                              'serviceTime': targetDateTime.toIso8601String(),
+                              'groomerId': null,
+                              'note': dogDescCtrl.text.trim(),
+                            };
+
+                            try {
+                              final response = await http.post(
+                                Uri.parse('$_baseUrl/api/v1/bookings/add'),
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                  'Authorization': 'Bearer ${widget.authToken}',
+                                },
+                                body: jsonEncode(payload),
+                              );
+
+                              final responseData = jsonDecode(response.body);
+                              if (response.statusCode == 200 || response.statusCode == 201) {
+                                Navigator.pop(context);
+                                _showSnackBar('🚀 Administrative appointment successfully recorded.');
+                                _fetchDashboardAppointments();
+                              } else {
+                                _showSnackBar('❌ Submission Rejected: ${responseData['message'] ?? 'Check input parameters.'}');
+                              }
+                            } catch (err) {
+                              _showSnackBar('❌ Error: Could not connect to target administrative cluster route.');
+                            }
+                          },
+                          child: const Text('Place Booking'),
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+              },
+            ),
           ),
-        ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTimeSlotDropdown(bool isClosed, bool isLoading, List<String> options, String? selected, ValueChanged<String?> onChanged) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        border: Border.all(color: isClosed ? Colors.red.shade300 : Colors.grey.shade300), 
+        borderRadius: BorderRadius.circular(4),
+        color: isClosed ? Colors.red.shade50 : (isLoading ? Colors.grey.shade100 : Colors.white),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: isClosed 
+            ? const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12.0),
+                child: Text('SHOP CLOSED', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.redAccent)),
+              )
+            : (isLoading
+                ? const SizedBox(height: 20, width: 20, child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
+                : DropdownButton<String>(
+                    isExpanded: true,
+                    hint: const Text('No available slots', style: TextStyle(fontSize: 13, color: Colors.redAccent)),
+                    value: selected,
+                    items: options.map((time) => DropdownMenuItem<String>(value: time, child: Text(time))).toList(),
+                    onChanged: onChanged,
+                  )),
       ),
     );
   }
 
   void _showSnackBar(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final themeColor = widget.config.primaryColor;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 900;
 
     return Scaffold(
       key: _scaffoldKey,
@@ -876,202 +820,189 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
         elevation: 0.5,
         backgroundColor: Colors.white,
         title: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(color: themeColor.withAlpha(25), borderRadius: BorderRadius.circular(8)),
-              child: Text(widget.config.logoIcon, style: const TextStyle(fontSize: 20)),
+              child: Text(widget.config.logoIcon, style: const TextStyle(fontSize: 18)),
             ),
-            const SizedBox(width: 12),
-            Text(widget.config.businessName, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A), fontSize: 18)),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                widget.config.businessName, 
+                style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A), fontSize: 16),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
-        actions: [
-          // 1. Customer Portal Button (Primary Action Style Retained)
-          OutlinedButton.icon(
-            icon: const Icon(Icons.launch, size: 16),
-            label: const Text('Customer Portal'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFF475569),
-              side: const BorderSide(color: Color(0xFFCBD5E1)),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-            ),
-            onPressed: () => Navigator.push(
-              context, 
-              MaterialPageRoute(
-                builder: (_) => CustomerPortalPage(config: widget.config, activeServices: liveServiceMatrices, baseUrl: _baseUrl)
-              )
-            ),
-          ),
-          const SizedBox(width: 8),
-
-          // 2. Manual Booking Button (Primary Action Style Retained)
-          ElevatedButton.icon(
-            icon: const Icon(Icons.add, size: 16),
-            label: Text(widget.config.getTxt('btn_book', 'Manual Booking')),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: themeColor,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-            ),
-            onPressed: _showCreateBookingDialog,
-          ),
-          
-          // Clean layout separation line before utility configurations
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-            child: VerticalDivider(color: Color(0xFFE2E8F0), width: 1),
-          ),
-
-          // 3. Admin Configuration Utilities (Refactored to Smart IconButtons)
-          if (widget.isAdmin) ...[
-            Tooltip(
-              message: 'Customer Info',
-              child: IconButton(
-                icon: const Icon(Icons.people_outline, color: Color(0xFF475569)),
-                onPressed: () {
-                  setState(() => _drawerTabController.index = 3); 
-                  _scaffoldKey.currentState!.openEndDrawer();
-                },
-              ),
-            ),
-            Tooltip(
-              message: 'Business Hours',
-              child: IconButton(
-                icon: const Icon(Icons.schedule_outlined, color: Color(0xFF475569)),
-                onPressed: () {
-                  setState(() => _drawerTabController.index = 1); 
-                  _scaffoldKey.currentState!.openEndDrawer();
-                },
-              ),
-            ),
-            Tooltip(
-              message: 'Manage Team',
-              child: IconButton(
-                icon: const Icon(Icons.group_outlined, color: Color(0xFF475569)),
-                onPressed: () {
-                  setState(() => _drawerTabController.index = 2); 
-                  _scaffoldKey.currentState!.openEndDrawer();
-                },
-              ),
-            ),
-            Tooltip(
-              message: 'Schedule Staff',
-              child: IconButton(
-                icon: const Icon(Icons.edit_calendar_rounded, color: Color(0xFF475569)),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => StaffSchedulingPage(
-                        config: widget.config,
-                        authToken: widget.authToken,
-                        businessHoursConfig: _businessHoursConfig,
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-          
-          // 4. Configure UI Text Button
-          Tooltip(
-            message: 'Configure UI Text',
-            child: IconButton(
-              icon: const Icon(Icons.tune, color: Color(0xFF475569)),
-              onPressed: () {
-                setState(() => _drawerTabController.index = 0); 
-                _scaffoldKey.currentState!.openEndDrawer();
-              },
-            ),
-          ),
-          
-          const VerticalDivider(width: 24, indent: 12, endIndent: 12),
-          
-          // 5. System Logout Button
-          Tooltip(
-            message: 'Logout',
-            child: IconButton(
-              icon: const Icon(Icons.logout_rounded, color: Colors.redAccent), 
-              onPressed: widget.onLogout,
-            ),
-          ),
-          const SizedBox(width: 16),
-        ],
+        actions: isMobile 
+            ? [
+                IconButton(
+                  icon: const Icon(Icons.add, color: Colors.blueAccent),
+                  onPressed: _showCreateBookingDialog,
+                ),
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert, color: Color(0xFF475569)),
+                  onSelected: (val) {
+                    if (val == 'portal') {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => CustomerPortalPage(config: widget.config, activeServices: liveServiceMatrices, baseUrl: _baseUrl)));
+                    } else if (val == 'cust') {
+                      setState(() => _drawerTabController.index = 3);
+                      _scaffoldKey.currentState!.openEndDrawer();
+                    } else if (val == 'hours') {
+                      setState(() => _drawerTabController.index = 1);
+                      _scaffoldKey.currentState!.openEndDrawer();
+                    } else if (val == 'team') {
+                      setState(() => _drawerTabController.index = 2);
+                      _scaffoldKey.currentState!.openEndDrawer();
+                    } else if (val == 'sched') {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => StaffSchedulingPage(config: widget.config, authToken: widget.authToken, businessHoursConfig: _businessHoursConfig)));
+                    } else if (val == 'logout') {
+                      widget.onLogout();
+                    }
+                  },
+                  itemBuilder: (ctx) => [
+                    const PopupMenuItem(value: 'portal', child: Text('Customer Portal')),
+                    if (widget.isAdmin) ...[
+                      const PopupMenuItem(value: 'cust', child: Text('Customer Info')),
+                      const PopupMenuItem(value: 'hours', child: Text('Business Hours')),
+                      const PopupMenuItem(value: 'team', child: Text('Manage Team')),
+                      const PopupMenuItem(value: 'sched', child: Text('Schedule Staff')),
+                    ],
+                    const PopupMenuItem(value: 'logout', child: Text('Logout', style: TextStyle(color: Colors.redAccent))),
+                  ],
+                ),
+              ]
+            : [
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.launch, size: 16),
+                  label: const Text('Customer Portal'),
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CustomerPortalPage(config: widget.config, activeServices: liveServiceMatrices, baseUrl: _baseUrl))),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.add, size: 16),
+                  label: Text(widget.config.getTxt('btn_book', 'Manual Booking')),
+                  style: ElevatedButton.styleFrom(backgroundColor: themeColor, foregroundColor: Colors.white),
+                  onPressed: _showCreateBookingDialog,
+                ),
+                if (widget.isAdmin) ...[
+                  IconButton(icon: const Icon(Icons.people_outline), onPressed: () { setState(() => _drawerTabController.index = 3); _scaffoldKey.currentState!.openEndDrawer(); }),
+                  IconButton(icon: const Icon(Icons.schedule_outlined), onPressed: () { setState(() => _drawerTabController.index = 1); _scaffoldKey.currentState!.openEndDrawer(); }),
+                  IconButton(icon: const Icon(Icons.group_outlined), onPressed: () { setState(() => _drawerTabController.index = 2); _scaffoldKey.currentState!.openEndDrawer(); }),
+                  IconButton(icon: const Icon(Icons.edit_calendar_rounded), onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => StaffSchedulingPage(config: widget.config, authToken: widget.authToken, businessHoursConfig: _businessHoursConfig))); }),
+                ],
+                IconButton(icon: const Icon(Icons.tune), onPressed: () { setState(() => _drawerTabController.index = 0); _scaffoldKey.currentState!.openEndDrawer(); }),
+                IconButton(icon: const Icon(Icons.logout_rounded, color: Colors.redAccent), onPressed: widget.onLogout),
+                const SizedBox(width: 16),
+              ],
       ),
       endDrawer: _buildManagementDrawer(themeColor),
-      body: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            flex: 3,
-            child: Container(
-              height: double.infinity,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(right: BorderSide(color: Color(0xFFE2E8F0))),
-              ),
-              padding: const EdgeInsets.all(20),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 900) {
+            return RefreshIndicator(
+              onRefresh: _fetchDashboardAppointments,
               child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16.0),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Master Monthly Overview', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                    const SizedBox(height: 14),
+                    _buildMetricHeaderSection(isMobile: true),
+                    const SizedBox(height: 16),
                     _buildCalendarCard(themeColor),
+                    const SizedBox(height: 16),
+                    _buildScheduleDropdownView(),
+                    const SizedBox(height: 16),
+                    _buildActiveScheduleSection(themeColor),
+                    const SizedBox(height: 16),
+                    _buildBrandIdentitySection(themeColor),
+                    const SizedBox(height: 16),
+                    _buildToggleableServiceCatalogSection(themeColor),
                   ],
                 ),
               ),
-            ),
-          ),
-          Expanded(
-            flex: 7,
-            child: _isAppointmentsLoading && mockAppointments.isEmpty
-                ? const Center(child: CircularProgressIndicator())
-                : RefreshIndicator(
-                    onRefresh: _fetchDashboardAppointments,
-                    child: SingleChildScrollView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(24.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(child: _buildMetricHeaderSection()),
-                              const SizedBox(width: 16),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFCBD5E1))),
-                                child: DropdownButtonHideUnderline(
-                                  child: DropdownButton<String>(
-                                    value: _activeScheduleView,
-                                    icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF475569)),
-                                    style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
-                                    items: _scheduleViewOptions.map((String val) {
-                                      return DropdownMenuItem<String>(value: val, child: Text(val));
-                                    }).toList(),
-                                    onChanged: (newVal) => setState(() => _activeScheduleView = newVal!),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 24),
-                          _buildBrandIdentitySection(themeColor),
-                          const SizedBox(height: 24),
-                          _buildActiveScheduleSection(themeColor),
-                          const SizedBox(height: 24),
-                          _buildToggleableServiceCatalogSection(themeColor), 
-                        ],
-                      ),
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 3,
+                child: Container(
+                  height: double.infinity,
+                  decoration: const BoxDecoration(color: Colors.white, border: Border(right: BorderSide(color: Color(0xFFE2E8F0)))),
+                  padding: const EdgeInsets.all(20),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Master Monthly Overview', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                        const SizedBox(height: 14),
+                        _buildCalendarCard(themeColor),
+                      ],
                     ),
                   ),
-          ),
-        ],
+                ),
+              ),
+              Expanded(
+                flex: 7,
+                child: _isAppointmentsLoading && mockAppointments.isEmpty
+                    ? const Center(child: CircularProgressIndicator())
+                    : RefreshIndicator(
+                        onRefresh: _fetchDashboardAppointments,
+                        child: SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.all(24.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              IntrinsicHeight(
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch, // Matches height of tallest item
+                                  children: [
+                                    Expanded(
+                                      child: _buildMetricHeaderSection(isMobile: false),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    // DO NOT wrap in Expanded here — let it keep its natural width
+                                    _buildScheduleDropdownView(),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              _buildBrandIdentitySection(themeColor),
+                              const SizedBox(height: 24),
+                              _buildActiveScheduleSection(themeColor),
+                              const SizedBox(height: 24),
+                              _buildToggleableServiceCatalogSection(themeColor), 
+                            ],
+                          ),
+                        ),
+                      ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildScheduleDropdownView() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFCBD5E1))),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _activeScheduleView,
+          icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF475569)),
+          style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
+          items: _scheduleViewOptions.map((String val) => DropdownMenuItem<String>(value: val, child: Text(val))).toList(),
+          onChanged: (newVal) => setState(() => _activeScheduleView = newVal!),
+        ),
       ),
     );
   }
@@ -1089,44 +1020,60 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     }
   }
 
-  Widget _buildMetricHeaderSection() {
+  Widget _buildMetricHeaderSection({bool isMobile = false}) {
     final targetDate = _selectedDay ?? DateTime.now();
     final targetedCount = mockAppointments.where((app) => isSameDay(app['rawStartTime'], targetDate)).length;
+
+    if (isMobile) {
+      return Column(
+        children: [
+          if (widget.isAdmin) ...[
+            _buildMetricCard(widget.config.getTxt('txt_revenue', 'Today Forecast Revenue'), '\$${todayRevenue.toStringAsFixed(2)} AUD', Icons.payments_outlined, Colors.green),
+            const SizedBox(height: 12),
+          ],
+          _buildMetricCard('Total Booked Pets', '$targetedCount Active Profiles', Icons.pets_outlined, Colors.indigo),
+        ],
+      );
+    }
 
     return Row(
       children: [
         if (widget.isAdmin) ...[
-          _buildMetricCard(widget.config.getTxt('txt_revenue', 'Today Forecast Revenue'), '\$${todayRevenue.toStringAsFixed(2)} AUD', Icons.payments_outlined, Colors.green),
+          Expanded(
+            child: _buildMetricCard(widget.config.getTxt('txt_revenue', 'Today Forecast Revenue'), '\$${todayRevenue.toStringAsFixed(2)} AUD', Icons.payments_outlined, Colors.green),
+          ),
           const SizedBox(width: 16),
         ],
-        _buildMetricCard('Total Booked Pets', '$targetedCount Active Profiles', Icons.pets_outlined, Colors.indigo),
+        Expanded(
+          child: _buildMetricCard('Total Booked Pets', '$targetedCount Active Profiles', Icons.pets_outlined, Colors.indigo),
+        ),
       ],
     );
   }
 
   Widget _buildMetricCard(String title, String val, IconData icon, Color col) {
-    return Expanded(
-      child: Container(
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: col.withAlpha(20), borderRadius: BorderRadius.circular(10)),
-              child: Icon(icon, color: col, size: 24),
-            ),
-            const SizedBox(width: 16),
-            Column(
+    return Container(
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: col.withAlpha(20), borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, color: col, size: 24),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(color: Color(0xFF64748B), fontSize: 12, fontWeight: FontWeight.w500)),
+                Text(title, style: const TextStyle(color: Color(0xFF64748B), fontSize: 12, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 4),
-                Text(val, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                Text(val, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)), overflow: TextOverflow.ellipsis),
               ],
-            )
-          ],
-        ),
+            ),
+          )
+        ],
       ),
     );
   }
@@ -1141,13 +1088,16 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
           const SizedBox(width: 8),
           const Text('Traits: ', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF475569))),
           const SizedBox(width: 12),
-          Wrap(
-            spacing: 8, 
-            children: widget.config.tags.map((t) => Chip(
-              backgroundColor: col.withAlpha(15), 
-              side: BorderSide.none,
-              label: Text(t, style: TextStyle(color: col, fontWeight: FontWeight.w500, fontSize: 12))
-            )).toList()
+          Expanded(
+            child: Wrap(
+              spacing: 8, 
+              runSpacing: 4,
+              children: widget.config.tags.map((t) => Chip(
+                backgroundColor: col.withAlpha(15), 
+                side: BorderSide.none,
+                label: Text(t, style: TextStyle(color: col, fontWeight: FontWeight.w500, fontSize: 12))
+              )).toList(),
+            ),
           )
         ],
       ),
@@ -1163,23 +1113,19 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ${widget.authToken}',
         },
-        body: jsonEncode({
-          'isActive': !currentStatus,
-        }),
+        body: jsonEncode({'isActive': !currentStatus}),
       );
 
-      final Map<String, dynamic> responseData = jsonDecode(response.body);
-
-      if (response.statusCode == 200 && responseData['success'] == true) {
+      if (response.statusCode == 200) {
         await _fetchServiceMatrices();
-        _showSnackBar('🔄 Service definition status successfully synchronized.');
+        _showSnackBar('🔄 Service status updated.');
       } else {
-        _showSnackBar('❌ Failed to update status: ${responseData['message'] ?? 'Error'}');
+        _showSnackBar('❌ Failed to update status.');
       }
-    } catch (e) {
-      _showSnackBar('❌ Transport Layer Error during service state modification.');
+    } catch (_) {
+      _showSnackBar('❌ Transport Layer Error.');
     } finally {
-      setState(() => _isServiceLoading = false);
+      if (mounted) setState(() => _isServiceLoading = false);
     }
   }
 
@@ -1197,20 +1143,21 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      Icon(_isServiceMatrixVisible ? Icons.keyboard_arrow_down_rounded : Icons.keyboard_arrow_right_rounded, color: const Color(0xFF475569)),
-                      const SizedBox(width: 8),
-                      const Text('Service Pricing Configuration Matrix', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                    ],
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Icon(_isServiceMatrixVisible ? Icons.keyboard_arrow_down_rounded : Icons.keyboard_arrow_right_rounded, color: const Color(0xFF475569)),
+                        const SizedBox(width: 8),
+                        const Flexible(child: Text('Service Pricing Configuration Matrix', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)), overflow: TextOverflow.ellipsis)),
+                      ],
+                    ),
                   ),
-                  if (_isServiceLoading) const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
                   if (widget.isAdmin && _isServiceMatrixVisible)
                     ElevatedButton.icon(
                       icon: const Icon(Icons.add_business_outlined, size: 16),
                       label: const Text('Add Entry'),
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F172A), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))),
-                      onPressed: _showAddServiceMatrixDialog,
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F172A), foregroundColor: Colors.white),
+                      onPressed: () => _showAddServiceMatrixDialog(context),
                     ),
                 ],
               ),
@@ -1221,7 +1168,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
             if (liveServiceMatrices.isEmpty)
               const Padding(
                 padding: EdgeInsets.all(24.0),
-                child: Text('No pricing profiles defined inside database layers yet.', style: TextStyle(color: Colors.grey)),
+                child: Text('No pricing profiles defined.', style: TextStyle(color: Colors.grey)),
               )
             else
               ListView.separated(
@@ -1236,62 +1183,22 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                   return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
-                                children: [
-                                  Text(
-                                    matrix['name'] ?? 'Unnamed Template',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      color: active ? const Color(0xFF1E293B) : Colors.grey,
-                                      decoration: active ? TextDecoration.none : TextDecoration.lineThrough,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: active ? Colors.green.shade50 : Colors.red.shade50,
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      active ? 'Active' : 'Inactive',
-                                      style: TextStyle(fontSize: 10, color: active ? Colors.green.shade700 : Colors.red.shade700, fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
-                                ],
-                              ),
+                              Text(matrix['name'] ?? 'Unnamed Template', style: TextStyle(fontWeight: FontWeight.w600, color: active ? const Color(0xFF1E293B) : Colors.grey)),
                               const SizedBox(height: 4),
-                              Text(
-                                'Weight Class: ${matrix['weightTier'] ?? 'ALL'} • Coat Configuration: ${matrix['coatType'] ?? 'ALL'} • Est Duration: ${matrix['durationMinutes']} mins',
-                                style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                              ),
+                              Text('Weight: ${matrix['weightTier']} • Coat: ${matrix['coatType']} • Duration: ${matrix['durationMinutes']}m', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
                             ],
                           ),
                         ),
-                        Row(
-                          children: [
-                            Text(
-                              '\$${((matrix['priceCentsAud'] ?? 0) / 100).toStringAsFixed(2)}',
-                              style: TextStyle(fontWeight: FontWeight.bold, color: active ? const Color(0xFF0F172A) : Colors.grey),
-                            ),
-                            if (widget.isAdmin) ...[
-                              const SizedBox(width: 16),
-                              Switch(
-                                value: active,
-                                activeColor: col,
-                                onChanged: (bool value) {
-                                  _toggleServiceActiveStatus(matrix['id'], active);
-                                },
-                              ),
-                            ],
-                          ],
-                        ),
+                        Text('\$${((matrix['priceCentsAud'] ?? 0) / 100).toStringAsFixed(2)}', style: TextStyle(fontWeight: FontWeight.bold, color: active ? const Color(0xFF0F172A) : Colors.grey)),
+                        if (widget.isAdmin) ...[
+                          const SizedBox(width: 12),
+                          Switch(value: active, activeColor: col, onChanged: (v) => _toggleServiceActiveStatus(matrix['id'], active)),
+                        ],
                       ],
                     ),
                   );
@@ -1316,7 +1223,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
           _selectedDay = sd;
           _focusedDay = fd;
         }),
-        headerStyle: const HeaderStyle(formatButtonVisible: false, titleCentered: true, leftChevronIcon: Icon(Icons.chevron_left, size: 20), rightChevronIcon: Icon(Icons.chevron_right, size: 20)),
+        headerStyle: const HeaderStyle(formatButtonVisible: false, titleCentered: true),
       ),
     );
   }
@@ -1334,7 +1241,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
           const Text('Daily Schedule Overview', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
           const SizedBox(height: 16),
           dailyFilteredApps.isEmpty
-              ? const Padding(padding: EdgeInsets.symmetric(vertical: 24), child: Center(child: Text('No active scheduled booking instances found for this day.')))
+              ? const Padding(padding: EdgeInsets.symmetric(vertical: 24), child: Center(child: Text('No active scheduled booking instances.')))
               : ListView.separated(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -1346,51 +1253,22 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                       onTap: () => _showUpdateBookingOptionsDialog(app),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4.0),
-                        child: Row(
+                        child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Text('Dog Name: ${app['petName']} (Breed: ${app['breed']})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F172A))),
-                                      const SizedBox(width: 8),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(4)),
-                                        child: Text('Status: ${app['status']}', style: TextStyle(fontSize: 10, color: Colors.blue.shade700, fontWeight: FontWeight.w600)),
-                                      ),
-                                      if (app['isLoyaltyWaived'] == true) ...[
-                                        const SizedBox(width: 6),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(color: Colors.purple.shade50, borderRadius: BorderRadius.circular(4)),
-                                          child: const Text('🎁 Free Reward', style: TextStyle(fontSize: 10, color: Colors.purple, fontWeight: FontWeight.bold)),
-                                        )
-                                      ]
-                                    ],
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text('Service Tier Variant: ${app['service']} • Scheduled Window: ${app['time']}', style: const TextStyle(fontSize: 13, color: Color(0xFF475569))),
-                                  if (app['staffTags'] != null && (app['staffTags'] as List).isNotEmpty) ...[
-                                    const SizedBox(height: 4),
-                                    Text('Tags: ${(app['staffTags'] as List).join(", ")}', style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontStyle: FontStyle.italic)),
-                                  ],
-                                  const SizedBox(height: 8),
-                                  Wrap(
-                                    spacing: 6,
-                                    runSpacing: 4,
-                                    children: [
-                                      _buildStatusBadge(app['isCheckedIn'] ? 'Checked In' : 'Not Checked In', app['isCheckedIn'] ? Colors.green : Colors.amber),
-                                      _buildStatusBadge(app['isDepositPaid'] ? 'Deposit Paid' : 'No Deposit', app['isDepositPaid'] ? Colors.blue : Colors.deepOrange),
-                                      _buildStatusBadge(app['isReadyForPickup'] ? 'Ready for Pickup' : 'Processing', app['isReadyForPickup'] ? Colors.purple : Colors.blueGrey),
-                                    ],
-                                  )
-                                ],
-                              ),
-                            ),
+                            Text('Dog Name: ${app['petName']} (${app['breed']})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F172A))),
+                            const SizedBox(height: 4),
+                            Text('Service: ${app['service']} • Time: ${app['time']}', style: const TextStyle(fontSize: 13, color: Color(0xFF475569))),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 4,
+                              children: [
+                                _buildStatusBadge(app['isCheckedIn'] ? 'Checked In' : 'Not Checked In', app['isCheckedIn'] ? Colors.green : Colors.amber),
+                                _buildStatusBadge(app['isDepositPaid'] ? 'Deposit Paid' : 'No Deposit', app['isDepositPaid'] ? Colors.blue : Colors.deepOrange),
+                                _buildStatusBadge(app['isReadyForPickup'] ? 'Ready for Pickup' : 'Processing', app['isReadyForPickup'] ? Colors.purple : Colors.blueGrey),
+                              ],
+                            )
                           ],
                         ),
                       ),
@@ -1403,248 +1281,243 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
   }
 
   Widget _buildDailyTimelineGrid(Color col) {
-    final targetDate = _selectedDay ?? DateTime.now();
-    final dailyFilteredApps = mockAppointments.where((app) => isSameDay(app['rawStartTime'], targetDate)).toList();
+  final targetDate = _selectedDay ?? DateTime.now();
+  final dailyFilteredApps = mockAppointments.where((app) => isSameDay(app['rawStartTime'], targetDate)).toList();
 
-    final dayRecord = _businessHoursConfig.firstWhere(
-      (element) => element['dayOfWeek'] == targetDate.weekday,
-      orElse: () => null,
-    );
+  final dayRecord = _businessHoursConfig.firstWhere(
+    (element) => element['dayOfWeek'] == targetDate.weekday,
+    orElse: () => null,
+  );
 
-    bool isClosed = true;
-    int startHour = 9;
-    int endHour = 17;
+  bool isClosed = true;
+  int startHour = 9;
+  int endHour = 17;
 
-    if (dayRecord != null && dayRecord['isClosed'] != true) {
-      isClosed = false;
-      final String startStr = dayRecord['openTime'] ?? '09:00';
-      final String endStr = dayRecord['closeTime'] ?? '17:00';
-      
-      startHour = int.tryParse(startStr.split(':')[0]) ?? 9;
-      endHour = int.tryParse(endStr.split(':')[0]) ?? 17;
-    }
+  if (dayRecord != null && dayRecord['isClosed'] != true) {
+    isClosed = false;
+    final String startStr = dayRecord['openTime'] ?? '09:00';
+    final String endStr = dayRecord['closeTime'] ?? '17:00';
+    
+    startHour = int.tryParse(startStr.split(':')[0]) ?? 9;
+    endHour = int.tryParse(endStr.split(':')[0]) ?? 17;
+  }
 
-    if (isClosed) {
-      return Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-        child: const Center(child: Text('Closed Today', style: TextStyle(color: Colors.grey))),
-      );
-    }
-
-    // --- NEW CONFIGURATION FOR SPANNING LAYOUT ---
-    const double slotHeight = 70.0; // Height allocated per hour row
-    final int totalHours = endHour - startHour + 1;
-
+  if (isClosed) {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white, 
-        borderRadius: BorderRadius.circular(12), 
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
       padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Timeline Lane Distribution Tracker', 
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-          ),
-          const SizedBox(height: 16),
-          
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 1. Left Axis: Fixed Time Slots Columns (e.g., 9 AM, 10 AM)
-              Column(
-                children: List.generate(totalHours, (index) {
-                  final hour = startHour + index;
-                  final displayHour = hour > 12 
-                      ? '${hour - 12} PM' 
-                      : hour == 12 ? '12 PM' : '$hour AM';
-                  return SizedBox(
-                    height: slotHeight,
-                    width: 65,
-                    child: Text(
-                      displayHour, 
-                      style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.blueGrey, fontSize: 13),
-                    ),
-                  );
-                }),
-              ),
-              
-              // 2. Right Axis: Interactive Calendar Stack Area
-              Expanded(
-                child: SizedBox(
-                  height: totalHours * slotHeight,
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final totalWidth = constraints.maxWidth;
-                      
-                      // Sort appointments by start time chronologically
-                      final sortedApps = List.from(dailyFilteredApps)
-                        ..sort((a, b) => a['rawStartTime'].compareTo(b['rawStartTime']));
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+      child: const Center(child: Text('Closed Today', style: TextStyle(color: Colors.grey))),
+    );
+  }
 
-                      // Distribute overlapping items into columns side-by-side
-                      List<List<Map<String, dynamic>>> columns = [];
-                      for (var app in sortedApps) {
-                        bool placed = false;
-                        for (var column in columns) {
-                          final lastApp = column.last;
-                          final lastStart = lastApp['rawStartTime'] as DateTime;
-                          // Assumes m['rawEndTime'] exists, falls back to 1 hour duration if null
-                          final lastEnd = lastApp['rawEndTime'] as DateTime? ?? lastStart.add(const Duration(hours: 1));
-                          final appStart = app['rawStartTime'] as DateTime;
+  const double slotHeight = 70.0; // Height allocated per hour row
+  final int totalHours = endHour - startHour + 1;
 
-                          if (appStart.isAfter(lastEnd) || appStart.isAtSameMomentAs(lastEnd)) {
-                            column.add(app);
-                            placed = true;
-                            break;
-                          }
-                        }
-                        if (!placed) {
-                          columns.add([app]);
+  return Container(
+    decoration: BoxDecoration(
+      color: Colors.white, 
+      borderRadius: BorderRadius.circular(12), 
+      border: Border.all(color: const Color(0xFFE2E8F0)),
+    ),
+    padding: const EdgeInsets.all(20),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Timeline Lane Distribution Tracker', 
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+        ),
+        const SizedBox(height: 16),
+        
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 1. Left Axis: Fixed Time Slots Columns
+            Column(
+              children: List.generate(totalHours, (index) {
+                final hour = startHour + index;
+                final displayHour = hour > 12 
+                    ? '${hour - 12} PM' 
+                    : hour == 12 ? '12 PM' : '$hour AM';
+                return SizedBox(
+                  height: slotHeight,
+                  width: 65,
+                  child: Text(
+                    displayHour, 
+                    style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.blueGrey, fontSize: 13),
+                  ),
+                );
+              }),
+            ),
+            
+            // 2. Right Axis: Interactive Calendar Stack Area
+            Expanded(
+              child: SizedBox(
+                height: totalHours * slotHeight,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final totalWidth = constraints.maxWidth;
+                    
+                    // Sort appointments by start time chronologically
+                    final sortedApps = List.from(dailyFilteredApps)
+                      ..sort((a, b) => a['rawStartTime'].compareTo(b['rawStartTime']));
+
+                    // Distribute overlapping items into columns side-by-side
+                    List<List<Map<String, dynamic>>> columns = [];
+                    for (var app in sortedApps) {
+                      bool placed = false;
+                      for (var column in columns) {
+                        final lastApp = column.last;
+                        final lastStart = lastApp['rawStartTime'] as DateTime;
+                        final lastEnd = lastApp['rawEndTime'] as DateTime? ?? lastStart.add(const Duration(hours: 1));
+                        final appStart = app['rawStartTime'] as DateTime;
+
+                        if (appStart.isAfter(lastEnd) || appStart.isAtSameMomentAs(lastEnd)) {
+                          column.add(app);
+                          placed = true;
+                          break;
                         }
                       }
+                      if (!placed) {
+                        columns.add([app]);
+                      }
+                    }
 
-                      final int totalCols = columns.isEmpty ? 1 : columns.length;
-                      final double itemWidth = totalWidth / totalCols;
+                    final int totalCols = columns.isEmpty ? 1 : columns.length;
+                    final double itemWidth = totalWidth / totalCols;
 
-                      return Stack(
-                        children: [
-                          // Background Grid Separator Lines
-                          ...List.generate(totalHours, (index) {
-                            return Positioned(
-                              top: index * slotHeight,
-                              left: 0,
-                              right: 0,
-                              child: Container(
-                                height: slotHeight,
-                                decoration: BoxDecoration(
-                                  border: Border(top: BorderSide(color: Colors.grey.shade100, width: 1)),
-                                ),
+                    return Stack(
+                      children: [
+                        // Background Grid Separator Lines
+                        ...List.generate(totalHours, (index) {
+                          return Positioned(
+                            top: index * slotHeight,
+                            left: 0,
+                            right: 0,
+                            child: Container(
+                              height: slotHeight,
+                              decoration: BoxDecoration(
+                                border: Border(top: BorderSide(color: Colors.grey.shade100, width: 1)),
                               ),
-                            );
-                          }),
+                            ),
+                          );
+                        }),
 
-                          // Foreground Rendered Spanned Booking Blocks
-                          ...List.generate(columns.length, (colIndex) {
-                            final currentColumnApps = columns[colIndex];
-                            return currentColumnApps.map((app) {
-                              final start = app['rawStartTime'] as DateTime;
-                              final end = app['rawEndTime'] as DateTime? ?? start.add(const Duration(hours: 2)); // Dynamic fallback duration
+                        // Foreground Rendered Spanned Booking Blocks
+                        ...List.generate(columns.length, (colIndex) {
+                          final currentColumnApps = columns[colIndex];
+                          return currentColumnApps.map((app) {
+                            final start = app['rawStartTime'] as DateTime;
+                            final end = app['rawEndTime'] as DateTime? ?? start.add(const Duration(hours: 2));
 
-                              // Compute positions relative to the timeline structure 
-                              final double startMinutes = (start.hour - startHour) * 60.0 + start.minute;
-                              final double endMinutes = (end.hour - startHour) * 60.0 + end.minute;
+                            final double startMinutes = (start.hour - startHour) * 60.0 + start.minute;
+                            final double endMinutes = (end.hour - startHour) * 60.0 + end.minute;
 
-                              final double topPosition = (startMinutes / 60.0) * slotHeight;
-                              final double blockHeight = ((endMinutes - startMinutes) / 60.0) * slotHeight;
-                              
-                              // Visual cosmetics setup
-                              final cardColor = _getPastelColor(app['breed'] ?? '');
+                            final double topPosition = (startMinutes / 60.0) * slotHeight;
+                            final double blockHeight = ((endMinutes - startMinutes) / 60.0) * slotHeight;
+                            
+                            final cardColor = _getPastelColor(app['breed'] ?? '');
 
-                              return Positioned(
-                                top: topPosition,
-                                left: colIndex * itemWidth,
-                                width: itemWidth - 4,
-                                height: blockHeight - 2, 
-                                // 🌟 ADDED: Tooltip widget wraps the item to display full info on hover
-                                child: Tooltip(
-                                  richMessage: TextSpan(
-                                    style: const TextStyle(color: Colors.white, fontSize: 12, height: 1.4),
-                                    children: [
-                                      TextSpan(text: '🐾 Dog: ${app['petName']} (${app['breed']})\n', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                      TextSpan(text: '👤 Owner: ${app['ownerName'] ?? 'Unknown Owner'}\n'),
-                                      TextSpan(text: '📞 Phone: ${app['ownerPhone'] ?? 'No Phone'}\n'),
-                                      TextSpan(text: '✉️ Email: ${app['ownerEmail'] ?? 'No Email'}'),
-                                    ],
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade900.withOpacity(0.95),
-                                    borderRadius: BorderRadius.circular(8),
-                                    boxShadow: [
-                                      BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 6, offset: const Offset(0, 3))
-                                    ],
-                                  ),
-                                  padding: const EdgeInsets.all(12),
-                                  preferBelow: true,
-                                  waitDuration: const Duration(milliseconds: 200), // Quick response on mouse hover
-                                  child: GestureDetector(
-                                    onTap: () => _showUpdateBookingOptionsDialog(app),
-                                    child: Container(
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        color: cardColor.withOpacity(0.25),
-                                        borderRadius: BorderRadius.circular(6),
-                                        border: Border.all(color: cardColor, width: 1.5),
-                                      ),
-                                      // 🌟 CHANGED: SingleChildScrollView prevents the "BOTTOM OVERFLOWED" red screen crash completely
-                                      child: SingleChildScrollView(
-                                        physics: const NeverScrollableScrollPhysics(), // Disables tiny inner scrollbars to keep UI clean
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text(
-                                              '🐾 ${app['petName']} (${app['breed']})',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 12,
-                                                color: cardColor.withRed(30).withGreen(30),
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
+                            return Positioned(
+                              top: topPosition,
+                              left: colIndex * itemWidth,
+                              width: itemWidth - 4,
+                              height: blockHeight - 2, 
+                              // 🌟 Tooltip widget wraps item to display full info on hover
+                              child: Tooltip(
+                                richMessage: TextSpan(
+                                  style: const TextStyle(color: Colors.white, fontSize: 12, height: 1.4),
+                                  children: [
+                                    TextSpan(text: '🐾 Dog: ${app['petName']} (${app['breed']})\n', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    TextSpan(text: '👤 Owner: ${app['ownerName'] ?? 'Unknown Owner'}\n'),
+                                    TextSpan(text: '📞 Phone: ${app['ownerPhone'] ?? 'No Phone'}\n'),
+                                    TextSpan(text: '✉️ Email: ${app['ownerEmail'] ?? 'No Email'}'),
+                                  ],
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade900.withOpacity(0.95),
+                                  borderRadius: BorderRadius.circular(8),
+                                  boxShadow: [
+                                    BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 6, offset: const Offset(0, 3))
+                                  ],
+                                ),
+                                padding: const EdgeInsets.all(12),
+                                preferBelow: true,
+                                waitDuration: const Duration(milliseconds: 200),
+                                child: GestureDetector(
+                                  onTap: () => _showUpdateBookingOptionsDialog(app),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: cardColor.withOpacity(0.25),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: cardColor, width: 1.5),
+                                    ),
+                                    // 🌟 SingleChildScrollView prevents overflow errors on short slots
+                                    child: SingleChildScrollView(
+                                      physics: const NeverScrollableScrollPhysics(),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            '🐾 ${app['petName']} (${app['breed']})',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                              color: cardColor.withRed(30).withGreen(30),
                                             ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              '👤 ${app['ownerName'] ?? 'Unknown Owner'}',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.w600,
-                                                fontSize: 11,
-                                                color: Colors.grey.shade800,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            '👤 ${app['ownerName'] ?? 'Unknown Owner'}',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 11,
+                                              color: Colors.grey.shade800,
                                             ),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              '📞 ${app['ownerPhone'] ?? 'No Phone'}',
-                                              style: TextStyle(
-                                                fontSize: 10,
-                                                color: Colors.grey.shade700,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            '📞 ${app['ownerPhone'] ?? 'No Phone'}',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              color: Colors.grey.shade700,
                                             ),
-                                            Text(
-                                              '✉️ ${app['ownerEmail'] ?? 'No Email'}',
-                                              style: TextStyle(
-                                                fontSize: 10,
-                                                color: Colors.grey.shade600,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          Text(
+                                            '✉️ ${app['ownerEmail'] ?? 'No Email'}',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              color: Colors.grey.shade600,
                                             ),
-                                          ],
-                                        ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ),
                                 ),
-                              );
-                            }).toList();
-                          }).expand((element) => element).toList(),
-                        ],
-                      );
-                    },
-                  ),
+                              ),
+                            );
+                          }).toList();
+                        }).expand((element) => element).toList(),
+                      ],
+                    );
+                  },
                 ),
               ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
 
-  // Helper method to assign distinct theme colors based on the data block
   Color _getPastelColor(String seed) {
     final int hash = seed.hashCode;
     final List<Color> colors = [Colors.green.shade600, Colors.purple.shade400, Colors.orange.shade600, Colors.blue.shade600];
@@ -1652,53 +1525,72 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
   }
 
   Widget _buildWeeklyScheduleGrid(Color col) {
-    final targetDate = _selectedDay ?? DateTime.now();
-    final DateTime mondayOfTargetWeek = targetDate.subtract(Duration(days: targetDate.weekday - 1));
+  final targetDate = _selectedDay ?? DateTime.now();
+  final DateTime mondayOfTargetWeek = targetDate.subtract(Duration(days: targetDate.weekday - 1));
 
-    return Container(
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('One Week Aggregate Density', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-          const SizedBox(height: 16),
-          Row(
-            children: List.generate(7, (index) {
-              final DateTime dayOfRow = mondayOfTargetWeek.add(Duration(days: index));
-              final count = mockAppointments.where((a) => isSameDay(a['rawStartTime'], dayOfRow)).length;
-              final bool isCurrentSelected = isSameDay(_selectedDay, dayOfRow);
+  return Container(
+    decoration: BoxDecoration(
+      color: Colors.white, 
+      borderRadius: BorderRadius.circular(12), 
+      border: Border.all(color: const Color(0xFFE2E8F0)),
+    ),
+    padding: const EdgeInsets.all(16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'One Week Aggregate Density', 
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: List.generate(7, (index) {
+            final DateTime dayOfRow = mondayOfTargetWeek.add(Duration(days: index));
+            final count = mockAppointments.where((a) => isSameDay(a['rawStartTime'], dayOfRow)).length;
+            final bool isCurrentSelected = isSameDay(_selectedDay, dayOfRow);
 
-              return Expanded(
+            return Expanded(
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 2),
+                decoration: BoxDecoration(
+                  color: isCurrentSelected ? col.withAlpha(25) : Colors.blueGrey.shade50, 
+                  border: isCurrentSelected ? Border.all(color: col, width: 1.5) : null,
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
                   onTap: () => setState(() {
                     _selectedDay = dayOfRow;
                     _focusedDay = dayOfRow;
                   }),
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: isCurrentSelected ? col.withAlpha(25) : Colors.blueGrey.shade50, 
-                      border: isCurrentSelected ? Border.all(color: col, width: 1.5) : null,
-                      borderRadius: BorderRadius.circular(8)
-                    ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
                     child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('${dayOfRow.day}/${dayOfRow.month}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 8),
-                        Text('$count Grooms', style: TextStyle(color: col, fontWeight: FontWeight.bold, fontSize: 12)),
+                        Text(
+                          '${dayOfRow.day}/${dayOfRow.month}', 
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '$count Grooms', 
+                          style: TextStyle(color: col, fontWeight: FontWeight.bold, fontSize: 11),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ],
                     ),
                   ),
                 ),
-              );
-            }),
-          )
-        ],
-      ),
-    );
-  }
+              ),
+            );
+          }),
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildStatusBadge(String text, Color mappedColor) {
     return Container(
@@ -1708,31 +1600,64 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     );
   }
 
+  void _confirmActionGuard({
+    required String title,
+    required String body,
+    required VoidCallback onConfirm,
+  }) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        content: Text(body, style: const TextStyle(fontSize: 14)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade800,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              onConfirm();
+            },
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showUpdateBookingOptionsDialog(Map<String, dynamic> app) {
     bool isCheckedIn = app['isCheckedIn'] ?? false;
     bool depositPaid = app['isDepositPaid'] ?? false;
     bool isReadyForPickup = app['isReadyForPickup'] ?? false;
     bool isLoyaltyWaived = app['isLoyaltyWaived'] ?? false;
     String currentStatus = app['status'] ?? 'PENDING';
-    
-    final tagsController = TextEditingController(text: (app['staffTags'] as List).join(', '));
 
-    // 1. Parse the raw DateTime object or fallback safely
-    DateTime updatedBookingDate = app['rawStartTime'] is DateTime 
-        ? app['rawStartTime'] 
+    final tagsController = TextEditingController(
+      text: (app['staffTags'] as List? ?? []).join(', '),
+    );
+
+    // 1. Parse raw DateTime or safely fallback
+    DateTime updatedBookingDate = app['rawStartTime'] is DateTime
+        ? app['rawStartTime']
         : (DateTime.tryParse(app['rawStartTime']?.toString() ?? '') ?? DateTime.now());
 
-    // 2. Format to 24-hour style (e.g., "14:30") as requested
-    String updatedBookingTimeSlot = "${updatedBookingDate.hour.toString().padLeft(2, '0')}:${updatedBookingDate.minute.toString().padLeft(2, '0')}";
+    // 2. Format initial slot string as 24h ("14:30")
+    String updatedBookingTimeSlot =
+        "${updatedBookingDate.hour.toString().padLeft(2, '0')}:${updatedBookingDate.minute.toString().padLeft(2, '0')}";
 
-    // 3. Initialize the options array with our initial 24h slot string
     List<String> operationalHoursTimeOptions = [updatedBookingTimeSlot];
 
     bool isLoadingSlots = false;
     bool isDayClosed = false;
     bool hasInitialFetched = false;
 
-    // 4. Dedicated dynamic slot fetch function to pull from backend immediately on launch
+    // 3. Dynamic backend slot fetcher
     Future<void> loadInitialSlots(StateSetter setModalState) async {
       if (hasInitialFetched) return;
       hasInitialFetched = true;
@@ -1746,13 +1671,13 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
         final String formattedDate = "${updatedBookingDate.year}-"
             "${updatedBookingDate.month.toString().padLeft(2, '0')}-"
             "${updatedBookingDate.day.toString().padLeft(2, '0')}";
-        
+
         final int durationMinutes = app['durationMinutes'] ?? 60;
         final String targetUrl = '$_baseUrl/api/v1/bookings/available-slots'
             '?merchantId=${widget.config.merchantId}'
             '&date=$formattedDate'
             '&duration=$durationMinutes';
-        
+
         final response = await http.get(
           Uri.parse(targetUrl),
           headers: {'Content-Type': 'application/json'},
@@ -1767,10 +1692,9 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
               isLoadingSlots = false;
               if (backendSlots.isNotEmpty) {
                 isDayClosed = false;
-                // Map pure backend 24h strings
-                operationalHoursTimeOptions = backendSlots.map<String>((slot) => slot.toString()).toList();
+                operationalHoursTimeOptions =
+                    backendSlots.map<String>((slot) => slot.toString()).toList();
 
-                // Keep original slot selected if it's still available, otherwise auto-select the first one
                 if (!operationalHoursTimeOptions.contains(updatedBookingTimeSlot)) {
                   updatedBookingTimeSlot = operationalHoursTimeOptions.first;
                 }
@@ -1790,540 +1714,859 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) {
+      builder: (context) {
+        final screenWidth = MediaQuery.of(context).size.width;
+        final isCompact = screenWidth < 600;
 
-          // Add this line here to trigger the backend request on opening!
-          if (!hasInitialFetched) {
-            Future.delayed(Duration.zero, () => loadInitialSlots(setModalState));
-          }
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            if (!hasInitialFetched) {
+              Future.delayed(Duration.zero, () => loadInitialSlots(setModalState));
+            }
 
-          return AlertDialog(
-            title: Row(
-              children: [
-                const Icon(Icons.edit_calendar, color: Colors.indigo),
-                const SizedBox(width: 8),
-                Text('Manage Booking: Dog Name: ${app['petName']} (Breed: ${app['breed']})', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-              ],
-            ),
-            content: SizedBox(
-              width: 500,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Owner Account: ${app['ownerName']} (${app['ownerPhone']})', style: const TextStyle(color: Colors.grey, fontSize: 13)),
-                    const SizedBox(height: 4),
-                    // ==========================================
-                    // ADDED: SERVICE NAME AND DURATION VISUAL LAYER
-                    // ==========================================
-                    Row(
-                      children: [
-                        Icon(Icons.layers_outlined, size: 14, color: Colors.grey.shade600),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Service: ${app['service'] ?? 'General'} [${app['time']}]',
-                          style: TextStyle(color: Colors.grey.shade700, fontSize: 13, fontWeight: FontWeight.w500),
-                        ),
-                      ],
+            return AlertDialog(
+              insetPadding: const EdgeInsets.all(16),
+              title: Row(
+                children: [
+                  const Icon(Icons.edit_calendar, color: Colors.indigo),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Manage Booking: Dog Name: ${app['petName']} (Breed: ${app['breed']})',
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    
-                    const Divider(height: 24),
-                    
-                    const Text(
-                      'Reschedule Date & Time Layout', 
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569)),
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        // ==========================================
-                        // 1. DATE PICKER BUTTON BLOCK
-                        // ==========================================
-                        Expanded(
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.calendar_today, size: 14),
-                          label: Text('${updatedBookingDate.day}/${updatedBookingDate.month}/${updatedBookingDate.year}'),
-                          onPressed: () async {
-                            final pickedDate = await showDatePicker(
-                              context: context,
-                              initialDate: updatedBookingDate,
-                              firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                              lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
-                            );
-                            
-                            if (pickedDate != null) {
-                              // Turn on loader and set date
-                              setModalState(() {
-                                updatedBookingDate = pickedDate;
-                                isLoadingSlots = true;
-                                isDayClosed = false;
-                              });
-
-                              try {
-                                // Format date to YYYY-MM-DD for backend
-                                final String formattedDate = "${pickedDate.year}-"
-                                    "${pickedDate.month.toString().padLeft(2, '0')}-"
-                                    "${pickedDate.day.toString().padLeft(2, '0')}";
-                                
-                                final int durationMinutes = app['durationMinutes'] ?? 60;
-                                final String targetUrl = '$_baseUrl/api/v1/bookings/available-slots'
-                                    '?merchantId=${widget.config.merchantId}'
-                                    '&date=$formattedDate'
-                                    '&duration=$durationMinutes';
-                                
-                                final response = await http.get(
-                                  Uri.parse(targetUrl),
-                                  headers: {'Content-Type': 'application/json'},
-                                );
-
-                                if (response.statusCode == 200) {
-                                  final Map<String, dynamic> parsedBody = json.decode(response.body);
-                                  if (parsedBody['success'] == true && parsedBody['data'] is List) {
-                                    final List<dynamic> backendSlots = parsedBody['data'];
-
-                                    setModalState(() {
-                                      isLoadingSlots = false;
-                                      if (backendSlots.isNotEmpty) {
-                                        isDayClosed = false;
-                                        
-                                        // Keep options strictly as 24-hour strings (e.g., "14:30") to match your state logic
-                                        operationalHoursTimeOptions = backendSlots.map<String>((slot) => slot.toString()).toList();
-
-                                        // Update value safely if available
-                                        if (operationalHoursTimeOptions.isNotEmpty) {
-                                          updatedBookingTimeSlot = operationalHoursTimeOptions.first;
-                                        }
-                                      } else {
-                                        isDayClosed = true;
-                                        operationalHoursTimeOptions = [];
-                                      }
-                                    });
-                                  } else {
-                                    setModalState(() => isLoadingSlots = false);
-                                  }
-                                } else {
-                                  setModalState(() => isLoadingSlots = false);
-                                }
-                              } catch (e) {
-                                setModalState(() => isLoadingSlots = false);
-                              }
-                            }
-                          },
-                        ),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: isCompact ? screenWidth : 520,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Owner Account: ${app['ownerName']} (${app['ownerPhone']})',
+                        style: const TextStyle(color: Colors.grey, fontSize: 13),
                       ),
-                      const SizedBox(width: 8),
-
-                      // ==========================================
-                      // 2. DYNAMIC TIME SLOTS DROPDOWN BLOCK
-                      // ==========================================
-                      Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: isDayClosed ? Colors.red.shade300 : Colors.grey.shade300), 
-                            borderRadius: BorderRadius.circular(4),
-                            color: isDayClosed ? Colors.red.shade50 : (isLoadingSlots ? Colors.grey.shade100 : Colors.white),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(Icons.layers_outlined, size: 14, color: Colors.grey.shade600),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              'Service: ${app['service'] ?? 'General'} [${app['time']}]',
+                              style: TextStyle(
+                                  color: Colors.grey.shade700,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                          child: DropdownButtonHideUnderline(
-                            child: isDayClosed 
-                                ? const Padding(
-                                    padding: EdgeInsets.symmetric(vertical: 12.0),
-                                    child: Text(
-                                      'SHOP CLOSED', 
-                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.redAccent),
-                                    ),
-                                  )
-                                : (isLoadingSlots
-                                    ? const SizedBox(
-                                        height: 20, 
-                                        width: 20, 
-                                        child: Center(
-                                          child: SizedBox(
-                                            height: 16,
-                                            width: 16,
-                                            child: CircularProgressIndicator(strokeWidth: 2),
-                                          ),
-                                        ),
-                                      )
-                                    : DropdownButton<String>(
-                                        isExpanded: true,
-                                        hint: const Text('No slots', style: TextStyle(fontSize: 12, color: Colors.redAccent)),
-                                        // Prevents crash by safely checking constraints against the exact 24h keys
-                                        value: operationalHoursTimeOptions.contains(updatedBookingTimeSlot) ? updatedBookingTimeSlot : null,
-                                        items: operationalHoursTimeOptions.map((raw24hTime) {
-                                          // Convert 24h string ("14:30") to readable UI layout string ("02:30 PM") inline here
-                                          String displayTime = raw24hTime;
-                                          try {
-                                            final parts = raw24hTime.split(':');
-                                            final int hour = int.parse(parts[0]);
-                                            final String minute = parts[1];
-                                            
-                                            final int displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
-                                            final String amPm = hour >= 12 ? 'PM' : 'AM';
-                                            final String paddedHour = displayHour.toString().padLeft(2, '0');
-                                            
-                                            displayTime = '$paddedHour:$minute $amPm';
-                                          } catch (_) {}
+                        ],
+                      ),
+                      const Divider(height: 24),
+                      const Text(
+                        'Reschedule Date & Time Layout',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569)),
+                      ),
+                      const SizedBox(height: 6),
 
-                                          return DropdownMenuItem<String>(
-                                            value: raw24hTime, 
-                                            child: Text('Time: $displayTime'),
+                      // Responsive Row / Column layout for Date and Time pickers
+                      isCompact
+                          ? Column(
+                              children: [
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: OutlinedButton.icon(
+                                    icon: const Icon(Icons.calendar_today, size: 14),
+                                    label: Text(
+                                        '${updatedBookingDate.day}/${updatedBookingDate.month}/${updatedBookingDate.year}'),
+                                    onPressed: () async {
+                                      final pickedDate = await showDatePicker(
+                                        context: context,
+                                        initialDate: updatedBookingDate,
+                                        firstDate:
+                                            DateTime.now().subtract(const Duration(days: 365)),
+                                        lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                                      );
+
+                                      if (pickedDate != null) {
+                                        setModalState(() {
+                                          updatedBookingDate = pickedDate;
+                                          isLoadingSlots = true;
+                                          isDayClosed = false;
+                                        });
+
+                                        try {
+                                          final String formattedDate = "${pickedDate.year}-"
+                                              "${pickedDate.month.toString().padLeft(2, '0')}-"
+                                              "${pickedDate.day.toString().padLeft(2, '0')}";
+
+                                          final int durationMinutes = app['durationMinutes'] ?? 60;
+                                          final String targetUrl =
+                                              '$_baseUrl/api/v1/bookings/available-slots'
+                                              '?merchantId=${widget.config.merchantId}'
+                                              '&date=$formattedDate'
+                                              '&duration=$durationMinutes';
+
+                                          final response = await http.get(
+                                            Uri.parse(targetUrl),
+                                            headers: {'Content-Type': 'application/json'},
                                           );
-                                        }).toList(),
-                                        onChanged: (val) {
-                                          if (val != null) {
-                                            setModalState(() => updatedBookingTimeSlot = val);
+
+                                          if (response.statusCode == 200) {
+                                            final Map<String, dynamic> parsedBody =
+                                                json.decode(response.body);
+                                            if (parsedBody['success'] == true &&
+                                                parsedBody['data'] is List) {
+                                              final List<dynamic> backendSlots = parsedBody['data'];
+
+                                              setModalState(() {
+                                                isLoadingSlots = false;
+                                                if (backendSlots.isNotEmpty) {
+                                                  isDayClosed = false;
+                                                  operationalHoursTimeOptions = backendSlots
+                                                      .map<String>((slot) => slot.toString())
+                                                      .toList();
+
+                                                  if (operationalHoursTimeOptions.isNotEmpty) {
+                                                    updatedBookingTimeSlot =
+                                                        operationalHoursTimeOptions.first;
+                                                  }
+                                                } else {
+                                                  isDayClosed = true;
+                                                  operationalHoursTimeOptions = [];
+                                                }
+                                              });
+                                            } else {
+                                              setModalState(() => isLoadingSlots = false);
+                                            }
+                                          } else {
+                                            setModalState(() => isLoadingSlots = false);
                                           }
-                                        },
-                                      )),
+                                        } catch (e) {
+                                          setModalState(() => isLoadingSlots = false);
+                                        }
+                                      }
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(
+                                        color: isDayClosed
+                                            ? Colors.red.shade300
+                                            : Colors.grey.shade300),
+                                    borderRadius: BorderRadius.circular(4),
+                                    color: isDayClosed
+                                        ? Colors.red.shade50
+                                        : (isLoadingSlots ? Colors.grey.shade100 : Colors.white),
+                                  ),
+                                  child: DropdownButtonHideUnderline(
+                                    child: isDayClosed
+                                        ? const Padding(
+                                            padding: EdgeInsets.symmetric(vertical: 12.0),
+                                            child: Text(
+                                              'SHOP CLOSED',
+                                              style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.redAccent),
+                                            ),
+                                          )
+                                        : (isLoadingSlots
+                                            ? const SizedBox(
+                                                height: 20,
+                                                width: 20,
+                                                child: Center(
+                                                  child: SizedBox(
+                                                    height: 16,
+                                                    width: 16,
+                                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                                  ),
+                                                ),
+                                              )
+                                            : DropdownButton<String>(
+                                                isExpanded: true,
+                                                hint: const Text('No slots',
+                                                    style: TextStyle(
+                                                        fontSize: 12, color: Colors.redAccent)),
+                                                value: operationalHoursTimeOptions
+                                                        .contains(updatedBookingTimeSlot)
+                                                    ? updatedBookingTimeSlot
+                                                    : null,
+                                                items: operationalHoursTimeOptions.map((raw24hTime) {
+                                                  String displayTime = raw24hTime;
+                                                  try {
+                                                    final parts = raw24hTime.split(':');
+                                                    final int hour = int.parse(parts[0]);
+                                                    final String minute = parts[1];
+
+                                                    final int displayHour = hour > 12
+                                                        ? hour - 12
+                                                        : (hour == 0 ? 12 : hour);
+                                                    final String amPm = hour >= 12 ? 'PM' : 'AM';
+                                                    final String paddedHour =
+                                                        displayHour.toString().padLeft(2, '0');
+
+                                                    displayTime = '$paddedHour:$minute $amPm';
+                                                  } catch (_) {}
+
+                                                  return DropdownMenuItem<String>(
+                                                    value: raw24hTime,
+                                                    child: Text('Time: $displayTime'),
+                                                  );
+                                                }).toList(),
+                                                onChanged: (val) {
+                                                  if (val != null) {
+                                                    setModalState(
+                                                        () => updatedBookingTimeSlot = val);
+                                                  }
+                                                },
+                                              )),
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    icon: const Icon(Icons.calendar_today, size: 14),
+                                    label: Text(
+                                        '${updatedBookingDate.day}/${updatedBookingDate.month}/${updatedBookingDate.year}'),
+                                    onPressed: () async {
+                                      final pickedDate = await showDatePicker(
+                                        context: context,
+                                        initialDate: updatedBookingDate,
+                                        firstDate:
+                                            DateTime.now().subtract(const Duration(days: 365)),
+                                        lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                                      );
+
+                                      if (pickedDate != null) {
+                                        setModalState(() {
+                                          updatedBookingDate = pickedDate;
+                                          isLoadingSlots = true;
+                                          isDayClosed = false;
+                                        });
+
+                                        try {
+                                          final String formattedDate = "${pickedDate.year}-"
+                                              "${pickedDate.month.toString().padLeft(2, '0')}-"
+                                              "${pickedDate.day.toString().padLeft(2, '0')}";
+
+                                          final int durationMinutes = app['durationMinutes'] ?? 60;
+                                          final String targetUrl =
+                                              '$_baseUrl/api/v1/bookings/available-slots'
+                                              '?merchantId=${widget.config.merchantId}'
+                                              '&date=$formattedDate'
+                                              '&duration=$durationMinutes';
+
+                                          final response = await http.get(
+                                            Uri.parse(targetUrl),
+                                            headers: {'Content-Type': 'application/json'},
+                                          );
+
+                                          if (response.statusCode == 200) {
+                                            final Map<String, dynamic> parsedBody =
+                                                json.decode(response.body);
+                                            if (parsedBody['success'] == true &&
+                                                parsedBody['data'] is List) {
+                                              final List<dynamic> backendSlots = parsedBody['data'];
+
+                                              setModalState(() {
+                                                isLoadingSlots = false;
+                                                if (backendSlots.isNotEmpty) {
+                                                  isDayClosed = false;
+                                                  operationalHoursTimeOptions = backendSlots
+                                                      .map<String>((slot) => slot.toString())
+                                                      .toList();
+
+                                                  if (operationalHoursTimeOptions.isNotEmpty) {
+                                                    updatedBookingTimeSlot =
+                                                        operationalHoursTimeOptions.first;
+                                                  }
+                                                } else {
+                                                  isDayClosed = true;
+                                                  operationalHoursTimeOptions = [];
+                                                }
+                                              });
+                                            } else {
+                                              setModalState(() => isLoadingSlots = false);
+                                            }
+                                          } else {
+                                            setModalState(() => isLoadingSlots = false);
+                                          }
+                                        } catch (e) {
+                                          setModalState(() => isLoadingSlots = false);
+                                        }
+                                      }
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(
+                                          color: isDayClosed
+                                              ? Colors.red.shade300
+                                              : Colors.grey.shade300),
+                                      borderRadius: BorderRadius.circular(4),
+                                      color: isDayClosed
+                                          ? Colors.red.shade50
+                                          : (isLoadingSlots ? Colors.grey.shade100 : Colors.white),
+                                    ),
+                                    child: DropdownButtonHideUnderline(
+                                      child: isDayClosed
+                                          ? const Padding(
+                                              padding: EdgeInsets.symmetric(vertical: 12.0),
+                                              child: Text(
+                                                'SHOP CLOSED',
+                                                style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.redAccent),
+                                              ),
+                                            )
+                                          : (isLoadingSlots
+                                              ? const SizedBox(
+                                                  height: 20,
+                                                  width: 20,
+                                                  child: Center(
+                                                    child: SizedBox(
+                                                      height: 16,
+                                                      width: 16,
+                                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                                    ),
+                                                  ),
+                                                )
+                                              : DropdownButton<String>(
+                                                  isExpanded: true,
+                                                  hint: const Text('No slots',
+                                                      style: TextStyle(
+                                                          fontSize: 12, color: Colors.redAccent)),
+                                                  value: operationalHoursTimeOptions
+                                                          .contains(updatedBookingTimeSlot)
+                                                      ? updatedBookingTimeSlot
+                                                      : null,
+                                                  items:
+                                                      operationalHoursTimeOptions.map((raw24hTime) {
+                                                    String displayTime = raw24hTime;
+                                                    try {
+                                                      final parts = raw24hTime.split(':');
+                                                      final int hour = int.parse(parts[0]);
+                                                      final String minute = parts[1];
+
+                                                      final int displayHour = hour > 12
+                                                          ? hour - 12
+                                                          : (hour == 0 ? 12 : hour);
+                                                      final String amPm =
+                                                          hour >= 12 ? 'PM' : 'AM';
+                                                      final String paddedHour =
+                                                          displayHour.toString().padLeft(2, '0');
+
+                                                      displayTime = '$paddedHour:$minute $amPm';
+                                                    } catch (_) {}
+
+                                                    return DropdownMenuItem<String>(
+                                                      value: raw24hTime,
+                                                      child: Text('Time: $displayTime'),
+                                                    );
+                                                  }).toList(),
+                                                  onChanged: (val) {
+                                                    if (val != null) {
+                                                      setModalState(
+                                                          () => updatedBookingTimeSlot = val);
+                                                    }
+                                                  },
+                                                )),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                      const Divider(height: 24),
+
+                      const Text('Administrative Pipeline Status',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      DropdownButton<String>(
+                        value: currentStatus,
+                        isExpanded: true,
+                        items: const [
+                          DropdownMenuItem(value: 'PENDING', child: Text('PENDING')),
+                          DropdownMenuItem(value: 'PAID', child: Text('PAID')),
+                          DropdownMenuItem(value: 'COMPLETED', child: Text('COMPLETED')),
+                          DropdownMenuItem(value: 'CANCELLED', child: Text('CANCELLED')),
+                        ],
+                        onChanged: (val) => setModalState(() => currentStatus = val!),
+                      ),
+                      const SizedBox(height: 12),
+
+                      SwitchListTile(
+                        title: const Text('Client Checked In', style: TextStyle(fontSize: 13)),
+                        value: isCheckedIn,
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        onChanged: (v) => setModalState(() => isCheckedIn = v),
+                      ),
+                      SwitchListTile(
+                        title: const Text('Deposit Paid Status', style: TextStyle(fontSize: 13)),
+                        value: depositPaid,
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        onChanged: (v) => setModalState(() => depositPaid = v),
+                      ),
+                      SwitchListTile(
+                        title: const Text('Pet Ready For Pickup', style: TextStyle(fontSize: 13)),
+                        value: isReadyForPickup,
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        onChanged: (v) => setModalState(() => isReadyForPickup = v),
+                      ),
+                      SwitchListTile(
+                        title: const Text('Waive Fee (Free Loyalty Reward Groom)',
+                            style: TextStyle(fontSize: 13)),
+                        value: isLoyaltyWaived,
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        onChanged: (v) => setModalState(() => isLoyaltyWaived = v),
+                      ),
+                      const SizedBox(height: 12),
+
+                      TextField(
+                        controller: tagsController,
+                        decoration: const InputDecoration(
+                          labelText: 'Internal Staff/Admin Tags (comma separated)',
+                          border: OutlineInputBorder(),
+                          hintText: 'Aggressive, HighAnxiety, SpecialCare',
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Center(
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red.shade800,
+                            foregroundColor: Colors.white,
                           ),
-                        ),
-                      ),
-                      ],
-                    ),
-                    const Divider(height: 24),
-
-                    const Text('Administrative Pipeline Status', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                    DropdownButton<String>(
-                      value: currentStatus,
-                      isExpanded: true,
-                      items: const [
-                        DropdownMenuItem(value: 'PENDING', child: Text('PENDING')),
-                        DropdownMenuItem(value: 'PAID', child: Text('PAID')),
-                        DropdownMenuItem(value: 'COMPLETED', child: Text('COMPLETED')),
-                        DropdownMenuItem(value: 'CANCELLED', child: Text('CANCELLED')),
-                      ],
-                      onChanged: (val) => setModalState(() => currentStatus = val!),
-                    ),
-                    const SizedBox(height: 12),
-
-                    SwitchListTile(
-                      title: const Text('Client Checked In', style: TextStyle(fontSize: 13)),
-                      value: isCheckedIn,
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      onChanged: (v) => setModalState(() => isCheckedIn = v),
-                    ),
-                    SwitchListTile(
-                      title: const Text('Deposit Paid Status', style: TextStyle(fontSize: 13)),
-                      value: depositPaid,
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      onChanged: (v) => setModalState(() => depositPaid = v),
-                    ),
-                    SwitchListTile(
-                      title: const Text('Pet Ready For Pickup', style: TextStyle(fontSize: 13)),
-                      value: isReadyForPickup,
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      onChanged: (v) => setModalState(() => isReadyForPickup = v),
-                    ),
-                    SwitchListTile(
-                      title: const Text('Waive Fee (Free Loyalty Reward Groom)', style: TextStyle(fontSize: 13)),
-                      value: isLoyaltyWaived,
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      onChanged: (v) => setModalState(() => isLoyaltyWaived = v),
-                    ),
-                    const SizedBox(height: 12),
-
-                    TextField(
-                      controller: tagsController,
-                      decoration: const InputDecoration(
-                        labelText: 'Internal Staff/Admin Tags (comma separated)',
-                        border: OutlineInputBorder(),
-                        hintText: 'Aggressive, HighAnxiety, SpecialCare',
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Center(
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red.shade800, 
-                          foregroundColor: Colors.white,
-                        ),
-                        onPressed: () async {
-                          Navigator.pop(context);
-                          _confirmActionGuard(
-                            title: 'Purge Operational Record',
-                            body: 'This operation will delete booking identifier ${app['id']} permanently from the production cluster.',
-                            onConfirm: () async {
-                              try {
-                                await http.delete(
-                                  Uri.parse('$_baseUrl/api/v1/bookings/delete/${app['id']}'),
-                                  headers: {'Authorization': 'Bearer ${widget.authToken}'},
-                                );
-                                _showSnackBar('🚀 Purge schema sync completed.');
-                                _fetchDashboardAppointments();
-                              } catch (e) {
-                                setState(() {
-                                  mockAppointments.removeWhere((item) => item['id'] == app['id']);
+                          onPressed: () async {
+                            Navigator.pop(context);
+                            _confirmActionGuard(
+                                title: 'Purge Operational Record',
+                                body:
+                                    'This operation will delete booking identifier ${app['id']} permanently from the production cluster.',
+                                onConfirm: () async {
+                                  try {
+                                    await http.delete(
+                                      Uri.parse('$_baseUrl/api/v1/bookings/delete/${app['id']}'),
+                                      headers: {'Authorization': 'Bearer ${widget.authToken}'},
+                                    );
+                                    _showSnackBar('🚀 Purge schema sync completed.');
+                                    _fetchDashboardAppointments();
+                                  } catch (e) {
+                                    setState(() {
+                                      mockAppointments
+                                          .removeWhere((item) => item['id'] == app['id']);
+                                    });
+                                    _showSnackBar('Removed local record object safely.');
+                                  }
                                 });
-                                _showSnackBar('Removed local record object safely.');
-                              }
-                            }
-                          );
-                        },
-                        child: const Text('Delete Permanently'),
-                      ),
-                    )
-                  ],
+                          },
+                          child: const Text('Delete Permanently'),
+                        ),
+                      )
+                    ],
+                  ),
                 ),
               ),
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Discard')),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F172A), foregroundColor: Colors.white),
-                onPressed: () async {
-                  final parsedTags = tagsController.text
-                      .split(',')
-                      .map((t) => t.trim())
-                      .where((t) => t.isNotEmpty)
-                      .toList();
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    tagsController.dispose();
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Discard'),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0F172A),
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () async {
+                    final parsedTags = tagsController.text
+                        .split(',')
+                        .map((t) => t.trim())
+                        .where((t) => t.isNotEmpty)
+                        .toList();
 
-                  final timeParts = updatedBookingTimeSlot.split(':');
-                  final hour = int.parse(timeParts[0]);
-                  final minute = int.parse(timeParts[1]);
+                    final timeParts = updatedBookingTimeSlot.split(':');
+                    final hour = int.parse(timeParts[0]);
+                    final minute = int.parse(timeParts[1]);
 
-                  final targetFullDateTime = DateTime(
-                    updatedBookingDate.year,
-                    updatedBookingDate.month,
-                    updatedBookingDate.day,
-                    hour,
-                    minute
-                  );
-
-                  final updatePayload = {
-                    'status': currentStatus,
-                    'startTime': targetFullDateTime.toIso8601String(),
-                    'isCheckedIn': isCheckedIn,
-                    'depositPaid': depositPaid,
-                    'isReadyToPickup': isReadyForPickup,
-                    'isLoyaltyWaived': isLoyaltyWaived,
-                    'internalTags': parsedTags,
-                  };
-
-                  int serverVerifiedDuration = app['durationMinutes'] ?? 60;
-
-                  try {
-                    final response = await http.put(
-                      Uri.parse('$_baseUrl/api/v1/bookings/update/${app['id']}'),
-                      headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Bearer ${widget.authToken}',
-                      },
-                      body: jsonEncode(updatePayload),
+                    final targetFullDateTime = DateTime(
+                      updatedBookingDate.year,
+                      updatedBookingDate.month,
+                      updatedBookingDate.day,
+                      hour,
+                      minute,
                     );
 
-                    if (response.statusCode == 200) {
-                      final Map<String, dynamic> responseData = jsonDecode(response.body);
-                      if (responseData['success'] == true && responseData['data'] != null) {
-                        final appointmentSnapshot = responseData['data'];
-                        if (appointmentSnapshot['durationMinutes'] != null) {
-                          serverVerifiedDuration = appointmentSnapshot['durationMinutes'] as int;
+                    final updatePayload = {
+                      'status': currentStatus,
+                      'startTime': targetFullDateTime.toIso8601String(),
+                      'isCheckedIn': isCheckedIn,
+                      'depositPaid': depositPaid,
+                      'isReadyToPickup': isReadyForPickup,
+                      'isLoyaltyWaived': isLoyaltyWaived,
+                      'internalTags': parsedTags,
+                    };
+
+                    int serverVerifiedDuration = app['durationMinutes'] ?? 60;
+
+                    try {
+                      final response = await http.put(
+                        Uri.parse('$_baseUrl/api/v1/bookings/update/${app['id']}'),
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': 'Bearer ${widget.authToken}',
+                        },
+                        body: jsonEncode(updatePayload),
+                      );
+
+                      if (response.statusCode == 200) {
+                        final Map<String, dynamic> responseData = jsonDecode(response.body);
+                        if (responseData['success'] == true && responseData['data'] != null) {
+                          final appointmentSnapshot = responseData['data'];
+                          if (appointmentSnapshot['durationMinutes'] != null) {
+                            serverVerifiedDuration =
+                                appointmentSnapshot['durationMinutes'] as int;
+                          }
                         }
+                        _showSnackBar('🚀 Cloud database schema updated safely.');
+                      } else {
+                        _showSnackBar('⚠️ Live sync rejected; falling back to local simulation.');
                       }
-                      _showSnackBar('🚀 Cloud database schema updated safely.');
-                    } else {
-                      _showSnackBar('⚠️ Live sync rejected; falling back to local simulation.');
+                    } catch (e) {
+                      _showSnackBar('🔄 Connection error; processing local simulation safely.');
                     }
-                  } catch (e) {
-                    _showSnackBar('🔄 Connection error; processing local simulation safely.');
-                  }
 
-                  setState(() {
-                    final targetIdx = mockAppointments.indexWhere((element) => element['id'] == app['id']);
-                    if (targetIdx != -1) {
-                      mockAppointments[targetIdx]['isCheckedIn'] = isCheckedIn;
-                      mockAppointments[targetIdx]['isDepositPaid'] = depositPaid;
-                      mockAppointments[targetIdx]['isReadyForPickup'] = isReadyForPickup;
-                      mockAppointments[targetIdx]['isLoyaltyWaived'] = isLoyaltyWaived;
-                      mockAppointments[targetIdx]['status'] = currentStatus;
-                      mockAppointments[targetIdx]['staffTags'] = parsedTags;
-                      mockAppointments[targetIdx]['rawStartTime'] = targetFullDateTime;
-                      mockAppointments[targetIdx]['durationMinutes'] = serverVerifiedDuration;
-                      
-                      final rangeEnd = targetFullDateTime.add(Duration(minutes: serverVerifiedDuration));
-                      mockAppointments[targetIdx]['rawEndTime'] = rangeEnd; 
-                      
-                      mockAppointments[targetIdx]['time'] = 
-                          "${targetFullDateTime.hour.toString().padLeft(2, '0')}:${targetFullDateTime.minute.toString().padLeft(2, '0')} - ${rangeEnd.hour.toString().padLeft(2, '0')}:${rangeEnd.minute.toString().padLeft(2, '0')}";
-                    }
-                  });
+                    setState(() {
+                      final targetIdx =
+                          mockAppointments.indexWhere((element) => element['id'] == app['id']);
+                      if (targetIdx != -1) {
+                        mockAppointments[targetIdx]['isCheckedIn'] = isCheckedIn;
+                        mockAppointments[targetIdx]['isDepositPaid'] = depositPaid;
+                        mockAppointments[targetIdx]['isReadyForPickup'] = isReadyForPickup;
+                        mockAppointments[targetIdx]['isLoyaltyWaived'] = isLoyaltyWaived;
+                        mockAppointments[targetIdx]['status'] = currentStatus;
+                        mockAppointments[targetIdx]['staffTags'] = parsedTags;
+                        mockAppointments[targetIdx]['rawStartTime'] = targetFullDateTime;
+                        mockAppointments[targetIdx]['durationMinutes'] = serverVerifiedDuration;
 
-                  Navigator.pop(context);
-                },
-                child: const Text('Commit Changes'),
-              )
-            ],
-          );
-        },
-      ),
+                        final rangeEnd = targetFullDateTime
+                            .add(Duration(minutes: serverVerifiedDuration));
+                        mockAppointments[targetIdx]['rawEndTime'] = rangeEnd;
+
+                        mockAppointments[targetIdx]['time'] =
+                            "${targetFullDateTime.hour.toString().padLeft(2, '0')}:${targetFullDateTime.minute.toString().padLeft(2, '0')} - ${rangeEnd.hour.toString().padLeft(2, '0')}:${rangeEnd.minute.toString().padLeft(2, '0')}";
+                      }
+                    });
+
+                    tagsController.dispose();
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Commit Changes'),
+                )
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
-  void _showAddServiceMatrixDialog() {
-    final nameCtrl = TextEditingController();
-    final priceCtrl = TextEditingController();
-    final depositCtrl = TextEditingController();
+  void _showAddServiceMatrixDialog(BuildContext context) {
+    final nameController = TextEditingController();
+    final priceController = TextEditingController();
+    final depositController = TextEditingController();
+
     String selectedCoat = 'SHORT';
-    String selectedSize = 'M';
+    String selectedWeight = 'M';
     int selectedDuration = 45;
-    final List<String> coatOptions = ['SHORT', 'LONG_CURLY', 'DOUBLE_A', 'DOUBLE_B'];
-    final List<String> sizeOptions = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
+
     final List<int> durationOptions = [15, 30, 45, 60, 75, 90, 105, 120];
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) {
-          return AlertDialog(
-            title: const Row(
-              children: [
-                Icon(Icons.add_business_outlined, color: Color(0xFF0F172A)),
-                SizedBox(width: 10),
-                Text('Provision Pricing Matrix Tier', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              ],
-            ),
-            content: SizedBox(
-              width: 500,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    TextField(
-                      controller: nameCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Service Matrix Name Line Label Identifier',
-                        border: OutlineInputBorder(),
+      barrierColor: Colors.black.withOpacity(0.4),
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            final isWebMobile = MediaQuery.of(context).size.width < 600;
+
+            return Dialog(
+              backgroundColor: const Color(0xFFEFEBF2),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+              ),
+              insetPadding: EdgeInsets.symmetric(
+                horizontal: isWebMobile ? 16 : 40,
+                vertical: 24,
+              ),
+              child: Container(
+                width: isWebMobile ? double.infinity : 520,
+                padding: const EdgeInsets.all(28.0),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: const [
+                          Icon(Icons.store_outlined, size: 28, color: Color(0xFF1E293B)),
+                          SizedBox(width: 12),
+                          Text(
+                            'Provision Pricing Matrix Tier',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Target Coat Attribute Configuration Variant Matrix Layer',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
-                    DropdownButton<String>(
-                      value: selectedCoat,
-                      isExpanded: true,
-                      items: coatOptions
-                          .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                          .toList(),
-                      onChanged: (v) => setModalState(() => selectedCoat = v!),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Target Weight Profile Tier Matrix Layer Filter Option Type Descriptor',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
-                    DropdownButton<String>(
-                      value: selectedSize,
-                      isExpanded: true,
-                      items: sizeOptions
-                          .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                          .toList(),
-                      onChanged: (v) => setModalState(() => selectedSize = v!),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Allocated Operational Handling Execution Window Span Duration Minutes',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
-                    Wrap(
-                      spacing: 6,
-                      children: durationOptions.map((d) {
-                        return ChoiceChip(
-                          label: Text('$d min'),
-                          selected: selectedDuration == d,
-                          onSelected: (bool selected) {
-                            if (selected) {
-                              setModalState(() => selectedDuration = d);
-                            }
-                          },
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 20),
-                    TextField(
-                      controller: priceCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(
-                        labelText: 'Price Target Rate (\$ AUD)',
-                        prefixText: '\$ ',
-                        border: OutlineInputBorder(),
+                      const SizedBox(height: 20),
+
+                      TextField(
+                        controller: nameController,
+                        decoration: InputDecoration(
+                          hintText: 'Service Matrix Name Line Label Identifier',
+                          hintStyle: TextStyle(color: Colors.grey.shade600, fontSize: 15),
+                          filled: true,
+                          fillColor: const Color(0xFFE8E3EE),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey.shade400),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey.shade400),
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: depositCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
-                      ],
-                      decoration: const InputDecoration(
-                        labelText: 'Deposit Amount (\$ AUD)',
-                        prefixText: '\$ ',
-                        border: OutlineInputBorder(),
+                      const SizedBox(height: 20),
+
+                      const Text(
+                        'Target Coat Attribute Configuration Variant Matrix Layer',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD3CEDC),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: selectedCoat,
+                            isExpanded: true,
+                            icon: const Icon(Icons.arrow_drop_down, color: Colors.black87),
+                            items: ['SHORT', 'LONG_CURLY', 'DOUBLE_COAT']
+                                .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                                .toList(),
+                            onChanged: (val) {
+                              if (val != null) setStateDialog(() => selectedCoat = val);
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      const Text(
+                        'Target Weight Profile Tier Matrix Layer Filter Option Type Descriptor',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          border: Border(bottom: BorderSide(color: Colors.grey.shade400)),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: selectedWeight,
+                            isExpanded: true,
+                            icon: const Icon(Icons.arrow_drop_down, color: Colors.black87),
+                            items: ['S', 'M', 'L', 'XL']
+                                .map((w) => DropdownMenuItem(value: w, child: Text(w)))
+                                .toList(),
+                            onChanged: (val) {
+                              if (val != null) setStateDialog(() => selectedWeight = val);
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      const Text(
+                        'Allocated Operational Handling Execution Window Span Duration Minutes',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 10,
+                        children: durationOptions.map((mins) {
+                          final isSelected = mins == selectedDuration;
+                          return InkWell(
+                            onTap: () => setStateDialog(() => selectedDuration = mins),
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: isSelected ? const Color(0xFFDDD2EB) : Colors.white.withOpacity(0.6),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: isSelected ? const Color(0xFF7E22CE) : Colors.grey.shade400,
+                                  width: isSelected ? 1.5 : 1,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (isSelected) ...[
+                                    const Icon(Icons.check, size: 16, color: Color(0xFF4C1D95)),
+                                    const SizedBox(width: 6),
+                                  ],
+                                  Text(
+                                    '$mins min',
+                                    style: TextStyle(
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                      color: const Color(0xFF1E293B),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 20),
+
+                      TextField(
+                        controller: priceController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: InputDecoration(
+                          hintText: 'Price Target Rate (\$ AUD)',
+                          hintStyle: TextStyle(color: Colors.grey.shade600, fontSize: 15),
+                          filled: true,
+                          fillColor: const Color(0xFFE8E3EE),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey.shade400),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      TextField(
+                        controller: depositController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: InputDecoration(
+                          hintText: 'Deposit Amount (\$ AUD)',
+                          hintStyle: TextStyle(color: Colors.grey.shade600, fontSize: 15),
+                          filled: true,
+                          fillColor: const Color(0xFFE8E3EE),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey.shade400),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            onPressed: () {
+                              nameController.dispose();
+                              priceController.dispose();
+                              depositController.dispose();
+                              Navigator.pop(context);
+                            },
+                            child: const Text(
+                              'Cancel',
+                              style: TextStyle(color: Color(0xFF6B21A8), fontSize: 15, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          ElevatedButton(
+                            onPressed: () async {
+                              final name = nameController.text.trim();
+                              final price = double.tryParse(priceController.text.trim()) ?? 0.0;
+                              final deposit = double.tryParse(depositController.text.trim()) ?? 0.0;
+
+                              if (name.isEmpty) {
+                                _showSnackBar('⚠️ Please specify a matrix tier name.');
+                                return;
+                              }
+
+                              nameController.dispose();
+                              priceController.dispose();
+                              depositController.dispose();
+                              Navigator.pop(context);
+
+                              await _createServiceMatrixTier(
+                                name: name,
+                                coatType: selectedCoat,
+                                weightTier: selectedWeight,
+                                duration: selectedDuration,
+                                priceCents: (price * 100).round(),
+                                depositCents: (deposit * 100).round(),
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF0F172A),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(24),
+                              ),
+                            ),
+                            child: const Text(
+                              'Confirm Provision',
+                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            actions: [
-              TextButton(onPressed: _isServiceLoading ? null : () => Navigator.pop(context), child: const Text('Cancel')),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F172A), foregroundColor: Colors.white),
-                onPressed: _isServiceLoading ? null : () async {
-                  if (nameCtrl.text.isEmpty || priceCtrl.text.isEmpty || depositCtrl.text.isEmpty) return;
-                  final double parsedPrice = double.tryParse(priceCtrl.text) ?? 0.0;
-                  final int calculatedCents = (parsedPrice * 100).round();
-                  final double parsedDeposit = double.tryParse(depositCtrl.text) ?? 0.0;
-                  final int calculatedDepositCents = (parsedDeposit * 100).round();
-                  final String finalName = nameCtrl.text.trim();
-                  Navigator.pop(context);
-                  await _createServiceMatrixTier(
-                    name: finalName,
-                    coatType: selectedCoat,
-                    weightTier: selectedSize,
-                    duration: selectedDuration,
-                    priceCents: calculatedCents,
-                    depositCents: calculatedDepositCents,
-                  );
-                },
-                child: _isServiceLoading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Confirm Provision'),
-              )
-            ],
-          );
-        }
-      ),
-    );
-  }
-
-  void _confirmActionGuard({required String title, required String body, required VoidCallback onConfirm}) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: Text(body),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Abort')),
-          ElevatedButton(onPressed: () {
-            Navigator.pop(ctx);
-            onConfirm();
-          }, child: const Text('Confirm')),
-        ],
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
   Widget _buildManagementDrawer(Color themeColor) {
     return Drawer(
-      width: 450,
+      width: kIsWeb ? 450 : MediaQuery.of(context).size.width * 0.85,
       child: SafeArea(
         child: Column(
           children: [
@@ -2332,77 +2575,60 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
               labelColor: themeColor,
               unselectedLabelColor: const Color(0xFF64748B),
               indicatorColor: themeColor,
-              tabs: [
-                const Tab(icon: Icon(Icons.tune), text: 'UI Text Config'),
-                if (widget.isAdmin) ...[
-                  const Tab(icon: Icon(Icons.schedule_rounded), text: 'Hours'),
-                  const Tab(icon: Icon(Icons.badge_outlined), text: 'Team Members'),
-                  const Tab(icon: Icon(Icons.pets), text: 'Customers'),
-                ]
-              ],
+              tabs: widget.isAdmin 
+                  ? const [
+                      Tab(icon: Icon(Icons.tune), text: 'UI Text'),
+                      Tab(icon: Icon(Icons.schedule), text: 'Hours'),
+                      Tab(icon: Icon(Icons.group), text: 'Team'),
+                      Tab(icon: Icon(Icons.people), text: 'Clients'),
+                    ]
+                  : const [
+                      Tab(icon: Icon(Icons.tune), text: 'UI Text'),
+                    ],
             ),
             Expanded(
               child: TabBarView(
                 controller: _drawerTabController,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(20.0),
-                    child: SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('UI Localization Dictionary Controls', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                          const SizedBox(height: 16),
-                          TextField(controller: _btnBookController, decoration: const InputDecoration(labelText: 'Manual Booking Button Text', border: OutlineInputBorder())),
-                          const SizedBox(height: 16),
-                          TextField(controller: _btnCancelController, decoration: const InputDecoration(labelText: 'Cancel Button Text', border: OutlineInputBorder())),
-                          const SizedBox(height: 16),
-                          TextField(controller: _btnEditController, decoration: const InputDecoration(labelText: 'Reschedule Button Text', border: OutlineInputBorder())),
-                          const SizedBox(height: 16),
-                          TextField(controller: _txtRevenueController, decoration: const InputDecoration(labelText: 'Revenue Metric Label Title', border: OutlineInputBorder())),
-                          const SizedBox(height: 24),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 46,
-                            child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(backgroundColor: themeColor, foregroundColor: Colors.white),
-                              onPressed: _saveUiTextConfigToDatabase,
-                              child: const Text('Save Text Formats'),
-                            ),
-                          )
-                        ],
-                      ),
-                    ),
-                  ),
-                  if (widget.isAdmin) ...[
-                    ManageHoursPanel(
-                      config: widget.config,
-                      authToken: widget.authToken,
-                    ),
-                    ManageTeamPanel(
-                      config: widget.config, 
-                      authToken: widget.authToken,
-                    ),
-                    CustomerInfoPanel(
-                      config: widget.config,
-                      authToken: widget.authToken,
-                      baseUrl: _baseUrl,
-                      themeColor: themeColor,
-                    ),
-                  ],
-                ],
+                children: widget.isAdmin
+                    ? [
+                        _buildUiConfigPanel(),
+                        ManageHoursPanel(config: widget.config, authToken: widget.authToken),
+                        ManageTeamPanel(config: widget.config, authToken: widget.authToken),
+                        CustomerInfoPanel(config: widget.config, authToken: widget.authToken, baseUrl: _baseUrl, themeColor: themeColor,),
+                      ]
+                    : [
+                        _buildUiConfigPanel(),
+                      ],
               ),
-            )
+            ),
           ],
         ),
       ),
     );
   }
-}
 
-extension ColorDarken on Color {
-  Color darken([double amount = .3]) {
-    final hsl = HSLColor.fromColor(this);
-    return hsl.withLightness((hsl.lightness - amount).clamp(0.0, 1.0)).toColor();
+  Widget _buildUiConfigPanel() {
+    return Padding(
+      padding: const EdgeInsets.all(20.0),
+      child: ListView(
+        children: [
+          const Text('Configure Dynamic Dictionary UI Text', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 16),
+          TextField(controller: _btnBookController, decoration: const InputDecoration(labelText: 'Booking Button Text', border: OutlineInputBorder())),
+          const SizedBox(height: 12),
+          TextField(controller: _btnCancelController, decoration: const InputDecoration(labelText: 'Cancel Button Text', border: OutlineInputBorder())),
+          const SizedBox(height: 12),
+          TextField(controller: _btnEditController, decoration: const InputDecoration(labelText: 'Reschedule Button Text', border: OutlineInputBorder())),
+          const SizedBox(height: 12),
+          TextField(controller: _txtRevenueController, decoration: const InputDecoration(labelText: 'Revenue Metric Title', border: OutlineInputBorder())),
+          const SizedBox(height: 20),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: widget.config.primaryColor, foregroundColor: Colors.white),
+            onPressed: _saveUiTextConfigToDatabase,
+            child: const Text('Save Text Configuration'),
+          ),
+        ],
+      ),
+    );
   }
 }
