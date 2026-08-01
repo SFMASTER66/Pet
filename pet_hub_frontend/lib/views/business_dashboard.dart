@@ -416,12 +416,17 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                                 child: DropdownButton<Map<String, dynamic>>(
                                   isExpanded: true,
                                   value: selectedMatrixRow,
-                                  items: liveServiceMatrices.map((matrix) {
-                                    return DropdownMenuItem<Map<String, dynamic>>(
-                                      value: matrix,
-                                      child: Text('${matrix['name']} (${matrix['weightTier']} / ${matrix['coatType']}) - \$${((matrix['priceCentsAud'] ?? 0) / 100).toStringAsFixed(2)}', overflow: TextOverflow.ellipsis),
-                                    );
-                                  }).toList(),
+                                  items: liveServiceMatrices
+                                      .where((matrix) => matrix['isActive'] == true) // <--- Filters out inactive services
+                                      .map((matrix) {
+                                        return DropdownMenuItem<Map<String, dynamic>>(
+                                          value: matrix,
+                                          child: Text(
+                                            '${matrix['name']} (${matrix['weightTier']} / ${matrix['coatType']}) - \$${((matrix['priceCentsAud'] ?? 0) / 100).toStringAsFixed(2)}',
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        );
+                                      }).toList(),
                                   onChanged: (val) {
                                     setDialogState(() => selectedMatrixRow = val);
                                     updateCapacityAvailableSlots(); 
