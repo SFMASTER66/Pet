@@ -35,10 +35,6 @@ class UnifiedMerchantDashboard extends StatefulWidget {
 class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> with SingleTickerProviderStateMixin {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   
-  final _btnBookController = TextEditingController();
-  final _btnCancelController = TextEditingController();
-  final _btnEditController = TextEditingController();
-  final _txtRevenueController = TextEditingController();
   List<dynamic> _businessHoursConfig = [];
 
   final CalendarFormat _calendarFormat = CalendarFormat.month;
@@ -61,15 +57,16 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     return Platform.isAndroid ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
   }
 
-  late TabController _drawerTabController;
+  TabController? _drawerTabController;
   List<Map<String, dynamic>> mockAppointments = []; 
   List<Map<String, dynamic>> liveServiceMatrices = [];
 
   @override
   void initState() {
     super.initState();
-    _drawerTabController = TabController(length: widget.isAdmin ? 4 : 1, vsync: this);
-    _syncControllers();
+    if (widget.isAdmin) {
+      _drawerTabController = TabController(length: 3, vsync: this);
+    }
     _fetchServiceMatrices(); 
     _fetchDashboardAppointments();
     _fetchBusinessHours(); 
@@ -77,11 +74,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
 
   @override
   void dispose() {
-    _drawerTabController.dispose();
-    _btnBookController.dispose();
-    _btnCancelController.dispose();
-    _btnEditController.dispose();
-    _txtRevenueController.dispose();
+    _drawerTabController?.dispose();
     super.dispose();
   }
 
@@ -89,16 +82,9 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
   void didUpdateWidget(covariant UnifiedMerchantDashboard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.isAdmin != oldWidget.isAdmin) {
-      _drawerTabController.dispose();
-      _drawerTabController = TabController(length: widget.isAdmin ? 4 : 1, vsync: this);
+      _drawerTabController?.dispose();
+      _drawerTabController = widget.isAdmin ? TabController(length: 3, vsync: this) : null;
     }
-  }
-
-  void _syncControllers() {
-    _btnBookController.text = widget.config.getTxt('btn_book', 'Manual Booking');
-    _btnCancelController.text = widget.config.getTxt('btn_cancel', 'Cancel');
-    _btnEditController.text = widget.config.getTxt('btn_edit', 'Reschedule');
-    _txtRevenueController.text = widget.config.getTxt('txt_revenue', 'Today Forecast Revenue');
   }
 
   Future<void> _fetchServiceMatrices() async {
@@ -214,28 +200,6 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
       orElse: () => null,
     );
     return dayRecord != null && dayRecord['isClosed'] == true;
-  }
-
-  void _saveUiTextConfigToDatabase() {
-    MerchantConfig updated = MerchantConfig(
-      merchantId: widget.config.merchantId,
-      userId: widget.config.userId,
-      businessName: widget.config.businessName,
-      logoIcon: widget.config.logoIcon,
-      primaryColorValue: widget.config.primaryColorValue,
-      tags: widget.config.tags,
-      uiDictionary: {
-        'btn_book': _btnBookController.text,
-        'btn_cancel': _btnCancelController.text,
-        'btn_edit': _btnEditController.text,
-        'txt_revenue': _txtRevenueController.text,
-      },
-    );
-    widget.onConfigChanged(updated);
-    if (_scaffoldKey.currentState!.isEndDrawerOpen) {
-      Navigator.pop(context);
-    }
-    _showSnackBar('💾 System settings synchronized globally.');
   }
 
   Future<void> _createServiceMatrixTier({
@@ -417,7 +381,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                                   isExpanded: true,
                                   value: selectedMatrixRow,
                                   items: liveServiceMatrices
-                                      .where((matrix) => matrix['isActive'] == true) // <--- Filters out inactive services
+                                      .where((matrix) => matrix['isActive'] == true)
                                       .map((matrix) {
                                         return DropdownMenuItem<Map<String, dynamic>>(
                                           value: matrix,
@@ -704,8 +668,8 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                               return;
                             }
 
-                            final parts = selectedOperationalTime!.split(' '); // Splits "02:00" and "PM"
-                            final timeParts = parts[0].split(':');             // Splits "02" and "00"
+                            final parts = selectedOperationalTime!.split(' ');
+                            final timeParts = parts[0].split(':');
                             int hour = int.parse(timeParts[0]);
                             final int minute = int.parse(timeParts[1]);
                             final String amPm = parts[1];
@@ -716,7 +680,6 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                               hour = 0;
                             }
 
-                            // 3. Construct your final targetDateTime variable used by the API payload
                             final targetDateTime = DateTime(
                               selectedBookingDate.year, 
                               selectedBookingDate.month, 
@@ -733,8 +696,8 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                               'dogBreed': dogBreedCtrl.text.trim(),
                               'dogGender': selectedGender,
                               'isDesexed': isDesexed,
-                              'dogWeight': parsedWeight, // Included weight field in upstream transmission mapping
-                              'dogDob': selectedDogDob!.toIso8601String(), // Included structured ISO 8601 DOB entry
+                              'dogWeight': parsedWeight,
+                              'dogDob': selectedDogDob!.toIso8601String(),
                               'ownerName': ownerNameCtrl.text.trim(),
                               'ownerPhone': digitsOnlyPhone, 
                               'ownerEmail': cleanEmail,
@@ -822,89 +785,135 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
       key: _scaffoldKey,
       backgroundColor: const Color(0xFFF1F5F9), 
       appBar: AppBar(
-        elevation: 0.5,
-        backgroundColor: Colors.white,
-        title: Row(
+  elevation: 0.5,
+  backgroundColor: Colors.white,
+  centerTitle: false, // 👈 FIX: Prevents title from centering on desktop/web
+  titleSpacing: 16,   // Keeps clean alignment with the body content below
+  title: Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: themeColor.withAlpha(25),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          widget.config.logoIcon,
+          style: const TextStyle(fontSize: 18),
+        ),
+      ),
+      const SizedBox(width: 8),
+      Flexible(
+        child: Text(
+          widget.config.businessName,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF0F172A),
+            fontSize: 16,
+          ),
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+    ],
+  ),
+  actions: [
+    LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = MediaQuery.of(context).size.width < 600;
+
+        if (isCompact) {
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.launch, size: 20),
+                tooltip: 'Customer Portal',
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CustomerPortalPage(
+                      config: widget.config,
+                      activeServices: liveServiceMatrices,
+                      baseUrl: _baseUrl,
+                    ),
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: Icon(Icons.add_circle, color: themeColor, size: 22),
+                tooltip: 'Manual Booking',
+                onPressed: _showCreateBookingDialog,
+              ),
+              if (widget.isAdmin)
+                IconButton(
+                  icon: const Icon(
+                    Icons.manage_accounts_outlined,
+                    color: Color(0xFF475569),
+                  ),
+                  tooltip: 'Management Drawer',
+                  onPressed: () {
+                    _scaffoldKey.currentState!.openEndDrawer();
+                  },
+                ),
+              IconButton(
+                icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+                onPressed: widget.onLogout,
+              ),
+            ],
+          );
+        }
+
+        return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(color: themeColor.withAlpha(25), borderRadius: BorderRadius.circular(8)),
-              child: Text(widget.config.logoIcon, style: const TextStyle(fontSize: 18)),
-            ),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                widget.config.businessName, 
-                style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A), fontSize: 16),
-                overflow: TextOverflow.ellipsis,
+            OutlinedButton.icon(
+              icon: const Icon(Icons.launch, size: 16),
+              label: const Text('Customer Portal'),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CustomerPortalPage(
+                    config: widget.config,
+                    activeServices: liveServiceMatrices,
+                    baseUrl: _baseUrl,
+                  ),
+                ),
               ),
             ),
+            const SizedBox(width: 8),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('Manual Booking'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: themeColor,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: _showCreateBookingDialog,
+            ),
+            if (widget.isAdmin)
+              IconButton(
+                icon: const Icon(
+                  Icons.manage_accounts_outlined,
+                  color: Color(0xFF475569),
+                ),
+                tooltip: 'Management Drawer',
+                onPressed: () {
+                  _scaffoldKey.currentState!.openEndDrawer();
+                },
+              ),
+            IconButton(
+              icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+              onPressed: widget.onLogout,
+            ),
+            const SizedBox(width: 12),
           ],
-        ),
-        actions: isMobile 
-            ? [
-                IconButton(
-                  icon: const Icon(Icons.add, color: Colors.blueAccent),
-                  onPressed: _showCreateBookingDialog,
-                ),
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert, color: Color(0xFF475569)),
-                  onSelected: (val) {
-                    if (val == 'portal') {
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => CustomerPortalPage(config: widget.config, activeServices: liveServiceMatrices, baseUrl: _baseUrl)));
-                    } else if (val == 'cust') {
-                      setState(() => _drawerTabController.index = 3);
-                      _scaffoldKey.currentState!.openEndDrawer();
-                    } else if (val == 'hours') {
-                      setState(() => _drawerTabController.index = 1);
-                      _scaffoldKey.currentState!.openEndDrawer();
-                    } else if (val == 'team') {
-                      setState(() => _drawerTabController.index = 2);
-                      _scaffoldKey.currentState!.openEndDrawer();
-                    } else if (val == 'sched') {
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => StaffSchedulingPage(config: widget.config, authToken: widget.authToken, businessHoursConfig: _businessHoursConfig)));
-                    } else if (val == 'logout') {
-                      widget.onLogout();
-                    }
-                  },
-                  itemBuilder: (ctx) => [
-                    const PopupMenuItem(value: 'portal', child: Text('Customer Portal')),
-                    if (widget.isAdmin) ...[
-                      const PopupMenuItem(value: 'cust', child: Text('Customer Info')),
-                      const PopupMenuItem(value: 'hours', child: Text('Business Hours')),
-                      const PopupMenuItem(value: 'team', child: Text('Manage Team')),
-                      const PopupMenuItem(value: 'sched', child: Text('Schedule Staff')),
-                    ],
-                    const PopupMenuItem(value: 'logout', child: Text('Logout', style: TextStyle(color: Colors.redAccent))),
-                  ],
-                ),
-              ]
-            : [
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.launch, size: 16),
-                  label: const Text('Customer Portal'),
-                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CustomerPortalPage(config: widget.config, activeServices: liveServiceMatrices, baseUrl: _baseUrl))),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.add, size: 16),
-                  label: Text(widget.config.getTxt('btn_book', 'Manual Booking')),
-                  style: ElevatedButton.styleFrom(backgroundColor: themeColor, foregroundColor: Colors.white),
-                  onPressed: _showCreateBookingDialog,
-                ),
-                if (widget.isAdmin) ...[
-                  IconButton(icon: const Icon(Icons.people_outline), onPressed: () { setState(() => _drawerTabController.index = 3); _scaffoldKey.currentState!.openEndDrawer(); }),
-                  IconButton(icon: const Icon(Icons.schedule_outlined), onPressed: () { setState(() => _drawerTabController.index = 1); _scaffoldKey.currentState!.openEndDrawer(); }),
-                  IconButton(icon: const Icon(Icons.group_outlined), onPressed: () { setState(() => _drawerTabController.index = 2); _scaffoldKey.currentState!.openEndDrawer(); }),
-                  IconButton(icon: const Icon(Icons.edit_calendar_rounded), onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => StaffSchedulingPage(config: widget.config, authToken: widget.authToken, businessHoursConfig: _businessHoursConfig))); }),
-                ],
-                IconButton(icon: const Icon(Icons.tune), onPressed: () { setState(() => _drawerTabController.index = 0); _scaffoldKey.currentState!.openEndDrawer(); }),
-                IconButton(icon: const Icon(Icons.logout_rounded, color: Colors.redAccent), onPressed: widget.onLogout),
-                const SizedBox(width: 16),
-              ],
-      ),
-      endDrawer: _buildManagementDrawer(themeColor),
+        );
+      },
+    ),
+  ],
+),
+      endDrawer: widget.isAdmin ? _buildManagementDrawer(themeColor) : null,
       body: LayoutBuilder(
         builder: (context, constraints) {
           if (constraints.maxWidth < 900) {
@@ -967,13 +976,12 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                             children: [
                               IntrinsicHeight(
                                 child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch, // Matches height of tallest item
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
                                     Expanded(
                                       child: _buildMetricHeaderSection(isMobile: false),
                                     ),
                                     const SizedBox(width: 16),
-                                    // DO NOT wrap in Expanded here — let it keep its natural width
                                     _buildScheduleDropdownView(),
                                   ],
                                 ),
@@ -1033,7 +1041,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
       return Column(
         children: [
           if (widget.isAdmin) ...[
-            _buildMetricCard(widget.config.getTxt('txt_revenue', 'Today Forecast Revenue'), '\$${todayRevenue.toStringAsFixed(2)} AUD', Icons.payments_outlined, Colors.green),
+            _buildMetricCard('Today Forecast Revenue', '\$${todayRevenue.toStringAsFixed(2)} AUD', Icons.payments_outlined, Colors.green),
             const SizedBox(height: 12),
           ],
           _buildMetricCard('Total Booked Pets', '$targetedCount Active Profiles', Icons.pets_outlined, Colors.indigo),
@@ -1045,7 +1053,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
       children: [
         if (widget.isAdmin) ...[
           Expanded(
-            child: _buildMetricCard(widget.config.getTxt('txt_revenue', 'Today Forecast Revenue'), '\$${todayRevenue.toStringAsFixed(2)} AUD', Icons.payments_outlined, Colors.green),
+            child: _buildMetricCard('Today Forecast Revenue', '\$${todayRevenue.toStringAsFixed(2)} AUD', Icons.payments_outlined, Colors.green),
           ),
           const SizedBox(width: 16),
         ],
@@ -1286,242 +1294,234 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
   }
 
   Widget _buildDailyTimelineGrid(Color col) {
-  final targetDate = _selectedDay ?? DateTime.now();
-  final dailyFilteredApps = mockAppointments.where((app) => isSameDay(app['rawStartTime'], targetDate)).toList();
+    final targetDate = _selectedDay ?? DateTime.now();
+    final dailyFilteredApps = mockAppointments.where((app) => isSameDay(app['rawStartTime'], targetDate)).toList();
 
-  final dayRecord = _businessHoursConfig.firstWhere(
-    (element) => element['dayOfWeek'] == targetDate.weekday,
-    orElse: () => null,
-  );
-
-  bool isClosed = true;
-  int startHour = 9;
-  int endHour = 17;
-
-  if (dayRecord != null && dayRecord['isClosed'] != true) {
-    isClosed = false;
-    final String startStr = dayRecord['openTime'] ?? '09:00';
-    final String endStr = dayRecord['closeTime'] ?? '17:00';
-    
-    startHour = int.tryParse(startStr.split(':')[0]) ?? 9;
-    endHour = int.tryParse(endStr.split(':')[0]) ?? 17;
-  }
-
-  if (isClosed) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-      child: const Center(child: Text('Closed Today', style: TextStyle(color: Colors.grey))),
+    final dayRecord = _businessHoursConfig.firstWhere(
+      (element) => element['dayOfWeek'] == targetDate.weekday,
+      orElse: () => null,
     );
-  }
 
-  const double slotHeight = 70.0; // Height allocated per hour row
-  final int totalHours = endHour - startHour + 1;
+    bool isClosed = true;
+    int startHour = 9;
+    int endHour = 17;
 
-  return Container(
-    decoration: BoxDecoration(
-      color: Colors.white, 
-      borderRadius: BorderRadius.circular(12), 
-      border: Border.all(color: const Color(0xFFE2E8F0)),
-    ),
-    padding: const EdgeInsets.all(20),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Timeline Lane Distribution Tracker', 
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-        ),
-        const SizedBox(height: 16),
-        
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 1. Left Axis: Fixed Time Slots Columns
-            Column(
-              children: List.generate(totalHours, (index) {
-                final hour = startHour + index;
-                final displayHour = hour > 12 
-                    ? '${hour - 12} PM' 
-                    : hour == 12 ? '12 PM' : '$hour AM';
-                return SizedBox(
-                  height: slotHeight,
-                  width: 65,
-                  child: Text(
-                    displayHour, 
-                    style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.blueGrey, fontSize: 13),
-                  ),
-                );
-              }),
-            ),
-            
-            // 2. Right Axis: Interactive Calendar Stack Area
-            Expanded(
-              child: SizedBox(
-                height: totalHours * slotHeight,
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final totalWidth = constraints.maxWidth;
-                    
-                    // Sort appointments by start time chronologically
-                    final sortedApps = List.from(dailyFilteredApps)
-                      ..sort((a, b) => a['rawStartTime'].compareTo(b['rawStartTime']));
+    if (dayRecord != null && dayRecord['isClosed'] != true) {
+      isClosed = false;
+      final String startStr = dayRecord['openTime'] ?? '09:00';
+      final String endStr = dayRecord['closeTime'] ?? '17:00';
+      
+      startHour = int.tryParse(startStr.split(':')[0]) ?? 9;
+      endHour = int.tryParse(endStr.split(':')[0]) ?? 17;
+    }
 
-                    // Distribute overlapping items into columns side-by-side
-                    List<List<Map<String, dynamic>>> columns = [];
-                    for (var app in sortedApps) {
-                      bool placed = false;
-                      for (var column in columns) {
-                        final lastApp = column.last;
-                        final lastStart = lastApp['rawStartTime'] as DateTime;
-                        final lastEnd = lastApp['rawEndTime'] as DateTime? ?? lastStart.add(const Duration(hours: 1));
-                        final appStart = app['rawStartTime'] as DateTime;
+    if (isClosed) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+        child: const Center(child: Text('Closed Today', style: TextStyle(color: Colors.grey))),
+      );
+    }
 
-                        if (appStart.isAfter(lastEnd) || appStart.isAtSameMomentAs(lastEnd)) {
-                          column.add(app);
-                          placed = true;
-                          break;
+    const double slotHeight = 70.0;
+    final int totalHours = endHour - startHour + 1;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white, 
+        borderRadius: BorderRadius.circular(12), 
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Timeline Lane Distribution Tracker', 
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+          ),
+          const SizedBox(height: 16),
+          
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Column(
+                children: List.generate(totalHours, (index) {
+                  final hour = startHour + index;
+                  final displayHour = hour > 12 
+                      ? '${hour - 12} PM' 
+                      : hour == 12 ? '12 PM' : '$hour AM';
+                  return SizedBox(
+                    height: slotHeight,
+                    width: 65,
+                    child: Text(
+                      displayHour, 
+                      style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.blueGrey, fontSize: 13),
+                    ),
+                  );
+                }),
+              ),
+              
+              Expanded(
+                child: SizedBox(
+                  height: totalHours * slotHeight,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final totalWidth = constraints.maxWidth;
+                      
+                      final sortedApps = List.from(dailyFilteredApps)
+                        ..sort((a, b) => a['rawStartTime'].compareTo(b['rawStartTime']));
+
+                      List<List<Map<String, dynamic>>> columns = [];
+                      for (var app in sortedApps) {
+                        bool placed = false;
+                        for (var column in columns) {
+                          final lastApp = column.last;
+                          final lastStart = lastApp['rawStartTime'] as DateTime;
+                          final lastEnd = lastApp['rawEndTime'] as DateTime? ?? lastStart.add(const Duration(hours: 1));
+                          final appStart = app['rawStartTime'] as DateTime;
+
+                          if (appStart.isAfter(lastEnd) || appStart.isAtSameMomentAs(lastEnd)) {
+                            column.add(app);
+                            placed = true;
+                            break;
+                          }
+                        }
+                        if (!placed) {
+                          columns.add([app]);
                         }
                       }
-                      if (!placed) {
-                        columns.add([app]);
-                      }
-                    }
 
-                    final int totalCols = columns.isEmpty ? 1 : columns.length;
-                    final double itemWidth = totalWidth / totalCols;
+                      final int totalCols = columns.isEmpty ? 1 : columns.length;
+                      final double itemWidth = totalWidth / totalCols;
 
-                    return Stack(
-                      children: [
-                        // Background Grid Separator Lines
-                        ...List.generate(totalHours, (index) {
-                          return Positioned(
-                            top: index * slotHeight,
-                            left: 0,
-                            right: 0,
-                            child: Container(
-                              height: slotHeight,
-                              decoration: BoxDecoration(
-                                border: Border(top: BorderSide(color: Colors.grey.shade100, width: 1)),
-                              ),
-                            ),
-                          );
-                        }),
-
-                        // Foreground Rendered Spanned Booking Blocks
-                        ...List.generate(columns.length, (colIndex) {
-                          final currentColumnApps = columns[colIndex];
-                          return currentColumnApps.map((app) {
-                            final start = app['rawStartTime'] as DateTime;
-                            final end = app['rawEndTime'] as DateTime? ?? start.add(const Duration(hours: 2));
-
-                            final double startMinutes = (start.hour - startHour) * 60.0 + start.minute;
-                            final double endMinutes = (end.hour - startHour) * 60.0 + end.minute;
-
-                            final double topPosition = (startMinutes / 60.0) * slotHeight;
-                            final double blockHeight = ((endMinutes - startMinutes) / 60.0) * slotHeight;
-                            
-                            final cardColor = _getPastelColor(app['breed'] ?? '');
-
+                      return Stack(
+                        children: [
+                          ...List.generate(totalHours, (index) {
                             return Positioned(
-                              top: topPosition,
-                              left: colIndex * itemWidth,
-                              width: itemWidth - 4,
-                              height: blockHeight - 2, 
-                              // 🌟 Tooltip widget wraps item to display full info on hover
-                              child: Tooltip(
-                                richMessage: TextSpan(
-                                  style: const TextStyle(color: Colors.white, fontSize: 12, height: 1.4),
-                                  children: [
-                                    TextSpan(text: '🐾 Dog: ${app['petName']} (${app['breed']})\n', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                    TextSpan(text: '👤 Owner: ${app['ownerName'] ?? 'Unknown Owner'}\n'),
-                                    TextSpan(text: '📞 Phone: ${app['ownerPhone'] ?? 'No Phone'}\n'),
-                                    TextSpan(text: '✉️ Email: ${app['ownerEmail'] ?? 'No Email'}'),
-                                  ],
-                                ),
+                              top: index * slotHeight,
+                              left: 0,
+                              right: 0,
+                              child: Container(
+                                height: slotHeight,
                                 decoration: BoxDecoration(
-                                  color: Colors.grey.shade900.withOpacity(0.95),
-                                  borderRadius: BorderRadius.circular(8),
-                                  boxShadow: [
-                                    BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 6, offset: const Offset(0, 3))
-                                  ],
+                                  border: Border(top: BorderSide(color: Colors.grey.shade100, width: 1)),
                                 ),
-                                padding: const EdgeInsets.all(12),
-                                preferBelow: true,
-                                waitDuration: const Duration(milliseconds: 200),
-                                child: GestureDetector(
-                                  onTap: () => _showUpdateBookingOptionsDialog(app),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: cardColor.withOpacity(0.25),
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: cardColor, width: 1.5),
-                                    ),
-                                    // 🌟 SingleChildScrollView prevents overflow errors on short slots
-                                    child: SingleChildScrollView(
-                                      physics: const NeverScrollableScrollPhysics(),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text(
-                                            '🐾 ${app['petName']} (${app['breed']})',
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 12,
-                                              color: cardColor.withRed(30).withGreen(30),
+                              ),
+                            );
+                          }),
+
+                          ...List.generate(columns.length, (colIndex) {
+                            final currentColumnApps = columns[colIndex];
+                            return currentColumnApps.map((app) {
+                              final start = app['rawStartTime'] as DateTime;
+                              final end = app['rawEndTime'] as DateTime? ?? start.add(const Duration(hours: 2));
+
+                              final double startMinutes = (start.hour - startHour) * 60.0 + start.minute;
+                              final double endMinutes = (end.hour - startHour) * 60.0 + end.minute;
+
+                              final double topPosition = (startMinutes / 60.0) * slotHeight;
+                              final double blockHeight = ((endMinutes - startMinutes) / 60.0) * slotHeight;
+                              
+                              final cardColor = _getPastelColor(app['breed'] ?? '');
+
+                              return Positioned(
+                                top: topPosition,
+                                left: colIndex * itemWidth,
+                                width: itemWidth - 4,
+                                height: blockHeight - 2, 
+                                child: Tooltip(
+                                  richMessage: TextSpan(
+                                    style: const TextStyle(color: Colors.white, fontSize: 12, height: 1.4),
+                                    children: [
+                                      TextSpan(text: '🐾 Dog: ${app['petName']} (${app['breed']})\n', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                      TextSpan(text: '👤 Owner: ${app['ownerName'] ?? 'Unknown Owner'}\n'),
+                                      TextSpan(text: '📞 Phone: ${app['ownerPhone'] ?? 'No Phone'}\n'),
+                                      TextSpan(text: '✉️ Email: ${app['ownerEmail'] ?? 'No Email'}'),
+                                    ],
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade900.withOpacity(0.95),
+                                    borderRadius: BorderRadius.circular(8),
+                                    boxShadow: [
+                                      BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 6, offset: const Offset(0, 3))
+                                    ],
+                                  ),
+                                  padding: const EdgeInsets.all(12),
+                                  preferBelow: true,
+                                  waitDuration: const Duration(milliseconds: 200),
+                                  child: GestureDetector(
+                                    onTap: () => _showUpdateBookingOptionsDialog(app),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: cardColor.withOpacity(0.25),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: cardColor, width: 1.5),
+                                      ),
+                                      child: SingleChildScrollView(
+                                        physics: const NeverScrollableScrollPhysics(),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              '🐾 ${app['petName']} (${app['breed']})',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 12,
+                                                color: cardColor.withRed(30).withGreen(30),
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
                                             ),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            '👤 ${app['ownerName'] ?? 'Unknown Owner'}',
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: 11,
-                                              color: Colors.grey.shade800,
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              '👤 ${app['ownerName'] ?? 'Unknown Owner'}',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 11,
+                                                color: Colors.grey.shade800,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
                                             ),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            '📞 ${app['ownerPhone'] ?? 'No Phone'}',
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              color: Colors.grey.shade700,
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              '📞 ${app['ownerPhone'] ?? 'No Phone'}',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                color: Colors.grey.shade700,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
                                             ),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          Text(
-                                            '✉️ ${app['ownerEmail'] ?? 'No Email'}',
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              color: Colors.grey.shade600,
+                                            Text(
+                                              '✉️ ${app['ownerEmail'] ?? 'No Email'}',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                color: Colors.grey.shade600,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
                                             ),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            );
-                          }).toList();
-                        }).expand((element) => element).toList(),
-                      ],
-                    );
-                  },
+                              );
+                            }).toList();
+                          }).expand((element) => element).toList(),
+                        ],
+                      );
+                    },
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
-      ],
-    ),
-  );
-}
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   Color _getPastelColor(String seed) {
     final int hash = seed.hashCode;
@@ -1530,72 +1530,72 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
   }
 
   Widget _buildWeeklyScheduleGrid(Color col) {
-  final targetDate = _selectedDay ?? DateTime.now();
-  final DateTime mondayOfTargetWeek = targetDate.subtract(Duration(days: targetDate.weekday - 1));
+    final targetDate = _selectedDay ?? DateTime.now();
+    final DateTime mondayOfTargetWeek = targetDate.subtract(Duration(days: targetDate.weekday - 1));
 
-  return Container(
-    decoration: BoxDecoration(
-      color: Colors.white, 
-      borderRadius: BorderRadius.circular(12), 
-      border: Border.all(color: const Color(0xFFE2E8F0)),
-    ),
-    padding: const EdgeInsets.all(16),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'One Week Aggregate Density', 
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: List.generate(7, (index) {
-            final DateTime dayOfRow = mondayOfTargetWeek.add(Duration(days: index));
-            final count = mockAppointments.where((a) => isSameDay(a['rawStartTime'], dayOfRow)).length;
-            final bool isCurrentSelected = isSameDay(_selectedDay, dayOfRow);
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white, 
+        borderRadius: BorderRadius.circular(12), 
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'One Week Aggregate Density', 
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: List.generate(7, (index) {
+              final DateTime dayOfRow = mondayOfTargetWeek.add(Duration(days: index));
+              final count = mockAppointments.where((a) => isSameDay(a['rawStartTime'], dayOfRow)).length;
+              final bool isCurrentSelected = isSameDay(_selectedDay, dayOfRow);
 
-            return Expanded(
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 2),
-                decoration: BoxDecoration(
-                  color: isCurrentSelected ? col.withAlpha(25) : Colors.blueGrey.shade50, 
-                  border: isCurrentSelected ? Border.all(color: col, width: 1.5) : null,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(8),
-                  onTap: () => setState(() {
-                    _selectedDay = dayOfRow;
-                    _focusedDay = dayOfRow;
-                  }),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '${dayOfRow.day}/${dayOfRow.month}', 
-                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '$count Grooms', 
-                          style: TextStyle(color: col, fontWeight: FontWeight.bold, fontSize: 11),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
+              return Expanded(
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  decoration: BoxDecoration(
+                    color: isCurrentSelected ? col.withAlpha(25) : Colors.blueGrey.shade50, 
+                    border: isCurrentSelected ? Border.all(color: col, width: 1.5) : null,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () => setState(() {
+                      _selectedDay = dayOfRow;
+                      _focusedDay = dayOfRow;
+                    }),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${dayOfRow.day}/${dayOfRow.month}', 
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '$count Grooms', 
+                            style: TextStyle(color: col, fontWeight: FontWeight.bold, fontSize: 11),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            );
-          }),
-        ),
-      ],
-    ),
-  );
-}
+              );
+            }),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildStatusBadge(String text, Color mappedColor) {
     return Container(
@@ -1647,12 +1647,10 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
       text: (app['staffTags'] as List? ?? []).join(', '),
     );
 
-    // 1. Parse raw DateTime or safely fallback
     DateTime updatedBookingDate = app['rawStartTime'] is DateTime
         ? app['rawStartTime']
         : (DateTime.tryParse(app['rawStartTime']?.toString() ?? '') ?? DateTime.now());
 
-    // 2. Format initial slot string as 24h ("14:30")
     String updatedBookingTimeSlot =
         "${updatedBookingDate.hour.toString().padLeft(2, '0')}:${updatedBookingDate.minute.toString().padLeft(2, '0')}";
 
@@ -1662,7 +1660,6 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     bool isDayClosed = false;
     bool hasInitialFetched = false;
 
-    // 3. Dynamic backend slot fetcher
     Future<void> loadInitialSlots(StateSetter setModalState) async {
       if (hasInitialFetched) return;
       hasInitialFetched = true;
@@ -1780,7 +1777,6 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                       ),
                       const SizedBox(height: 6),
 
-                      // Responsive Row / Column layout for Date and Time pickers
                       isCompact
                           ? Column(
                               children: [
@@ -2580,59 +2576,24 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
               labelColor: themeColor,
               unselectedLabelColor: const Color(0xFF64748B),
               indicatorColor: themeColor,
-              tabs: widget.isAdmin 
-                  ? const [
-                      Tab(icon: Icon(Icons.tune), text: 'UI Text'),
-                      Tab(icon: Icon(Icons.schedule), text: 'Hours'),
-                      Tab(icon: Icon(Icons.group), text: 'Team'),
-                      Tab(icon: Icon(Icons.people), text: 'Clients'),
-                    ]
-                  : const [
-                      Tab(icon: Icon(Icons.tune), text: 'UI Text'),
-                    ],
+              tabs: const [
+                Tab(icon: Icon(Icons.schedule), text: 'Hours'),
+                Tab(icon: Icon(Icons.group), text: 'Team'),
+                Tab(icon: Icon(Icons.people), text: 'Clients'),
+              ],
             ),
             Expanded(
               child: TabBarView(
                 controller: _drawerTabController,
-                children: widget.isAdmin
-                    ? [
-                        _buildUiConfigPanel(),
-                        ManageHoursPanel(config: widget.config, authToken: widget.authToken),
-                        ManageTeamPanel(config: widget.config, authToken: widget.authToken),
-                        CustomerInfoPanel(config: widget.config, authToken: widget.authToken, baseUrl: _baseUrl, themeColor: themeColor,),
-                      ]
-                    : [
-                        _buildUiConfigPanel(),
-                      ],
+                children: [
+                  ManageHoursPanel(config: widget.config, authToken: widget.authToken),
+                  ManageTeamPanel(config: widget.config, authToken: widget.authToken),
+                  CustomerInfoPanel(config: widget.config, authToken: widget.authToken, baseUrl: _baseUrl, themeColor: themeColor),
+                ],
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildUiConfigPanel() {
-    return Padding(
-      padding: const EdgeInsets.all(20.0),
-      child: ListView(
-        children: [
-          const Text('Configure Dynamic Dictionary UI Text', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          const SizedBox(height: 16),
-          TextField(controller: _btnBookController, decoration: const InputDecoration(labelText: 'Booking Button Text', border: OutlineInputBorder())),
-          const SizedBox(height: 12),
-          TextField(controller: _btnCancelController, decoration: const InputDecoration(labelText: 'Cancel Button Text', border: OutlineInputBorder())),
-          const SizedBox(height: 12),
-          TextField(controller: _btnEditController, decoration: const InputDecoration(labelText: 'Reschedule Button Text', border: OutlineInputBorder())),
-          const SizedBox(height: 12),
-          TextField(controller: _txtRevenueController, decoration: const InputDecoration(labelText: 'Revenue Metric Title', border: OutlineInputBorder())),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: widget.config.primaryColor, foregroundColor: Colors.white),
-            onPressed: _saveUiTextConfigToDatabase,
-            child: const Text('Save Text Configuration'),
-          ),
-        ],
       ),
     );
   }
