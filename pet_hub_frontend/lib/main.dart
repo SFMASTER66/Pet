@@ -7,34 +7,39 @@ import 'views/auth_wrapper.dart';
 import 'models/merchant_config.dart';
 import 'views/business_dashboard.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
-import 'package:flutter_web_plugins/url_strategy.dart';
 import 'config/app_config.dart';
 
+// Customer view imports
+import 'views/customer/customer_home_page.dart';
+import 'views/customer/customer_services_page.dart';
+import 'views/customer/customer_policy_page.dart';
+import 'views/customer/customer_book_page.dart';
+import 'views/customer/customer_contact_page.dart';
+import 'views/customer/customer_career_page.dart';
+
 String? jwtToken;
-bool isAdmin = false; // 👈 Track dashboard permission context globally
+bool isAdmin = false; 
 late MerchantConfig globalMerchantConfig;
 late SharedPreferences prefs;
 
+const String kBaseUrl = 'http://localhost:8080';
+
 final GoRouter _router = GoRouter(
-  initialLocation: '/api/v1/login',
+  initialLocation: '/', 
   
   redirect: (BuildContext context, GoRouterState state) {
     final bool loggingIn = state.matchedLocation == '/api/v1/login' || 
                            state.matchedLocation == '/api/v1/register';
 
-    // 🛠️ FIX: Only read from storage cache if runtime memory variables are empty
-    // This prevents overwriting the freshly assigned 'true' state with stale storage values during redirect transitions
     jwtToken ??= prefs.getString('jwt_token');
     if (prefs.containsKey('is_admin') && jwtToken != null) {
-      // If memory says true, preserve it; otherwise fallback to cache
       isAdmin = isAdmin || (prefs.getBool('is_admin') ?? false); 
     }
     
     if (jwtToken == null) {
       if (loggingIn) return null;
-      return '/api/v1/login';
+      return null;
     }
 
     if (loggingIn) {
@@ -51,18 +56,76 @@ final GoRouter _router = GoRouter(
   },
 
   routes: [
+    // ---------------- Customer Routes ----------------
+    // Root landing page
+    GoRoute(
+      path: '/',
+      builder: (context, state) => CustomerHomePage(
+        config: globalMerchantConfig,
+        baseUrl: kBaseUrl,
+      ),
+    ),
+    // Route matching CustomerLayoutWrapper logo and 'Home' button navigation
+    GoRoute(
+      path: '/customer',
+      builder: (context, state) => CustomerHomePage(
+        config: globalMerchantConfig,
+        baseUrl: kBaseUrl,
+      ),
+    ),
+    // Service route
+    GoRoute(
+      path: '/customer/service',
+      builder: (context, state) => CustomerServicesPage(
+        config: globalMerchantConfig,
+      ),
+    ),
+    // Booking route
+    GoRoute(
+      path: '/customer/book',
+      builder: (context, state) => CustomerBookPage(
+        config: globalMerchantConfig,
+        baseUrl: kBaseUrl,
+      ),
+    ),
+    // Policy route
+    GoRoute(
+      path: '/customer/policy',
+      builder: (context, state) => CustomerPolicyPage(
+        config: globalMerchantConfig,
+        // baseUrl: kBaseUrl,
+      ),
+    ),
+    // Contact route
+    GoRoute(
+      path: '/customer/contact',
+      builder: (context, state) => CustomerContactPage(
+        config: globalMerchantConfig,
+        // baseUrl: kBaseUrl,
+      ),
+    ),
+    // Career route
+    GoRoute(
+      path: '/customer/career',
+      builder: (context, state) => CustomerCareerPage(
+        config: globalMerchantConfig,
+        // baseUrl: kBaseUrl,
+      ),
+    ),
+
+    // ---------------- Merchant Routes ----------------
     GoRoute(
       path: '/api/v1/login',
       builder: (context, state) => MerchantAuthWrapper(
         isRegisterMode: false,
-        onUpdateAuth: _handleAuthUpdate, // 👈 Handled via explicit functional callback method
+        onUpdateAuth: _handleAuthUpdate,
       ),
     ),
     GoRoute(
       path: '/api/v1/register',
       builder: (context, state) => MerchantAuthWrapper(
         isRegisterMode: true,
-        onUpdateAuth: _handleAuthUpdate, // 👈 Handled via explicit functional callback method
+        onUpdateAuth: _handleAuthUpdate,
       ),
     ),
     GoRoute(
@@ -71,7 +134,7 @@ final GoRouter _router = GoRouter(
         return UnifiedMerchantDashboard(
           config: globalMerchantConfig,
           authToken: jwtToken ?? '', 
-          isAdmin: isAdmin, // 👈 FIXED: Parameter successfully injected 
+          isAdmin: isAdmin,
           onLogout: () async {
             await prefs.remove('jwt_token');
             await prefs.remove('cached_config');
@@ -85,7 +148,6 @@ final GoRouter _router = GoRouter(
           },
           onConfigChanged: (updatedConfig) async {
             globalMerchantConfig = updatedConfig;
-            // Changed to .toJson() 👇
             await prefs.setString('cached_config', jsonEncode(updatedConfig.toJson()));
           },
         );
@@ -94,14 +156,11 @@ final GoRouter _router = GoRouter(
   ],
 );
 
-// Unified centralized authorization updates orchestrator execution block
 Future<void> _handleAuthUpdate(String token, String role, Map<String, dynamic> configPayload) async {
   jwtToken = token;
   isAdmin = (role == 'MERCHANT_ADMIN');
-  // Changed to .fromJson() 👇
   globalMerchantConfig = MerchantConfig.fromJson(configPayload);
 
-  // 🛠️ Synchronize elements completely before triggering router mutations
   await prefs.setString('jwt_token', token);
   await prefs.setBool('is_admin', isAdmin);
   await prefs.setString('cached_config', jsonEncode(configPayload));
@@ -112,7 +171,6 @@ Future<void> _handleAuthUpdate(String token, String role, Map<String, dynamic> c
       .trim()
       .replaceAll(RegExp(r'\s+'), '-');
 
-  // Trigger routing after the updates above are securely finalized
   _router.go('/api/v1/$businessSlug/dashboard');
 }
 
@@ -120,7 +178,6 @@ void main() async {
   usePathUrlStrategy(); 
   WidgetsFlutterBinding.ensureInitialized(); 
 
-  // ⚡ Configure Stripe synchronously without dotenv load issues
   Stripe.publishableKey = AppConfig.stripePublishableKey;
 
   if (!kIsWeb) {
@@ -128,7 +185,6 @@ void main() async {
     Stripe.urlScheme = AppConfig.urlScheme;
   }
 
-  // Safe apply settings call with fallback
   try {
     await Stripe.instance.applySettings();
   } catch (e) {
@@ -152,11 +208,10 @@ void main() async {
 }
 
 void _loadDefaultConfig() {
-  // Changed to .fromJson() 👇
   globalMerchantConfig = MerchantConfig.fromJson({
     'businessName': 'My Workspace',
     'logoIcon': '💼',
-    'primaryColor': '0xFF1E293B', // Wrapped in quotes to match hex string parsing if required by your model
+    'primaryColor': '0xFF1E293B',
     'tags': ['General'],
     'uiDictionary': {
       'btn_book': 'Book Appointment (Manual)',
