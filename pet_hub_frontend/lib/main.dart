@@ -37,21 +37,17 @@ final GoRouter _router = GoRouter(
       isAdmin = isAdmin || (prefs.getBool('is_admin') ?? false); 
     }
     
-    // Check if the route is a public customer route
+    // Allow access to root '/' and public '/customer/...' sub-routes
     final bool isCustomerRoute = state.matchedLocation == '/' || 
                                  state.matchedLocation.startsWith('/customer');
 
-    // If user is NOT logged in:
     if (jwtToken == null) {
-      // Allow access to login, register, and public customer pages
       if (loggingIn || isCustomerRoute) {
         return null;
       }
-      // Redirect protected routes (e.g. dashboard) to login
       return '/api/v1/login';
     }
 
-    // If user IS logged in and tries to access login or register page, send them to dashboard
     if (loggingIn) {
       final String rawBusinessName = globalMerchantConfig.businessName;
       final String businessSlug = rawBusinessName
@@ -67,7 +63,7 @@ final GoRouter _router = GoRouter(
 
   routes: [
     // ---------------- Customer Routes ----------------
-    // Root landing page
+    // Root landing page (Home)
     GoRoute(
       path: '/',
       builder: (context, state) => CustomerHomePage(
@@ -75,13 +71,10 @@ final GoRouter _router = GoRouter(
         baseUrl: kBaseUrl,
       ),
     ),
-    // Route matching CustomerLayoutWrapper logo and 'Home' button navigation
+    // Redirect alias for legacy /customer path to /
     GoRoute(
       path: '/customer',
-      builder: (context, state) => CustomerHomePage(
-        config: globalMerchantConfig,
-        baseUrl: kBaseUrl,
-      ),
+      redirect: (context, state) => '/',
     ),
     // Service route
     GoRoute(
@@ -103,7 +96,6 @@ final GoRouter _router = GoRouter(
       path: '/customer/policy',
       builder: (context, state) => CustomerPolicyPage(
         config: globalMerchantConfig,
-        // baseUrl: kBaseUrl,
       ),
     ),
     // Contact route
@@ -111,7 +103,6 @@ final GoRouter _router = GoRouter(
       path: '/customer/contact',
       builder: (context, state) => CustomerContactPage(
         config: globalMerchantConfig,
-        // baseUrl: kBaseUrl,
       ),
     ),
     // Career route
@@ -119,7 +110,6 @@ final GoRouter _router = GoRouter(
       path: '/customer/career',
       builder: (context, state) => CustomerCareerPage(
         config: globalMerchantConfig,
-        // baseUrl: kBaseUrl,
       ),
     ),
 

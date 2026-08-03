@@ -28,7 +28,7 @@ class CustomerLayoutWrapper extends StatelessWidget {
         centerTitle: false,
         iconTheme: IconThemeData(color: config.primaryColor),
         title: InkWell(
-          onTap: () => context.go('/customer'),
+          onTap: () => context.go('/'),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -120,7 +120,7 @@ class CustomerLayoutWrapper extends StatelessWidget {
               ],
             ),
           ),
-          _drawerItem(context, 'Home', Icons.home, '/customer', activeTab == CustomerTab.home),
+          _drawerItem(context, 'Home', Icons.home, '/', activeTab == CustomerTab.home),
           _drawerItem(context, 'Service', Icons.cleaning_services, '/customer/service', activeTab == CustomerTab.service),
           _drawerItem(context, 'Our Policy', Icons.policy, '/customer/policy', activeTab == CustomerTab.policy),
           _drawerItem(context, 'Book', Icons.calendar_today, '/customer/book', activeTab == CustomerTab.book),
