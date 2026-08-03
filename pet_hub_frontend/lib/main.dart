@@ -37,11 +37,21 @@ final GoRouter _router = GoRouter(
       isAdmin = isAdmin || (prefs.getBool('is_admin') ?? false); 
     }
     
+    // Check if the route is a public customer route
+    final bool isCustomerRoute = state.matchedLocation == '/' || 
+                                 state.matchedLocation.startsWith('/customer');
+
+    // If user is NOT logged in:
     if (jwtToken == null) {
-      if (loggingIn) return null;
-      return null;
+      // Allow access to login, register, and public customer pages
+      if (loggingIn || isCustomerRoute) {
+        return null;
+      }
+      // Redirect protected routes (e.g. dashboard) to login
+      return '/api/v1/login';
     }
 
+    // If user IS logged in and tries to access login or register page, send them to dashboard
     if (loggingIn) {
       final String rawBusinessName = globalMerchantConfig.businessName;
       final String businessSlug = rawBusinessName
