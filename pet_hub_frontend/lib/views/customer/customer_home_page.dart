@@ -62,7 +62,7 @@ class CustomerHomePage extends StatelessWidget {
                   alignment: WrapAlignment.center,
                   children: [
                     ElevatedButton.icon(
-                      onPressed: () => context.go('/customer/book'),
+                      onPressed: () => context.go('/book'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: config.primaryColor,
                         foregroundColor: Colors.white,
@@ -72,7 +72,7 @@ class CustomerHomePage extends StatelessWidget {
                       label: const Text('Book Appointment Now'),
                     ),
                     OutlinedButton.icon(
-                      onPressed: () => context.go('/customer/service'),
+                      onPressed: () => context.go('/service'),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                       ),

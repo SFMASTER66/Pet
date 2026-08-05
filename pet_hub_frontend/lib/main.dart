@@ -37,9 +37,8 @@ final GoRouter _router = GoRouter(
       isAdmin = isAdmin || (prefs.getBool('is_admin') ?? false); 
     }
     
-    // Allow access to root '/' and public '/customer/...' sub-routes
-    final bool isCustomerRoute = state.matchedLocation == '/' || 
-                                 state.matchedLocation.startsWith('/customer');
+    // Allow public access to all customer routes (non-API routes)
+    final bool isCustomerRoute = !state.matchedLocation.startsWith('/api/v1');
 
     if (jwtToken == null) {
       if (loggingIn || isCustomerRoute) {
@@ -71,21 +70,16 @@ final GoRouter _router = GoRouter(
         baseUrl: kBaseUrl,
       ),
     ),
-    // Redirect alias for legacy /customer path to /
-    GoRoute(
-      path: '/customer',
-      redirect: (context, state) => '/',
-    ),
     // Service route
     GoRoute(
-      path: '/customer/service',
+      path: '/service',
       builder: (context, state) => CustomerServicesPage(
         config: globalMerchantConfig,
       ),
     ),
     // Booking route
     GoRoute(
-      path: '/customer/book',
+      path: '/book',
       builder: (context, state) => CustomerBookPage(
         config: globalMerchantConfig,
         baseUrl: kBaseUrl,
@@ -93,21 +87,21 @@ final GoRouter _router = GoRouter(
     ),
     // Policy route
     GoRoute(
-      path: '/customer/policy',
+      path: '/policy',
       builder: (context, state) => CustomerPolicyPage(
         config: globalMerchantConfig,
       ),
     ),
     // Contact route
     GoRoute(
-      path: '/customer/contact',
+      path: '/contact',
       builder: (context, state) => CustomerContactPage(
         config: globalMerchantConfig,
       ),
     ),
     // Career route
     GoRoute(
-      path: '/customer/career',
+      path: '/career',
       builder: (context, state) => CustomerCareerPage(
         config: globalMerchantConfig,
       ),
