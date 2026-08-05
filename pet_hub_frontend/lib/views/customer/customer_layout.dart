@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/merchant_config.dart';
+import 'customer_footer.dart';
 
 enum CustomerTab { home, service, policy, book, contact, career }
 
@@ -71,12 +72,18 @@ class CustomerLayoutWrapper extends StatelessWidget {
                 children: [
                   child,
                   const SizedBox(height: 40),
+                  // Footer section
+                  const CustomerFooter(),
+                  const SizedBox(height: 16),
                   Divider(color: Colors.grey.shade300),
                   const SizedBox(height: 16),
+                  // "All rights reserved" placed below the footer
                   Text(
                     "© ${DateTime.now().year} ${config.businessName}. All rights reserved.",
                     style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                    textAlign: TextAlign.center,
                   ),
+                  const SizedBox(height: 16),
                 ],
               ),
             ),
