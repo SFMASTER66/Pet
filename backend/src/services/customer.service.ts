@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { getCareerEmailOptions } from '../email-templates/career-email';
+import { getContactEmailOptions } from '../email-templates/contact-email';
 
 // Strict Type Definitions
 interface CustomerContactInput {
@@ -45,29 +46,12 @@ export const CustomerService = {
     const transporter = createTransporter();
     const fullName = `${firstName.trim()} ${lastName.trim()}`;
 
-    const mailOptions = {
-      from: `"Pawparazzi Salon System" <no-reply@pawparazzipet.com.au>`,
-      to: process.env.BUSINESS_CONTACT_EMAIL || 'contact@pawparazzipet.com.au',
-      replyTo: email.trim().toLowerCase(),
-      subject: `🚨 New Customer Inquiry from ${fullName}`,
-      text: `
-        New Contact Form Submission received:
-        Customer Name: ${fullName}
-        Email Address: ${email.trim().toLowerCase()}
-        Message content:
-        ${message.trim()}
-      `,
-      html: `
-        <h3>New Contact Form Submission Received</h3>
-        <p><strong>Customer Name:</strong> ${fullName}</p>
-        <p><strong>Email Address:</strong> <a href="mailto:${email.trim().toLowerCase()}">${email.trim().toLowerCase()}</a></p>
-        <br/>
-        <p><strong>Message Content:</strong></p>
-        <div style="padding: 12px; background-color: #f7f9fa; border-left: 4px solid #5E6D55;">
-          ${message.trim().replace(/\n/g, '<br/>')}
-        </div>
-      `,
-    };
+    // Resolves email parameters utilizing the newly extracted external template file
+    const mailOptions = getContactEmailOptions({
+      fullName,
+      email,
+      message,
+    });
 
     await transporter.sendMail(mailOptions);
 
