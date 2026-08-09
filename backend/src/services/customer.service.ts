@@ -43,7 +43,6 @@ export const CustomerService = {
       text: `
 New Contact Form Submission received:
 
-Merchant ID: ${merchantId}
 Customer Name: ${fullName}
 Email Address: ${email.trim().toLowerCase()}
 
@@ -54,7 +53,6 @@ ${message.trim()}
       `,
       html: `
         <h3>New Contact Form Submission Received</h3>
-        <p><strong>Merchant ID:</strong> ${merchantId}</p>
         <p><strong>Customer Name:</strong> ${fullName}</p>
         <p><strong>Email Address:</strong> <a href="mailto:${email.trim().toLowerCase()}">${email.trim().toLowerCase()}</a></p>
         <br/>
