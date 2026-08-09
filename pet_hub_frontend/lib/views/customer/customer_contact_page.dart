@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' as latlong;
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'dart:io' show Platform; // Safe conditional platform imports
 
 import '../../models/merchant_config.dart';
 import 'customer_layout.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class CustomerContactPage extends StatefulWidget {
   final MerchantConfig config;
@@ -22,6 +25,8 @@ class _CustomerContactPageState extends State<CustomerContactPage> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _messageController = TextEditingController();
 
+  bool _isSubmitting = false;
+
   static const Color primaryGreen = Color(0xFF5E6D55);
   static const Color darkTextColor = Color(0xFF2C352E);
 
@@ -30,10 +35,16 @@ class _CustomerContactPageState extends State<CustomerContactPage> {
   static const double longitude = 149.1332;
   static const latlong.LatLng mapCenter = latlong.LatLng(latitude, longitude);
 
-  // Regex pattern for strict email validation
+  // Regex pattern for strict email validation[cite: 5]
   final RegExp _emailRegex = RegExp(
     r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9]+\.[a-zA-Z]+",
   );
+
+  /// 🌐 Dynamic base URL provider parsing layout rules by runtime target
+  String get _baseUrl {
+    if (kIsWeb) return 'http://localhost:3000';
+    return Platform.isAndroid ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
+  }
 
   @override
   void dispose() {
@@ -44,20 +55,90 @@ class _CustomerContactPageState extends State<CustomerContactPage> {
     super.dispose();
   }
 
+  /// 🌐 Performs the asynchronous POST transaction to the Express backend cluster[cite: 5]
+  Future<void> _submitContactForm() async {
+    if (!_formKey.currentState!.validate()) return; //[cite: 5]
+
+    setState(() {
+      _isSubmitting = true; //[cite: 5]
+    });
+
+    // Combines dynamic base target URLs safely with backend routing metrics[cite: 5]
+    final Uri url = Uri.parse("$_baseUrl/api/v1/customers/contact");
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+        body: jsonEncode({
+          "merchantId": widget.config.merchantId, // Dynamically sourced from configuration models[cite: 5]
+          "firstName": _firstNameController.text, //[cite: 5]
+          "lastName": _lastNameController.text, //[cite: 5]
+          "email": _emailController.text, //[cite: 5]
+          "message": _messageController.text, //[cite: 5]
+        }),
+      );
+
+      final Map<String, dynamic> responseData = jsonDecode(response.body); //[cite: 5]
+
+      if (!mounted) return; //[cite: 5]
+
+      if (response.statusCode == 201 && responseData['success'] == true) { //[cite: 5]
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Message sent successfully! Email dispatched to our team."), //[cite: 5]
+            backgroundColor: primaryGreen, //[cite: 5]
+          ),
+        );
+        
+        // Wipe local buffers on successful server acknowledgement[cite: 5]
+        _firstNameController.clear(); //[cite: 5]
+        _lastNameController.clear(); //[cite: 5]
+        _emailController.clear(); //[cite: 5]
+        _messageController.clear(); //[cite: 5]
+        _formKey.currentState?.reset(); //[cite: 5]
+      } else {
+        final errorMessage = responseData['message'] ?? 'Unable to process inquiry form parameters.'; //[cite: 5]
+        _showErrorSnackBar(errorMessage); //[cite: 5]
+      }
+    } catch (error) {
+      if (!mounted) return; //[cite: 5]
+      _showErrorSnackBar("Network connectivity error: Failed to reach processing server."); //[cite: 5]
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false; //[cite: 5]
+        });
+      }
+    }
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message), //[cite: 5]
+        backgroundColor: Colors.redAccent, //[cite: 5]
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final mapHeight = screenWidth < 600 ? 320.0 : 450.0;
+    final screenWidth = MediaQuery.of(context).size.width; //[cite: 5]
+    final mapHeight = screenWidth < 600 ? 320.0 : 450.0; //[cite: 5]
 
     return CustomerLayoutWrapper(
-      config: widget.config,
-      activeTab: CustomerTab.contact,
+      config: widget.config, //[cite: 5]
+      activeTab: CustomerTab.contact, //[cite: 5]
       child: SelectionArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0), //[cite: 5]
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -70,8 +151,8 @@ class _CustomerContactPageState extends State<CustomerContactPage> {
                       color: primaryGreen,
                       letterSpacing: -0.5,
                     ),
-                  ),
-                  const SizedBox(height: 12),
+                  ), //[cite: 5]
+                  const SizedBox(height: 12), //[cite: 5]
                   const Text(
                     "* Have any questions or inquiries? contact or call 0493707378, we would be happy to answer your questions.",
                     style: TextStyle(
@@ -79,21 +160,21 @@ class _CustomerContactPageState extends State<CustomerContactPage> {
                       color: Color(0xFF555555),
                       height: 1.4,
                     ),
-                  ),
-                  const SizedBox(height: 48),
+                  ), //[cite: 5]
+                  const SizedBox(height: 48), //[cite: 5]
 
                   // --- Responsive Main Layout (Grid / Column) ---
                   LayoutBuilder(
                     builder: (context, constraints) {
-                      final isMobile = constraints.maxWidth < 800;
+                      final isMobile = constraints.maxWidth < 800; //[cite: 5]
 
                       if (isMobile) {
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _buildContactInfoList(),
-                            const SizedBox(height: 48),
-                            _buildContactForm(),
+                            _buildContactInfoList(), //[cite: 5]
+                            const SizedBox(height: 48), //[cite: 5]
+                            _buildContactForm(), //[cite: 5]
                           ],
                         );
                       }
@@ -103,12 +184,12 @@ class _CustomerContactPageState extends State<CustomerContactPage> {
                         children: [
                           Expanded(
                             flex: 5,
-                            child: _buildContactInfoList(),
+                            child: _buildContactInfoList(), //[cite: 5]
                           ),
-                          const SizedBox(width: 48),
+                          const SizedBox(width: 48), //[cite: 5]
                           Expanded(
                             flex: 6,
-                            child: _buildContactForm(),
+                            child: _buildContactForm(), //[cite: 5]
                           ),
                         ],
                       );
@@ -118,46 +199,46 @@ class _CustomerContactPageState extends State<CustomerContactPage> {
               ),
             ),
 
-            const SizedBox(height: 32),
+            const SizedBox(height: 32), //[cite: 5]
 
             // --- Thin Horizontal Divider line above map ---
             const Divider(
               color: Color(0xFFE2E8F0),
               thickness: 1,
               height: 1,
-            ),
+            ), //[cite: 5]
 
-            const SizedBox(height: 48),
+            const SizedBox(height: 48), //[cite: 5]
 
             // --- Interactive Map (Hardcoded Location: Braddon ACT 2612) ---
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              padding: const EdgeInsets.symmetric(horizontal: 16.0), //[cite: 5]
               child: Container(
-                height: mapHeight,
-                width: double.infinity,
+                height: mapHeight, //[cite: 5]
+                width: double.infinity, //[cite: 5]
                 decoration: BoxDecoration(
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: const Color(0xFFE2E8F0)), //[cite: 5]
+                  borderRadius: BorderRadius.circular(4), //[cite: 5]
                 ),
-                clipBehavior: Clip.antiAlias,
+                clipBehavior: Clip.antiAlias, //[cite: 5]
                 child: FlutterMap(
                   options: const MapOptions(
-                    initialCenter: mapCenter,
-                    initialZoom: 15.0,
-                    minZoom: 3.0,
-                    maxZoom: 18.0,
+                    initialCenter: mapCenter, //[cite: 5]
+                    initialZoom: 15.0, //[cite: 5]
+                    minZoom: 3.0, //[cite: 5]
+                    maxZoom: 18.0, //[cite: 5]
                   ),
                   children: [
                     TileLayer(
-                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.pawparazzi.app',
+                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', //[cite: 5]
+                      userAgentPackageName: 'com.pawparazzi.app', //[cite: 5]
                     ),
                     const MarkerLayer(
                       markers: [
                         Marker(
-                          point: mapCenter,
-                          width: 44,
-                          height: 44,
+                          point: mapCenter, //[cite: 5]
+                          width: 44, //[cite: 5]
+                          height: 44, //[cite: 5]
                           child: Icon(
                             Icons.location_on_rounded,
                             color: Color(0xFFD93737),
@@ -171,7 +252,7 @@ class _CustomerContactPageState extends State<CustomerContactPage> {
               ),
             ),
 
-            const SizedBox(height: 48),
+            const SizedBox(height: 48), //[cite: 5]
           ],
         ),
       ),
@@ -180,8 +261,8 @@ class _CustomerContactPageState extends State<CustomerContactPage> {
 
   // --- Left Side: Hardcoded Contact Details ---
   Widget _buildContactInfoList() {
-    return Column(
-      children: const [
+    return const Column(
+      children: [
         _ContactInfoTile(
           icon: Icons.location_on_outlined,
           children: [
@@ -195,8 +276,8 @@ class _CustomerContactPageState extends State<CustomerContactPage> {
               style: TextStyle(fontSize: 16, color: darkTextColor, fontWeight: FontWeight.w500),
             ),
           ],
-        ),
-        SizedBox(height: 28),
+        ), //[cite: 5]
+        SizedBox(height: 28), //[cite: 5]
         _ContactInfoTile(
           icon: Icons.phone_outlined,
           children: [
@@ -205,8 +286,8 @@ class _CustomerContactPageState extends State<CustomerContactPage> {
               style: TextStyle(fontSize: 16, color: darkTextColor, fontWeight: FontWeight.w500),
             ),
           ],
-        ),
-        SizedBox(height: 28),
+        ), //[cite: 5]
+        SizedBox(height: 28), //[cite: 5]
         _ContactInfoTile(
           icon: Icons.mail_outline_rounded,
           children: [
@@ -215,8 +296,8 @@ class _CustomerContactPageState extends State<CustomerContactPage> {
               style: TextStyle(fontSize: 16, color: darkTextColor, fontWeight: FontWeight.w500),
             ),
           ],
-        ),
-        SizedBox(height: 28),
+        ), //[cite: 5]
+        SizedBox(height: 28), //[cite: 5]
         _ContactInfoTile(
           icon: Icons.access_time_rounded,
           children: [
@@ -232,38 +313,40 @@ class _CustomerContactPageState extends State<CustomerContactPage> {
           ],
         ),
       ],
-    );
+    ); //[cite: 5]
   }
 
   // --- Right Side: Required Form Fields ---
   Widget _buildContactForm() {
     return Form(
-      key: _formKey,
-      autovalidateMode: AutovalidateMode.onUserInteraction,
+      key: _formKey, //[cite: 5]
+      autovalidateMode: AutovalidateMode.onUserInteraction, //[cite: 5]
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           LayoutBuilder(
             builder: (context, constraints) {
-              final isSmallScreen = constraints.maxWidth < 500;
+              final isSmallScreen = constraints.maxWidth < 500; //[cite: 5]
               if (isSmallScreen) {
                 return Column(
                   children: [
                     _FormFieldWrapper(
                       label: "First Name *",
                       child: TextFormField(
-                        controller: _firstNameController,
-                        decoration: _inputDecoration(),
-                        validator: (val) => (val == null || val.trim().isEmpty) ? "First name is required" : null,
+                        controller: _firstNameController, //[cite: 5]
+                        decoration: _inputDecoration(), //[cite: 5]
+                        enabled: !_isSubmitting, //[cite: 5]
+                        validator: (val) => (val == null || val.trim().isEmpty) ? "First name is required" : null, //[cite: 5]
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 20), //[cite: 5]
                     _FormFieldWrapper(
                       label: "Last Name *",
                       child: TextFormField(
-                        controller: _lastNameController,
-                        decoration: _inputDecoration(),
-                        validator: (val) => (val == null || val.trim().isEmpty) ? "Last name is required" : null,
+                        controller: _lastNameController, //[cite: 5]
+                        decoration: _inputDecoration(), //[cite: 5]
+                        enabled: !_isSubmitting, //[cite: 5]
+                        validator: (val) => (val == null || val.trim().isEmpty) ? "Last name is required" : null, //[cite: 5]
                       ),
                     ),
                   ],
@@ -277,20 +360,22 @@ class _CustomerContactPageState extends State<CustomerContactPage> {
                     child: _FormFieldWrapper(
                       label: "First Name *",
                       child: TextFormField(
-                        controller: _firstNameController,
-                        decoration: _inputDecoration(),
-                        validator: (val) => (val == null || val.trim().isEmpty) ? "First name is required" : null,
+                        controller: _firstNameController, //[cite: 5]
+                        decoration: _inputDecoration(), //[cite: 5]
+                        enabled: !_isSubmitting, //[cite: 5]
+                        validator: (val) => (val == null || val.trim().isEmpty) ? "First name is required" : null, //[cite: 5]
                       ),
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 16), //[cite: 5]
                   Expanded(
                     child: _FormFieldWrapper(
                       label: "Last Name *",
                       child: TextFormField(
-                        controller: _lastNameController,
-                        decoration: _inputDecoration(),
-                        validator: (val) => (val == null || val.trim().isEmpty) ? "Last name is required" : null,
+                        controller: _lastNameController, //[cite: 5]
+                        decoration: _inputDecoration(), //[cite: 5]
+                        enabled: !_isSubmitting, //[cite: 5]
+                        validator: (val) => (val == null || val.trim().isEmpty) ? "Last name is required" : null, //[cite: 5]
                       ),
                     ),
                   ),
@@ -298,58 +383,56 @@ class _CustomerContactPageState extends State<CustomerContactPage> {
               );
             },
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 20), //[cite: 5]
           _FormFieldWrapper(
             label: "Email *",
             child: TextFormField(
-              controller: _emailController,
-              keyboardType: TextInputType.emailAddress,
-              decoration: _inputDecoration(),
+              controller: _emailController, //[cite: 5]
+              keyboardType: TextInputType.emailAddress, //[cite: 5]
+              decoration: _inputDecoration(), //[cite: 5]
+              enabled: !_isSubmitting, //[cite: 5]
               validator: (val) {
-                if (val == null || val.trim().isEmpty) return "Email is required";
-                if (!_emailRegex.hasMatch(val.trim())) return "Please enter a valid email address";
-                return null;
+                if (val == null || val.trim().isEmpty) return "Email is required"; //[cite: 5]
+                if (!_emailRegex.hasMatch(val.trim())) return "Please enter a valid email address"; //[cite: 5]
+                return null; //[cite: 5]
               },
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 20), //[cite: 5]
           _FormFieldWrapper(
             label: "Message *",
             child: TextFormField(
-              controller: _messageController,
-              maxLines: 5,
-              decoration: _inputDecoration(),
-              validator: (val) => (val == null || val.trim().isEmpty) ? "Message cannot be empty" : null,
+              controller: _messageController, //[cite: 5]
+              maxLines: 5, //[cite: 5]
+              decoration: _inputDecoration(), //[cite: 5]
+              enabled: !_isSubmitting, //[cite: 5]
+              validator: (val) => (val == null || val.trim().isEmpty) ? "Message cannot be empty" : null, //[cite: 5]
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 24), //[cite: 5]
           Align(
-            alignment: Alignment.centerRight,
+            alignment: Alignment.centerRight, //[cite: 5]
             child: SizedBox(
-              width: 140,
-              height: 48,
+              width: 140, //[cite: 5]
+              height: 48, //[cite: 5]
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: primaryGreen,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+                  backgroundColor: primaryGreen, //[cite: 5]
+                  foregroundColor: Colors.white, //[cite: 5]
+                  elevation: 0, //[cite: 5]
+                  shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero), //[cite: 5]
                 ),
-                onPressed: () {
-                  if (_formKey.currentState!.validate()) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("Message sent successfully!"),
-                        backgroundColor: primaryGreen,
-                      ),
-                    );
-                    _firstNameController.clear();
-                    _lastNameController.clear();
-                    _emailController.clear();
-                    _messageController.clear();
-                  }
-                },
-                child: const Text("Send", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w400)),
+                onPressed: _isSubmitting ? null : _submitContactForm, //[cite: 5]
+                child: _isSubmitting
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2.0,
+                        ),
+                      ) //[cite: 5]
+                    : const Text("Send", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w400)), //[cite: 5]
               ),
             ),
           ),
@@ -367,7 +450,7 @@ class _CustomerContactPageState extends State<CustomerContactPage> {
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.zero, borderSide: BorderSide(color: primaryGreen, width: 1.5)),
       errorBorder: OutlineInputBorder(borderRadius: BorderRadius.zero, borderSide: BorderSide(color: Colors.redAccent, width: 1)),
       focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.zero, borderSide: BorderSide(color: Colors.redAccent, width: 1.5)),
-    );
+    ); //[cite: 5]
   }
 }
 
@@ -383,16 +466,16 @@ class _ContactInfoTile extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 28, color: const Color(0xFF4A5568)),
-        const SizedBox(width: 24),
+        Icon(icon, size: 28, color: const Color(0xFF4A5568)), //[cite: 5]
+        const SizedBox(width: 24), //[cite: 5]
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: children,
+            children: children, //[cite: 5]
           ),
         ),
       ],
-    );
+    ); //[cite: 5]
   }
 }
 
@@ -410,9 +493,9 @@ class _FormFieldWrapper extends StatelessWidget {
         Text(
           label,
           style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: Color(0xFF333333)),
-        ),
-        const SizedBox(height: 6),
-        child,
+        ), //[cite: 5]
+        const SizedBox(height: 6), //[cite: 5]
+        child, //[cite: 5]
       ],
     );
   }
