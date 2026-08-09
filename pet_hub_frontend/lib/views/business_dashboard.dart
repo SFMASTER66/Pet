@@ -65,11 +65,36 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
   void initState() {
     super.initState();
     if (widget.isAdmin) {
-      _drawerTabController = TabController(length: 3, vsync: this);
+      _initDrawerController();
     }
     _fetchServiceMatrices(); 
     _fetchDashboardAppointments();
     _fetchBusinessHours(); 
+  }
+  void _initDrawerController() {
+    _drawerTabController = TabController(length: 4, vsync: this);
+    _drawerTabController!.addListener(() {
+      // Index 3 is the Roster Tab
+      if (_drawerTabController!.index == 3 && !_drawerTabController!.indexIsChanging) {
+        // 1. Revert index back to the first tab so the drawer doesn't look broken if reopened
+        _drawerTabController!.index = 0;
+        
+        // 2. Close the slide-out management drawer
+        Navigator.pop(context);
+        
+        // 3. Open the Roster page as a full responsive page!
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => StaffSchedulingPage(
+              config: widget.config,
+              authToken: widget.authToken,
+              businessHoursConfig: _businessHoursConfig,
+            ),
+          ),
+        );
+      }
+    });
   }
 
   @override
@@ -83,7 +108,11 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     super.didUpdateWidget(oldWidget);
     if (widget.isAdmin != oldWidget.isAdmin) {
       _drawerTabController?.dispose();
-      _drawerTabController = widget.isAdmin ? TabController(length: 3, vsync: this) : null;
+      if (widget.isAdmin) {
+        _initDrawerController();
+      } else {
+        _drawerTabController = null;
+      }
     }
   }
 
@@ -785,134 +814,134 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
       key: _scaffoldKey,
       backgroundColor: const Color(0xFFF1F5F9), 
       appBar: AppBar(
-  elevation: 0.5,
-  backgroundColor: Colors.white,
-  centerTitle: false, // 👈 FIX: Prevents title from centering on desktop/web
-  titleSpacing: 16,   // Keeps clean alignment with the body content below
-  title: Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Container(
-        padding: const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-          color: themeColor.withAlpha(25),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(
-          widget.config.logoIcon,
-          style: const TextStyle(fontSize: 18),
-        ),
-      ),
-      const SizedBox(width: 8),
-      Flexible(
-        child: Text(
-          widget.config.businessName,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF0F172A),
-            fontSize: 16,
-          ),
-          overflow: TextOverflow.ellipsis,
-        ),
-      ),
-    ],
-  ),
-  actions: [
-    LayoutBuilder(
-      builder: (context, constraints) {
-        final isCompact = MediaQuery.of(context).size.width < 600;
-
-        if (isCompact) {
-          return Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.launch, size: 20),
-                tooltip: 'Customer Portal',
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => CustomerPortalPage(
-                      config: widget.config,
-                      activeServices: liveServiceMatrices,
-                      baseUrl: _baseUrl,
-                    ),
-                  ),
-                ),
-              ),
-              IconButton(
-                icon: Icon(Icons.add_circle, color: themeColor, size: 22),
-                tooltip: 'Manual Booking',
-                onPressed: _showCreateBookingDialog,
-              ),
-              if (widget.isAdmin)
-                IconButton(
-                  icon: const Icon(
-                    Icons.manage_accounts_outlined,
-                    color: Color(0xFF475569),
-                  ),
-                  tooltip: 'Management Drawer',
-                  onPressed: () {
-                    _scaffoldKey.currentState!.openEndDrawer();
-                  },
-                ),
-              IconButton(
-                icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
-                onPressed: widget.onLogout,
-              ),
-            ],
-          );
-        }
-
-        return Row(
+        elevation: 0.5,
+        backgroundColor: Colors.white,
+        centerTitle: false, 
+        titleSpacing: 16,   
+        title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            OutlinedButton.icon(
-              icon: const Icon(Icons.launch, size: 16),
-              label: const Text('Customer Portal'),
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => CustomerPortalPage(
-                    config: widget.config,
-                    activeServices: liveServiceMatrices,
-                    baseUrl: _baseUrl,
-                  ),
-                ),
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: themeColor.withAlpha(25),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                widget.config.logoIcon,
+                style: const TextStyle(fontSize: 18),
               ),
             ),
             const SizedBox(width: 8),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text('Manual Booking'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: themeColor,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: _showCreateBookingDialog,
-            ),
-            if (widget.isAdmin)
-              IconButton(
-                icon: const Icon(
-                  Icons.manage_accounts_outlined,
-                  color: Color(0xFF475569),
+            Flexible(
+              child: Text(
+                widget.config.businessName,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0F172A),
+                  fontSize: 16,
                 ),
-                tooltip: 'Management Drawer',
-                onPressed: () {
-                  _scaffoldKey.currentState!.openEndDrawer();
-                },
+                overflow: TextOverflow.ellipsis,
               ),
-            IconButton(
-              icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
-              onPressed: widget.onLogout,
             ),
-            const SizedBox(width: 12),
           ],
-        );
-      },
-    ),
-  ],
-),
+        ),
+        actions: [
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isCompact = MediaQuery.of(context).size.width < 600;
+
+              if (isCompact) {
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.launch, size: 20),
+                      tooltip: 'Customer Portal',
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => CustomerPortalPage(
+                            config: widget.config,
+                            activeServices: liveServiceMatrices,
+                            baseUrl: _baseUrl,
+                          ),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.add_circle, color: themeColor, size: 22),
+                      tooltip: 'Manual Booking',
+                      onPressed: _showCreateBookingDialog,
+                    ),
+                    if (widget.isAdmin)
+                      IconButton(
+                        icon: const Icon(
+                          Icons.manage_accounts_outlined,
+                          color: Color(0xFF475569),
+                        ),
+                        tooltip: 'Management Drawer',
+                        onPressed: () {
+                          _scaffoldKey.currentState!.openEndDrawer();
+                        },
+                      ),
+                    IconButton(
+                      icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+                      onPressed: widget.onLogout,
+                    ),
+                  ],
+                );
+              }
+
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.launch, size: 16),
+                    label: const Text('Customer Portal'),
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => CustomerPortalPage(
+                          config: widget.config,
+                          activeServices: liveServiceMatrices,
+                          baseUrl: _baseUrl,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Manual Booking'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: themeColor,
+                      foregroundColor: Colors.white,
+                    ),
+                    onPressed: _showCreateBookingDialog,
+                  ),
+                  if (widget.isAdmin)
+                    IconButton(
+                      icon: const Icon(
+                        Icons.manage_accounts_outlined,
+                        color: Color(0xFF475569),
+                      ),
+                      tooltip: 'Management Drawer',
+                      onPressed: () {
+                        _scaffoldKey.currentState!.openEndDrawer();
+                      },
+                    ),
+                  IconButton(
+                    icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+                    onPressed: widget.onLogout,
+                  ),
+                  const SizedBox(width: 12),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
       endDrawer: widget.isAdmin ? _buildManagementDrawer(themeColor) : null,
       body: LayoutBuilder(
         builder: (context, constraints) {
@@ -2580,6 +2609,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                 Tab(icon: Icon(Icons.schedule), text: 'Hours'),
                 Tab(icon: Icon(Icons.group), text: 'Team'),
                 Tab(icon: Icon(Icons.people), text: 'Clients'),
+                Tab(icon: Icon(Icons.calendar_month), text: 'Roster'), 
               ],
             ),
             Expanded(
@@ -2589,6 +2619,8 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                   ManageHoursPanel(config: widget.config, authToken: widget.authToken),
                   ManageTeamPanel(config: widget.config, authToken: widget.authToken),
                   CustomerInfoPanel(config: widget.config, authToken: widget.authToken, baseUrl: _baseUrl, themeColor: themeColor),
+                  // Replaced with a placeholder container since navigation is now handled explicitly by the listener
+                  const Center(child: CircularProgressIndicator()), 
                 ],
               ),
             ),

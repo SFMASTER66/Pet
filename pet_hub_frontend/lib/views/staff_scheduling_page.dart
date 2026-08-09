@@ -35,14 +35,11 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
   DateTime? _selectedDay = DateTime.now();
   CalendarFormat _calendarFormat = CalendarFormat.month; 
   
-  // Roster assignments configured dynamically: Date -> List of Assigned Employee IDs
   final Map<DateTime, List<String>> _staffRosterAssignments = {};
   List<EmployeeSummary> _masterTeamMembersPool = [];
 
   bool _isSaving = false;
   bool _isLoadingStaff = true;
-  
-  // Configurable dynamic look-ahead days range setup
   int _rosterDaysLimit = 90;
 
   String get _baseUrl {
@@ -59,7 +56,6 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
   Future<void> _fetchStaffAndInitialize() async {
     setState(() => _isLoadingStaff = true);
     try {
-      // 1. Fetch active staff pool
       final staffResponse = await http.get(
         Uri.parse('$_baseUrl/api/v1/merchant/staff'),
         headers: {
@@ -88,7 +84,6 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
         }
       }
 
-      // 🟢 2. Fetch existing scheduled shifts from the DB
       final shiftsResponse = await http.get(
         Uri.parse('$_baseUrl/api/v1/merchant/${widget.config.merchantId}/shifts'),
         headers: {
@@ -116,7 +111,6 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
         }
       }
 
-      // 🟢 3. Pre-populate UI using DB shifts if available, or fall back to default active staff
       _prepopulateDefaultAssignments(existingShiftsMap);
 
     } catch (e) {
@@ -128,13 +122,9 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
     }
   }
 
-  // ///////////////////////////////////////////////////////////////////////////
-  // 🟢 HIGHLIGHTED CHANGE: Preserves existing data & only adds to unscheduled open days
-  // ///////////////////////////////////////////////////////////////////////////
   void _prepopulateDefaultAssignments([Map<DateTime, List<String>>? existingShiftsMap]) {
     if (_masterTeamMembersPool.isEmpty) return;
     
-    // Seed initial values from DB on first fetch if provided
     if (existingShiftsMap != null) {
       _staffRosterAssignments.clear();
       _staffRosterAssignments.addAll(existingShiftsMap);
@@ -142,28 +132,21 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
     
     final now = DateTime.now();
     DateTime loopDay = DateTime(now.year, now.month, now.day);
-    
     int scheduledDaysCount = 0;
 
     while (scheduledDaysCount < _rosterDaysLimit) {
       final cleanNormalizedDay = DateTime(loopDay.year, loopDay.month, loopDay.day);
-      
       if (!_checkIsDayClosed(cleanNormalizedDay)) {
-        // If day has no roster entries at all, default to full active staff
         if (!_staffRosterAssignments.containsKey(cleanNormalizedDay)) {
           _staffRosterAssignments[cleanNormalizedDay] = 
               _masterTeamMembersPool.map((e) => e.id).toList();
         }
         scheduledDaysCount++;
       }
-      
       loopDay = loopDay.add(const Duration(days: 1));
     }
   }
 
-  // ///////////////////////////////////////////////////////////////////////////
-  // 🟢 HIGHLIGHTED CHANGE: Helper method to determine if a date is within open days limit
-  // ///////////////////////////////////////////////////////////////////////////
   bool _isWithinOpenDaysLimit(DateTime date) {
     final now = DateTime.now();
     final start = DateTime(now.year, now.month, now.day);
@@ -205,13 +188,15 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) {
+          // Responsive width for dialog matching screen sizes
+          final screenWidth = MediaQuery.of(context).size.width;
           return AlertDialog(
             title: Text(
               'Roster Matrix: ${normalizedDate.day}/${normalizedDate.month}/${normalizedDate.year}',
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             content: SizedBox(
-              width: 400,
+              width: screenWidth > 500 ? 400 : screenWidth * 0.85,
               child: _masterTeamMembersPool.isEmpty
                   ? const Text('No active team members loaded.')
                   : Column(
@@ -261,16 +246,12 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
     
     final now = DateTime.now();
     DateTime loopDay = DateTime(now.year, now.month, now.day);
-    
     int processedOpenDays = 0;
 
-    // Iterates sequentially starting strictly from today onwards up to the chosen slider limit
     while (processedOpenDays < _rosterDaysLimit) {
       final dateKey = DateTime(loopDay.year, loopDay.month, loopDay.day);
-      
       if (!_checkIsDayClosed(dateKey)) {
         final List<String> employeeIds = _staffRosterAssignments[dateKey] ?? [];
-        
         final formattedDate = "${dateKey.year}-${dateKey.month.toString().padLeft(2, '0')}-${dateKey.day.toString().padLeft(2, '0')}";
         
         final targetHours = widget.businessHoursConfig.firstWhere(
@@ -288,10 +269,8 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
             "endTime": endTime
           });
         }
-        
         processedOpenDays++;
       }
-      
       loopDay = loopDay.add(const Duration(days: 1));
     }
 
@@ -332,13 +311,18 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
       backgroundColor: const Color(0xFFF1F5F9),
       appBar: AppBar(
         backgroundColor: Colors.white,
-        title: const Text('Staff Scheduling Management', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Staff Scheduling Management', 
+          style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16),
+        ),
         actions: [
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
             child: ElevatedButton.icon(
-              icon: _isSaving ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.cloud_upload_outlined),
-              label: const Text('Publish Changes'),
+              icon: _isSaving 
+                  ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) 
+                  : const Icon(Icons.cloud_upload_outlined, size: 16),
+              label: const Text('Publish', style: TextStyle(fontSize: 12)),
               style: ElevatedButton.styleFrom(backgroundColor: themeColor, foregroundColor: Colors.white),
               onPressed: _isSaving || _isLoadingStaff ? null : _commitRosterUpdatesToRemote,
             ),
@@ -347,184 +331,261 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
       ),
       body: _isLoadingStaff
           ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                // Frontend configuration panel for scheduling look-ahead horizon settings
-                Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.tune, color: Color(0xFF0F172A)),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Roster Horizon Configuration: ',
-                        style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey[800]),
-                      ),
-                      Text(
-                        '$_rosterDaysLimit Open Days',
-                        style: TextStyle(fontWeight: FontWeight.bold, color: themeColor, fontSize: 16),
-                      ),
-                      Expanded(
-                        child: Slider(
-                          value: _rosterDaysLimit.toDouble(),
-                          min: 30,
-                          max: 365,
-                          divisions: 67,
-                          activeColor: themeColor,
-                          label: '$_rosterDaysLimit Days',
-                          onChanged: (double val) {
-                            setState(() {
-                              _rosterDaysLimit = val.toInt();
-                              _prepopulateDefaultAssignments();
-                            });
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 4,
-                        child: Container(
-                          margin: const EdgeInsets.only(left: 24, right: 12, bottom: 24),
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-                          child: TableCalendar(
-                            firstDay: DateTime.utc(2026, 1, 1),
-                            lastDay: DateTime.utc(2030, 12, 31),
-                            focusedDay: _focusedDay,
-                            calendarFormat: _calendarFormat,
-                            
-                            availableCalendarFormats: const {
-                              CalendarFormat.month: 'Month',
-                            },
-                            onFormatChanged: (format) {
-                              setState(() {
-                                _calendarFormat = format;
-                              });
-                            },
-                            selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-                            onDaySelected: (selectedDay, focusedDay) {
-                              setState(() {
-                                _selectedDay = selectedDay;
-                                _focusedDay = focusedDay;
-                              });
-                            },
-                            calendarBuilders: CalendarBuilders(
-                              markerBuilder: (context, date, events) {
-                                final checkDay = DateTime(date.year, date.month, date.day);
-                                final now = DateTime.now();
-                                final todayMidnight = DateTime(now.year, now.month, now.day);
-                                
-                                if (checkDay.isBefore(todayMidnight)) {
-                                  return const SizedBox();
-                                }
-
-                                if (_checkIsDayClosed(checkDay)) return const SizedBox();
-
-                                // ///////////////////////////////////////////////////////////////////////////
-                                // 🟢 HIGHLIGHTED CHANGE: Check if day falls within current slider limit
-                                // ///////////////////////////////////////////////////////////////////////////
-                                if (!_isWithinOpenDaysLimit(checkDay)) {
-                                  return const SizedBox();
-                                }
-
-                                final staffCount = _staffRosterAssignments[checkDay]?.length ?? 0;
-                                if (staffCount == 0) return const SizedBox();
-                                
-                                return Positioned(
-                                  bottom: 4,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                                    decoration: BoxDecoration(
-                                      color: themeColor.withOpacity(0.15), 
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      '$staffCount Staff', 
-                                      style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: themeColor),
-                                    ),
-                                  ),
-                                );
-                              },
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                // Breakpoint evaluation: Mobile vs Tablet/Desktop
+                final bool isMobile = constraints.maxWidth < 768;
+                
+                // Adaptive layout configuration
+                final contentWidgets = [
+                  // 1. Horizon Setting Configuration Element
+                  _buildHorizonConfigPanel(themeColor, isMobile),
+                  
+                  // 2. Main content panels (stacked or side-by-side depending on viewport)
+                  isMobile
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _buildCalendarCard(themeColor),
+                            const SizedBox(height: 16),
+                            _buildAssignmentsCard(themeColor, activeSelectedDay, normalizedActiveDay, isSelectedDayClosed, currentDayStaffIds, isMobile),
+                          ],
+                        )
+                      : Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              flex: 4,
+                              child: _buildCalendarCard(themeColor),
                             ),
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        flex: 6,
-                        child: Container(
-                          margin: const EdgeInsets.only(left: 12, right: 24, bottom: 24),
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    'Assignments for ${activeSelectedDay.day}/${activeSelectedDay.month}/${activeSelectedDay.year}', 
-                                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                                  ),
-                                  if (!isSelectedDayClosed && 
-                                      !normalizedActiveDay.isBefore(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day)))
-                                    ElevatedButton(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFF0F172A), 
-                                        foregroundColor: Colors.white,
-                                      ),
-                                      onPressed: () => _showStaffAllocationDialog(normalizedActiveDay),
-                                      child: const Text('Modify Shifts'),
-                                    ),
-                                ],
-                              ),
-                              const Divider(height: 32),
-                              if (isSelectedDayClosed)
-                                const Expanded(
-                                  child: Center(
-                                    child: Text(
-                                      'Shop Closed', 
-                                      style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
-                                )
-                              else
-                                Expanded(
-                                  child: ListView.builder(
-                                    itemCount: currentDayStaffIds.length,
-                                    itemBuilder: (context, idx) {
-                                      final empId = currentDayStaffIds[idx];
-                                      final employee = _masterTeamMembersPool.firstWhere(
-                                        (e) => e.id == empId, 
-                                        orElse: () => EmployeeSummary(id: '', name: 'Unknown', email: ''),
-                                      );
-                                      return ListTile(
-                                        leading: CircleAvatar(
-                                          backgroundColor: themeColor.withOpacity(0.2),
-                                          foregroundColor: themeColor,
-                                          child: Text(employee.name.isNotEmpty ? employee.name.substring(0, 1) : '?'),
-                                        ),
-                                        title: Text(employee.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                                        subtitle: Text(employee.email), 
-                                      );
-                                    },
-                                  ),
-                                )
-                            ],
-                          ),
-                        ),
-                      )
-                    ],
+                            Expanded(
+                              flex: 6,
+                              child: _buildAssignmentsCard(themeColor, activeSelectedDay, normalizedActiveDay, isSelectedDayClosed, currentDayStaffIds, isMobile),
+                            ),
+                          ],
+                        )
+                ];
+
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: contentWidgets,
                   ),
+                );
+              },
+            ),
+    );
+  }
+
+  // --- HELPER LAYOUT REFACTORING BLOCKS ---
+
+  Widget _buildHorizonConfigPanel(Color themeColor, bool isMobile) {
+    final titleWidget = Text(
+      'Roster Horizon Configuration: ',
+      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey[800], fontSize: 13),
+    );
+    final valueWidget = Text(
+      '$_rosterDaysLimit Open Days',
+      style: TextStyle(fontWeight: FontWeight.bold, color: themeColor, fontSize: 14),
+    );
+    final sliderWidget = Slider(
+      value: _rosterDaysLimit.toDouble(),
+      min: 30,
+      max: 365,
+      divisions: 67,
+      activeColor: themeColor,
+      label: '$_rosterDaysLimit Days',
+      onChanged: (double val) {
+        setState(() {
+          _rosterDaysLimit = val.toInt();
+          _prepopulateDefaultAssignments();
+        });
+      },
+    );
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+      child: isMobile 
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.tune, color: Color(0xFF0F172A), size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(child: Wrap(runSpacing: 4, children: [titleWidget, valueWidget])),
+                  ],
                 ),
+                sliderWidget,
+              ],
+            )
+          : Row(
+              children: [
+                const Icon(Icons.tune, color: Color(0xFF0F172A)),
+                const SizedBox(width: 12),
+                titleWidget,
+                valueWidget,
+                Expanded(child: sliderWidget),
               ],
             ),
+    );
+  }
+
+  Widget _buildCalendarCard(Color themeColor) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+      child: TableCalendar(
+        firstDay: DateTime.utc(2026, 1, 1),
+        lastDay: DateTime.utc(2030, 12, 31),
+        focusedDay: _focusedDay,
+        calendarFormat: _calendarFormat,
+        rowHeight: 52, // Secure text/elements bounds spacing heights 
+        availableCalendarFormats: const {
+          CalendarFormat.month: 'Month',
+        },
+        onFormatChanged: (format) {
+          setState(() {
+            _calendarFormat = format;
+          });
+        },
+        selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+        onDaySelected: (selectedDay, focusedDay) {
+          setState(() {
+            _selectedDay = selectedDay;
+            _focusedDay = focusedDay;
+          });
+        },
+        calendarBuilders: CalendarBuilders(
+          markerBuilder: (context, date, events) {
+            final checkDay = DateTime(date.year, date.month, date.day);
+            final now = DateTime.now();
+            final todayMidnight = DateTime(now.year, now.month, now.day);
+            
+            if (checkDay.isBefore(todayMidnight)) return const SizedBox();
+            if (_checkIsDayClosed(checkDay)) return const SizedBox();
+            if (!_isWithinOpenDaysLimit(checkDay)) return const SizedBox();
+
+            final staffCount = _staffRosterAssignments[checkDay]?.length ?? 0;
+            if (staffCount == 0) return const SizedBox();
+            
+            return Positioned(
+              bottom: 2,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: themeColor.withOpacity(0.15), 
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  '$staffCount Staff', 
+                  style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: themeColor),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAssignmentsCard(
+    Color themeColor, 
+    DateTime activeSelectedDay, 
+    DateTime normalizedActiveDay, 
+    bool isSelectedDayClosed, 
+    List<String> currentDayStaffIds,
+    bool isMobile,
+  ) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Responsive configuration inside content updates card header
+          isMobile 
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Assignments for ${activeSelectedDay.day}/${activeSelectedDay.month}/${activeSelectedDay.year}', 
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    if (!isSelectedDayClosed && !normalizedActiveDay.isBefore(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day)))
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F172A), foregroundColor: Colors.white),
+                          onPressed: () => _showStaffAllocationDialog(normalizedActiveDay),
+                          child: const Text('Modify Shifts'),
+                        ),
+                      ),
+                  ],
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Assignments for ${activeSelectedDay.day}/${activeSelectedDay.month}/${activeSelectedDay.year}', 
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                    ),
+                    if (!isSelectedDayClosed && !normalizedActiveDay.isBefore(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day)))
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F172A), foregroundColor: Colors.white),
+                        onPressed: () => _showStaffAllocationDialog(normalizedActiveDay),
+                        child: const Text('Modify Shifts'),
+                      ),
+                  ],
+                ),
+          const Divider(height: 24),
+          if (isSelectedDayClosed)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 32),
+              child: Center(
+                child: Text('Shop Closed', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+              ),
+            )
+          else if (currentDayStaffIds.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 32),
+              child: Center(
+                child: Text('No Staff Allocated', style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
+              ),
+            )
+          else
+            // Changed list pattern from Expanded to standard ListView with fixed constraints inside structural layout parameters
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: currentDayStaffIds.length,
+              itemBuilder: (context, idx) {
+                final empId = currentDayStaffIds[idx];
+                final employee = _masterTeamMembersPool.firstWhere(
+                  (e) => e.id == empId, 
+                  orElse: () => EmployeeSummary(id: '', name: 'Unknown', email: ''),
+                );
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: CircleAvatar(
+                    backgroundColor: themeColor.withOpacity(0.2),
+                    foregroundColor: themeColor,
+                    child: Text(employee.name.isNotEmpty ? employee.name.substring(0, 1) : '?'),
+                  ),
+                  title: Text(employee.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  subtitle: Text(employee.email, style: const TextStyle(fontSize: 12)), 
+                );
+              },
+            )
+        ],
+      ),
     );
   }
 }
