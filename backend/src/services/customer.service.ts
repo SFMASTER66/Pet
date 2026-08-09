@@ -41,15 +41,15 @@ export const CustomerService = {
       replyTo: email.trim().toLowerCase(),
       subject: `🚨 New Customer Inquiry from ${fullName}`,
       text: `
-New Contact Form Submission received:
+        New Contact Form Submission received:
 
-Customer Name: ${fullName}
-Email Address: ${email.trim().toLowerCase()}
+        Customer Name: ${fullName}
+        Email Address: ${email.trim().toLowerCase()}
 
-Message content:
-------------------------------------------
-${message.trim()}
-------------------------------------------
+        Message content:
+        ------------------------------------------
+        ${message.trim()}
+        ------------------------------------------
       `,
       html: `
         <h3>New Contact Form Submission Received</h3>
