@@ -1,4 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb; // Added for platform-aware URL handling style
+import 'dart:io' show Platform; // Added for platform-aware URL handling style
+import 'package:http/http.dart' as http;
 import '../../models/merchant_config.dart';
 import 'customer_layout.dart';
 
@@ -21,9 +25,17 @@ class _CustomerCareerPageState extends State<CustomerCareerPage> {
   final _emailController = TextEditingController();
   final _messageController = TextEditingController();
 
+  bool _isSubmitting = false;
+
   final RegExp _emailRegex = RegExp(
     r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+",
   );
+
+  /// 🌐 Dynamic base URL provider parsing layout rules by runtime target (Matches Contact Page style)
+  String get _baseUrl {
+    if (kIsWeb) return 'http://localhost:3000';
+    return Platform.isAndroid ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
+  }
 
   @override
   void dispose() {
@@ -32,6 +44,67 @@ class _CustomerCareerPageState extends State<CustomerCareerPage> {
     _emailController.dispose();
     _messageController.dispose();
     super.dispose();
+  }
+
+  Future<void> _submitApplication() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      // Combines dynamic base target URLs safely with backend routing metrics matching Contact Page style
+      final Uri url = Uri.parse("$_baseUrl/api/v1/customers/career");
+      
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode({
+          'merchantId': widget.config.merchantId ?? '', 
+          'firstName': _firstNameController.text.trim(),
+          'lastName': _lastNameController.text.trim(),
+          'email': _emailController.text.trim(),
+          'message': _messageController.text.trim(),
+        }),
+      );
+
+      if (!mounted) return;
+
+      if (response.statusCode == 201) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Application submitted successfully! Our hiring managers will be in touch.'),
+            backgroundColor: primaryGreen,
+          ),
+        );
+        _firstNameController.clear();
+        _lastNameController.clear();
+        _emailController.clear();
+        _messageController.clear();
+        _formKey.currentState?.reset();
+      } else {
+        final errorData = jsonDecode(response.body);
+        throw Exception(errorData['message'] ?? 'Failed submission error code discovered.');
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${error.toString().replaceAll('Exception: ', '')}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
   }
 
   InputDecoration _inputDecoration() {
@@ -177,6 +250,7 @@ class _CustomerCareerPageState extends State<CustomerCareerPage> {
                                       label: "First Name",
                                       child: TextFormField(
                                         controller: _firstNameController,
+                                        enabled: !_isSubmitting,
                                         decoration: _inputDecoration(),
                                         autovalidateMode: AutovalidateMode.onUserInteraction,
                                         style: const TextStyle(color: darkTextColor),
@@ -188,6 +262,7 @@ class _CustomerCareerPageState extends State<CustomerCareerPage> {
                                       label: "Last Name",
                                       child: TextFormField(
                                         controller: _lastNameController,
+                                        enabled: !_isSubmitting,
                                         decoration: _inputDecoration(),
                                         autovalidateMode: AutovalidateMode.onUserInteraction,
                                         style: const TextStyle(color: darkTextColor),
@@ -199,6 +274,7 @@ class _CustomerCareerPageState extends State<CustomerCareerPage> {
                                       label: "Email *",
                                       child: TextFormField(
                                         controller: _emailController,
+                                        enabled: !_isSubmitting,
                                         keyboardType: TextInputType.emailAddress,
                                         decoration: _inputDecoration(),
                                         autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -219,6 +295,7 @@ class _CustomerCareerPageState extends State<CustomerCareerPage> {
                                   label: "Message",
                                   child: TextFormField(
                                     controller: _messageController,
+                                    enabled: !_isSubmitting,
                                     maxLines: 8,
                                     decoration: _inputDecoration(),
                                     autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -236,6 +313,7 @@ class _CustomerCareerPageState extends State<CustomerCareerPage> {
                                 label: "First Name",
                                 child: TextFormField(
                                   controller: _firstNameController,
+                                  enabled: !_isSubmitting,
                                   decoration: _inputDecoration(),
                                   autovalidateMode: AutovalidateMode.onUserInteraction,
                                   style: const TextStyle(color: darkTextColor),
@@ -247,6 +325,7 @@ class _CustomerCareerPageState extends State<CustomerCareerPage> {
                                 label: "Last Name",
                                 child: TextFormField(
                                   controller: _lastNameController,
+                                  enabled: !_isSubmitting,
                                   decoration: _inputDecoration(),
                                   autovalidateMode: AutovalidateMode.onUserInteraction,
                                   style: const TextStyle(color: darkTextColor),
@@ -258,6 +337,7 @@ class _CustomerCareerPageState extends State<CustomerCareerPage> {
                                 label: "Email *",
                                 child: TextFormField(
                                   controller: _emailController,
+                                  enabled: !_isSubmitting,
                                   keyboardType: TextInputType.emailAddress,
                                   decoration: _inputDecoration(),
                                   autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -274,6 +354,7 @@ class _CustomerCareerPageState extends State<CustomerCareerPage> {
                                 label: "Message",
                                 child: TextFormField(
                                   controller: _messageController,
+                                  enabled: !_isSubmitting,
                                   maxLines: 6,
                                   decoration: _inputDecoration(),
                                   autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -294,18 +375,20 @@ class _CustomerCareerPageState extends State<CustomerCareerPage> {
                         width: isDesktop ? 160 : double.infinity,
                         height: 44,
                         child: ElevatedButton(
-                          onPressed: () {
-                            if (_formKey.currentState!.validate()) {
-                              // Process valid submit actions
-                            }
-                          },
+                          onPressed: _isSubmitting ? null : _submitApplication,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: primaryGreen,
                             foregroundColor: Colors.white,
                             shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
                             elevation: 0,
                           ),
-                          child: const Text("Send", style: TextStyle(fontSize: 16)),
+                          child: _isSubmitting 
+                            ? const SizedBox(
+                                width: 20, 
+                                height: 20, 
+                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                              )
+                            : const Text("Send", style: TextStyle(fontSize: 16)),
                         ),
                       ),
                     ),
