@@ -294,7 +294,13 @@ export const BookingService = {
           data: {
             pet: { connect: { id: petProfile.id } },
             merchant: { connect: { id: input.merchantId } },
-            bookedBy: { connect: { id: input.bookedById } },
+            bookedBy: {
+              connect: {
+                id: (input.bookedById && input.bookedById.trim() !== "") 
+                  ? input.bookedById 
+                  : userProfile.id
+              }
+            },
             servicePricingMatrix: { connect: { id: matrixRow.id } },
             groomer: input.groomerId 
               ? { connect: { id: input.groomerId } } 

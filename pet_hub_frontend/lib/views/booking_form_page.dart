@@ -12,6 +12,7 @@ class BookingFormPage extends StatefulWidget {
   final Color themeColor;
   final MerchantConfig config;
   final String baseUrl;
+  final String merchantId; // Optional merchantId for API calls
 
   const BookingFormPage({
     super.key,
@@ -20,6 +21,7 @@ class BookingFormPage extends StatefulWidget {
     required this.themeColor,
     required this.config,
     required this.baseUrl,
+    required this.merchantId, // Required in constructor
   });
 
   @override
@@ -84,7 +86,7 @@ class _BookingFormPageState extends State<BookingFormPage> {
       final int durationMinutes = matchedVariant?['durationMinutes'] ?? 60;
 
       final String targetUrl = '${widget.baseUrl}/api/v1/bookings/available-slots'
-          '?merchantId=${widget.config.merchantId}'
+          '?merchantId=${widget.merchantId}'
           '&date=$formattedDate'
           '&duration=$durationMinutes';
 
@@ -263,7 +265,7 @@ class _BookingFormPageState extends State<BookingFormPage> {
       );
 
       final bookingPayload = {
-        'merchantId': widget.config.merchantId,
+        'merchantId': widget.merchantId,
         'bookedById': widget.config.userId,
         'servicePricingMatrixId': matchedRecord['id'],
         'dogName': _dogNameCtrl.text.trim(),
@@ -305,7 +307,7 @@ class _BookingFormPageState extends State<BookingFormPage> {
         totalAmount: totalAmount,
         depositAmount: depositAmount,
         serviceTime: targetDateTime,
-        merchantId: widget.config.merchantId,
+        merchantId: widget.merchantId,
         ownerName: _ownerNameCtrl.text.trim(),
         ownerPhone: _ownerPhoneCtrl.text.trim(),
         ownerEmail: _ownerEmailCtrl.text.trim(),

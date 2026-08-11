@@ -162,6 +162,7 @@ class _CustomerPortalPageState extends State<CustomerPortalPage> {
                                         themeColor: themeColor,
                                         config: widget.config,
                                         baseUrl: widget.baseUrl, // Injected the URL dynamically here
+                                        merchantId: widget.config.merchantId, // Pass the merchantId to the booking form
                                       ),
                                     ),
                                   ),

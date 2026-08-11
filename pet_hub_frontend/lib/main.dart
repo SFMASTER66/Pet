@@ -23,7 +23,7 @@ bool isAdmin = false;
 late MerchantConfig globalMerchantConfig;
 late SharedPreferences prefs;
 
-const String kBaseUrl = 'http://localhost:8080';
+const String kBaseUrl = 'http://localhost:3000';
 
 final GoRouter _router = GoRouter(
   initialLocation: '/', 
@@ -83,6 +83,7 @@ final GoRouter _router = GoRouter(
       builder: (context, state) => CustomerBookPage(
         config: globalMerchantConfig,
         baseUrl: kBaseUrl,
+        merchantId: AppConfig.merchantID,
       ),
     ),
     // Policy route

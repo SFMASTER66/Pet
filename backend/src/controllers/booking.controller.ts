@@ -46,7 +46,7 @@ export const portalBooking = async (req: Request, res: Response): Promise<void> 
       note
     } = req.body;
 
-    if (!merchantId || !bookedById || !servicePricingMatrixId || !dogName || !ownerPhone || !serviceTime || !dogWeight || !dogDob) {
+    if (!merchantId || !servicePricingMatrixId || !dogName || !ownerPhone || !serviceTime || !dogWeight || !dogDob) {
       res.status(400).json({
         success: false,
         message: 'Missing core criteria: mandatory fields incomplete.'
