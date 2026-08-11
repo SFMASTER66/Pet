@@ -40,6 +40,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
   final CalendarFormat _calendarFormat = CalendarFormat.month;
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay = DateTime.now();
+  List<Map<String, dynamic>>? _invitedStaff;
 
   String _activeScheduleView = 'Daily List View'; 
   final List<String> _scheduleViewOptions = [
@@ -285,490 +286,582 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
         .fold(0, (p, e) => p + e);
   }
 
-  void _showCreateBookingDialog() {
-    final dogNameCtrl = TextEditingController();
-    final dogBreedCtrl = TextEditingController();
-    final dogWeightCtrl = TextEditingController();
-    final ownerNameCtrl = TextEditingController();
-    final ownerPhoneCtrl = TextEditingController();
-    final ownerEmailCtrl = TextEditingController();
-    final dogDescCtrl = TextEditingController();
+  Future<void> _showCreateBookingDialog() async {
+      try { 
+        await _fetchStaffList();
+        final dogNameCtrl = TextEditingController();
+        final dogBreedCtrl = TextEditingController();
+        final dogWeightCtrl = TextEditingController();
+        final ownerNameCtrl = TextEditingController();
+        final ownerPhoneCtrl = TextEditingController();
+        final ownerEmailCtrl = TextEditingController();
+        final dogDescCtrl = TextEditingController();
 
-    Map<String, dynamic>? selectedMatrixRow = liveServiceMatrices.isNotEmpty ? liveServiceMatrices.first : null;
-    String selectedGender = 'MALE';
-    bool isDesexed = false;
-    DateTime? selectedDogDob;
-    
-    DateTime selectedBookingDate = _selectedDay ?? DateTime.now();
-    bool isDayClosed = _checkIsDayClosed(selectedBookingDate);
-    
-    List<String> operationalHoursTimeOptions = [];
-    String? selectedOperationalTime;
-    bool isLoadingSlots = false;
-    bool hasFetchedInitialSlots = false;
+        Map<String, dynamic>? selectedMatrixRow = liveServiceMatrices.isNotEmpty ? liveServiceMatrices.first : null;
+        String selectedGender = 'MALE';
+        bool isDesexed = false;
+        DateTime? selectedDogDob;
+        
+        DateTime selectedBookingDate = _selectedDay ?? DateTime.now();
+        bool isDayClosed = _checkIsDayClosed(selectedBookingDate);
+        
+        List<String> operationalHoursTimeOptions = [];
+        String? selectedOperationalTime;
+        bool isLoadingSlots = false;
+        bool hasFetchedInitialSlots = false;
 
-    showDialog(
-      context: context,
-      builder: (context) {
-        final screenWidth = MediaQuery.of(context).size.width;
-        final isMobileDialog = screenWidth < 600;
+        // Track if we are fetching staff inside the modal instance
+        bool isLoadingStaff = _invitedStaff == null; 
+        dynamic selectedGroomerId; 
 
-        return AlertDialog(
-          insetPadding: const EdgeInsets.all(16),
-          title: const Row(
-            children: [
-              Icon(Icons.add_task_outlined, color: Colors.blueAccent),
-              SizedBox(width: 10),
-              Expanded(child: Text('Create New Booking Instance', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
-            ],
-          ),
-          content: SizedBox(
-            width: isMobileDialog ? screenWidth : 600,
-            child: StatefulBuilder(
-              builder: (context, setDialogState) {
-                Future<void> updateCapacityAvailableSlots() async {
-                  if (selectedMatrixRow == null || isDayClosed) return;
-                  
-                  setDialogState(() => isLoadingSlots = true);
+        showDialog(
+          context: context,
+          builder: (context) {
+            final screenWidth = MediaQuery.of(context).size.width;
+            final isMobileDialog = screenWidth < 600;
 
-                  try {
-                    final String formattedDate = "${selectedBookingDate.year}-"
-                        "${selectedBookingDate.month.toString().padLeft(2, '0')}-"
-                        "${selectedBookingDate.day.toString().padLeft(2, '0')}";
+            return AlertDialog(
+              insetPadding: const EdgeInsets.all(16),
+              title: const Row(
+                children: [
+                  Icon(Icons.add_task_outlined, color: Colors.blueAccent),
+                  SizedBox(width: 10),
+                  Expanded(child: Text('Create New Booking Instance', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                ],
+              ),
+              content: SizedBox(
+                width: isMobileDialog ? screenWidth : 600,
+                child: StatefulBuilder(
+                  builder: (context, setDialogState) {
                     
-                    final int durationMinutes = selectedMatrixRow?['durationMinutes'] ?? 60;
-
-                    final String targetUrl = '$_baseUrl/api/v1/bookings/available-slots'
-                        '?merchantId=${widget.config.merchantId}'
-                        '&date=$formattedDate'
-                        '&duration=$durationMinutes';
-                    
-                    final response = await http.get(
-                      Uri.parse(targetUrl),
-                      headers: {'Content-Type': 'application/json'},
-                    );
-
-                    if (response.statusCode == 200) {
-                      final Map<String, dynamic> parsedBody = json.decode(response.body);
-                      if (parsedBody['success'] == true && parsedBody['data'] is List) {
-                        final List<dynamic> backendSlots = parsedBody['data'];
-
+                    // Helper to fetch staff and refresh the modal layout state concurrently
+                    Future<void> loadStaffDataForDialog() async {
+                      await _fetchStaffList();
+                      if (context.mounted) {
                         setDialogState(() {
-                          if (backendSlots.isNotEmpty) {
-                            isDayClosed = false;
-                            operationalHoursTimeOptions = backendSlots.map<String>((slot) {
-                              final parts = slot.toString().split(':');
-                              final int hour = int.parse(parts[0]);
-                              final String minute = parts[1];
-                              
-                              final int displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
-                              final String amPm = hour >= 12 ? 'PM' : 'AM';
-                              final String paddedHour = displayHour.toString().padLeft(2, '0');
-                              
-                              return '$paddedHour:$minute $amPm';
-                            }).toList();
-                          } else {
-                            isDayClosed = true;
-                            operationalHoursTimeOptions = [];
+                          isLoadingStaff = false;
+                          // Auto-select the first available groomer if the list populated successfully
+                          final active = (_invitedStaff ?? []).where((s) => s['isActive'] == true).toList();
+                          if (active.isNotEmpty) {
+                            selectedGroomerId = active.first['id'];
                           }
-
-                          selectedOperationalTime = operationalHoursTimeOptions.isNotEmpty ? operationalHoursTimeOptions.first : null;
                         });
                       }
-                    } else {
-                      setDialogState(() => isDayClosed = _checkIsDayClosed(selectedBookingDate));
                     }
-                  } catch (_) {
-                    setDialogState(() => isDayClosed = _checkIsDayClosed(selectedBookingDate));
-                  } finally {
-                    setDialogState(() => isLoadingSlots = false);
-                  }
-                }
 
-                if (!hasFetchedInitialSlots) {
-                  hasFetchedInitialSlots = true;
-                  if (!isDayClosed) {
-                    Future.delayed(Duration.zero, () => updateCapacityAvailableSlots());
-                  }
-                }
+                    // Run the API call immediately when the dialog opens if data isn't cached yet
+                    if (isLoadingStaff) {
+                      loadStaffDataForDialog();
+                    }
 
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Expanded(
-                      child: SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Select Service Matrix Tier', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569))),
-                            const SizedBox(height: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
-                              decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400), borderRadius: BorderRadius.circular(4)),
-                              child: DropdownButtonHideUnderline(
-                                child: DropdownButton<Map<String, dynamic>>(
-                                  isExpanded: true,
-                                  value: selectedMatrixRow,
-                                  items: liveServiceMatrices
-                                      .where((matrix) => matrix['isActive'] == true)
-                                      .map((matrix) {
-                                        return DropdownMenuItem<Map<String, dynamic>>(
-                                          value: matrix,
-                                          child: Text(
-                                            '${matrix['name']} (${matrix['weightTier']} / ${matrix['coatType']}) - \$${((matrix['priceCentsAud'] ?? 0) / 100).toStringAsFixed(2)}',
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        );
-                                      }).toList(),
-                                  onChanged: (val) {
-                                    setDialogState(() => selectedMatrixRow = val);
-                                    updateCapacityAvailableSlots(); 
-                                  },
+                    Future<void> updateCapacityAvailableSlots() async {
+                      if (selectedMatrixRow == null || isDayClosed) return;
+                      
+                      setDialogState(() => isLoadingSlots = true);
+
+                      try {
+                        final String formattedDate = "${selectedBookingDate.year}-"
+                            "${selectedBookingDate.month.toString().padLeft(2, '0')}-"
+                            "${selectedBookingDate.day.toString().padLeft(2, '0')}";
+                        
+                        final int durationMinutes = selectedMatrixRow?['durationMinutes'] ?? 60;
+
+                        final String targetUrl = '$_baseUrl/api/v1/bookings/available-slots'
+                            '?merchantId=${widget.config.merchantId}'
+                            '&date=$formattedDate'
+                            '&duration=$durationMinutes';
+                        
+                        final response = await http.get(
+                          Uri.parse(targetUrl),
+                          headers: {'Content-Type': 'application/json'},
+                        );
+
+                        if (response.statusCode == 200) {
+                          final Map<String, dynamic> parsedBody = json.decode(response.body);
+                          if (parsedBody['success'] == true && parsedBody['data'] is List) {
+                            final List<dynamic> backendSlots = parsedBody['data'];
+
+                            setDialogState(() {
+                              if (backendSlots.isNotEmpty) {
+                                isDayClosed = false;
+                                operationalHoursTimeOptions = backendSlots.map<String>((slot) {
+                                  final parts = slot.toString().split(':');
+                                  final int hour = int.parse(parts[0]);
+                                  final String minute = parts[1];
+                                  
+                                  final int displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+                                  final String amPm = hour >= 12 ? 'PM' : 'AM';
+                                  final String paddedHour = displayHour.toString().padLeft(2, '0');
+                                  
+                                  return '$paddedHour:$minute $amPm';
+                                }).toList();
+                              } else {
+                                isDayClosed = true;
+                                operationalHoursTimeOptions = [];
+                              }
+
+                              selectedOperationalTime = operationalHoursTimeOptions.isNotEmpty ? operationalHoursTimeOptions.first : null;
+                            });
+                          }
+                        } else {
+                          setDialogState(() => isDayClosed = _checkIsDayClosed(selectedBookingDate));
+                        }
+                      } catch (_) {
+                        setDialogState(() => isDayClosed = _checkIsDayClosed(selectedBookingDate));
+                      } finally {
+                        setDialogState(() => isLoadingSlots = false);
+                      }
+                    }
+
+                    if (!hasFetchedInitialSlots) {
+                      hasFetchedInitialSlots = true;
+                      if (!isDayClosed) {
+                        Future.delayed(Duration.zero, () => updateCapacityAvailableSlots());
+                      }
+                    }
+
+                    // Extract and filter active members safely out of the class list variable
+                    final activeGroomers = (_invitedStaff ?? [])
+                        .where((staff) => staff['isActive'] == true)
+                        .toList();
+
+                    // Fallback safety check: If state updated but no ID was initially selected, point to the first item
+                    if (selectedGroomerId == null && activeGroomers.isNotEmpty) {
+                      selectedGroomerId = activeGroomers.first['id'];
+                    }
+
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Expanded(
+                          child: SingleChildScrollView(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Select Service Matrix Tier', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569))),
+                                const SizedBox(height: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400), borderRadius: BorderRadius.circular(4)),
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<Map<String, dynamic>>(
+                                      isExpanded: true,
+                                      value: selectedMatrixRow,
+                                      items: liveServiceMatrices
+                                          .where((matrix) => matrix['isActive'] == true)
+                                          .map((matrix) {
+                                            return DropdownMenuItem<Map<String, dynamic>>(
+                                              value: matrix,
+                                              child: Text(
+                                                '${matrix['name']} (${matrix['weightTier']} / ${matrix['coatType']}) - \$${((matrix['priceCentsAud'] ?? 0) / 100).toStringAsFixed(2)}',
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            );
+                                          }).toList(),
+                                      onChanged: (val) {
+                                        setDialogState(() => selectedMatrixRow = val);
+                                        updateCapacityAvailableSlots(); 
+                                      },
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            
-                            const Text('Appointment Date & Time Selection', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569))),
-                            const SizedBox(height: 6),
-                            
-                            isMobileDialog
-                                ? Column(
-                                    children: [
-                                      OutlinedButton.icon(
-                                        style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(45)),
-                                        icon: const Icon(Icons.calendar_today, size: 16),
-                                        label: Text('Date: ${selectedBookingDate.day}/${selectedBookingDate.month}/${selectedBookingDate.year}'),
-                                        onPressed: () async {
-                                          final pickedDate = await showDatePicker(
-                                            context: context,
-                                            initialDate: selectedBookingDate,
-                                            firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                                            lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
-                                          );
-                                          if (pickedDate != null) {
-                                            setDialogState(() {
-                                              selectedBookingDate = pickedDate;
-                                              isDayClosed = _checkIsDayClosed(pickedDate);
-                                              isLoadingSlots = true;
-                                            });
-                                            updateCapacityAvailableSlots();
-                                          }
-                                        },
+                                const SizedBox(height: 16),
+                                
+                                const Text('Appointment Date & Time Selection', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569))),
+                                const SizedBox(height: 6),
+                                
+                                isMobileDialog
+                                    ? Column(
+                                        children: [
+                                          OutlinedButton.icon(
+                                            style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(45)),
+                                            icon: const Icon(Icons.calendar_today, size: 16),
+                                            label: Text('Date: ${selectedBookingDate.day}/${selectedBookingDate.month}/${selectedBookingDate.year}'),
+                                            onPressed: () async {
+                                              final pickedDate = await showDatePicker(
+                                                context: context,
+                                                initialDate: selectedBookingDate,
+                                                firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                                                lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                                              );
+                                              if (pickedDate != null) {
+                                                setDialogState(() {
+                                                  selectedBookingDate = pickedDate;
+                                                  isDayClosed = _checkIsDayClosed(pickedDate);
+                                                  isLoadingSlots = true;
+                                                });
+                                                updateCapacityAvailableSlots();
+                                              }
+                                            },
+                                          ),
+                                          const SizedBox(height: 10),
+                                          _buildTimeSlotDropdown(isDayClosed, isLoadingSlots, operationalHoursTimeOptions, selectedOperationalTime, (val) => setDialogState(() => selectedOperationalTime = val)),
+                                        ],
+                                      )
+                                    : Row(
+                                        children: [
+                                          Expanded(
+                                            child: OutlinedButton.icon(
+                                              icon: const Icon(Icons.calendar_today, size: 16),
+                                              label: Text('Date: ${selectedBookingDate.day}/${selectedBookingDate.month}/${selectedBookingDate.year}'),
+                                              onPressed: () async {
+                                                final pickedDate = await showDatePicker(
+                                                  context: context,
+                                                  initialDate: selectedBookingDate,
+                                                  firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                                                  lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                                                );
+                                                if (pickedDate != null) {
+                                                  setDialogState(() {
+                                                    selectedBookingDate = pickedDate;
+                                                    isDayClosed = _checkIsDayClosed(pickedDate);
+                                                    isLoadingSlots = true;
+                                                  });
+                                                  updateCapacityAvailableSlots();
+                                                }
+                                              },
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: _buildTimeSlotDropdown(isDayClosed, isLoadingSlots, operationalHoursTimeOptions, selectedOperationalTime, (val) => setDialogState(() => selectedOperationalTime = val)),
+                                          ),
+                                        ],
                                       ),
-                                      const SizedBox(height: 10),
-                                      _buildTimeSlotDropdown(isDayClosed, isLoadingSlots, operationalHoursTimeOptions, selectedOperationalTime, (val) => setDialogState(() => selectedOperationalTime = val)),
+                                const SizedBox(height: 16),
+
+                                // --- Updated Mandatory Groomer Dropdown ---
+                                const Text('Assign Groomer Staff member *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569))),
+                                const SizedBox(height: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400), borderRadius: BorderRadius.circular(4)),
+                                  child: DropdownButtonHideUnderline(
+                                    child: isLoadingStaff 
+                                      ? const Padding(
+                                          padding: EdgeInsets.symmetric(vertical: 12.0),
+                                          child: Row(
+                                            children: [
+                                              SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                                              SizedBox(width: 12),
+                                              Text('Syncing active staff...', style: TextStyle(fontSize: 14, color: Colors.grey)),
+                                            ],
+                                          ),
+                                        )
+                                      : activeGroomers.isEmpty
+                                          ? const Padding(
+                                              padding: EdgeInsets.symmetric(vertical: 12.0),
+                                              child: Text(
+                                                'No active staff members available',
+                                                style: TextStyle(fontSize: 14, color: Colors.redAccent, fontWeight: FontWeight.w500),
+                                              ),
+                                            )
+                                          : DropdownButton<dynamic>(
+                                              isExpanded: true,
+                                              value: selectedGroomerId,
+                                              hint: const Text('Select an assigned professional'),
+                                              items: activeGroomers.map((groomer) {
+                                                return DropdownMenuItem<dynamic>(
+                                                  value: groomer['id'],
+                                                  child: Text('${groomer['name']}'),
+                                                );
+                                              }).toList(),
+                                              onChanged: (val) {
+                                                setDialogState(() => selectedGroomerId = val);
+                                              },
+                                            ),
+                                  ),
+                                ),
+
+                                const Divider(height: 32),
+
+                                if (isMobileDialog) ...[
+                                  TextField(controller: dogNameCtrl, decoration: const InputDecoration(labelText: 'Dog Name *', border: OutlineInputBorder())),
+                                  const SizedBox(height: 12),
+                                  TextField(controller: dogBreedCtrl, decoration: const InputDecoration(labelText: 'Dog Breed Variant *', border: OutlineInputBorder())),
+                                  const SizedBox(height: 12),
+                                  OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                                    icon: const Icon(Icons.cake_outlined, size: 16),
+                                    label: Text(selectedDogDob == null 
+                                        ? 'Select Dog DOB *' 
+                                        : 'DOB: ${selectedDogDob!.day}/${selectedDogDob!.month}/${selectedDogDob!.year}'),
+                                    onPressed: () async {
+                                      final pickedDob = await showDatePicker(
+                                        context: context,
+                                        initialDate: selectedDogDob ?? DateTime.now().subtract(const Duration(days: 365 * 2)),
+                                        firstDate: DateTime(2000),
+                                        lastDate: DateTime.now(),
+                                      );
+                                      if (pickedDob != null) setDialogState(() => selectedDogDob = pickedDob);
+                                    },
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextField(
+                                    controller: dogWeightCtrl,
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))],
+                                    decoration: const InputDecoration(labelText: 'Dog Weight (kg) *', border: OutlineInputBorder(), hintText: 'e.g., 14.5'),
+                                  ),
+                                ] else ...[
+                                  Row(
+                                    children: [
+                                      Expanded(child: TextField(controller: dogNameCtrl, decoration: const InputDecoration(labelText: 'Dog Name *', border: OutlineInputBorder()))),
+                                      const SizedBox(width: 12),
+                                      Expanded(child: TextField(controller: dogBreedCtrl, decoration: const InputDecoration(labelText: 'Dog Breed Variant *', border: OutlineInputBorder()))),
                                     ],
-                                  )
-                                : Row(
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Row(
                                     children: [
                                       Expanded(
                                         child: OutlinedButton.icon(
-                                          icon: const Icon(Icons.calendar_today, size: 16),
-                                          label: Text('Date: ${selectedBookingDate.day}/${selectedBookingDate.month}/${selectedBookingDate.year}'),
+                                          icon: const Icon(Icons.cake_outlined, size: 16),
+                                          label: Text(selectedDogDob == null 
+                                              ? 'Select Dog DOB *' 
+                                              : 'DOB: ${selectedDogDob!.day}/${selectedDogDob!.month}/${selectedDogDob!.year}'),
                                           onPressed: () async {
-                                            final pickedDate = await showDatePicker(
+                                            final pickedDob = await showDatePicker(
                                               context: context,
-                                              initialDate: selectedBookingDate,
-                                              firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                                              lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                                              initialDate: selectedDogDob ?? DateTime.now().subtract(const Duration(days: 365 * 2)),
+                                              firstDate: DateTime(2000),
+                                              lastDate: DateTime.now(),
                                             );
-                                            if (pickedDate != null) {
-                                              setDialogState(() {
-                                                selectedBookingDate = pickedDate;
-                                                isDayClosed = _checkIsDayClosed(pickedDate);
-                                                isLoadingSlots = true;
-                                              });
-                                              updateCapacityAvailableSlots();
-                                            }
+                                            if (pickedDob != null) setDialogState(() => selectedDogDob = pickedDob);
                                           },
                                         ),
                                       ),
                                       const SizedBox(width: 12),
                                       Expanded(
-                                        child: _buildTimeSlotDropdown(isDayClosed, isLoadingSlots, operationalHoursTimeOptions, selectedOperationalTime, (val) => setDialogState(() => selectedOperationalTime = val)),
+                                        child: TextField(
+                                          controller: dogWeightCtrl,
+                                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))],
+                                          decoration: const InputDecoration(labelText: 'Dog Weight (kg) *', border: OutlineInputBorder(), hintText: 'e.g., 14.5'),
+                                        ),
                                       ),
                                     ],
                                   ),
-                            const Divider(height: 32),
-
-                            if (isMobileDialog) ...[
-                              TextField(controller: dogNameCtrl, decoration: const InputDecoration(labelText: 'Dog Name *', border: OutlineInputBorder())),
-                              const SizedBox(height: 12),
-                              TextField(controller: dogBreedCtrl, decoration: const InputDecoration(labelText: 'Dog Breed Variant *', border: OutlineInputBorder())),
-                              const SizedBox(height: 12),
-                              OutlinedButton.icon(
-                                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-                                icon: const Icon(Icons.cake_outlined, size: 16),
-                                label: Text(selectedDogDob == null 
-                                    ? 'Select Dog DOB *' 
-                                    : 'DOB: ${selectedDogDob!.day}/${selectedDogDob!.month}/${selectedDogDob!.year}'),
-                                onPressed: () async {
-                                  final pickedDob = await showDatePicker(
-                                    context: context,
-                                    initialDate: selectedDogDob ?? DateTime.now().subtract(const Duration(days: 365 * 2)),
-                                    firstDate: DateTime(2000),
-                                    lastDate: DateTime.now(),
-                                  );
-                                  if (pickedDob != null) setDialogState(() => selectedDogDob = pickedDob);
-                                },
-                              ),
-                              const SizedBox(height: 12),
-                              TextField(
-                                controller: dogWeightCtrl,
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))],
-                                decoration: const InputDecoration(labelText: 'Dog Weight (kg) *', border: OutlineInputBorder(), hintText: 'e.g., 14.5'),
-                              ),
-                            ] else ...[
-                              Row(
-                                children: [
-                                  Expanded(child: TextField(controller: dogNameCtrl, decoration: const InputDecoration(labelText: 'Dog Name *', border: OutlineInputBorder()))),
-                                  const SizedBox(width: 12),
-                                  Expanded(child: TextField(controller: dogBreedCtrl, decoration: const InputDecoration(labelText: 'Dog Breed Variant *', border: OutlineInputBorder()))),
                                 ],
-                              ),
-                              const SizedBox(height: 16),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      icon: const Icon(Icons.cake_outlined, size: 16),
-                                      label: Text(selectedDogDob == null 
-                                          ? 'Select Dog DOB *' 
-                                          : 'DOB: ${selectedDogDob!.day}/${selectedDogDob!.month}/${selectedDogDob!.year}'),
-                                      onPressed: () async {
-                                        final pickedDob = await showDatePicker(
-                                          context: context,
-                                          initialDate: selectedDogDob ?? DateTime.now().subtract(const Duration(days: 365 * 2)),
-                                          firstDate: DateTime(2000),
-                                          lastDate: DateTime.now(),
-                                        );
-                                        if (pickedDob != null) setDialogState(() => selectedDogDob = pickedDob);
-                                      },
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: TextField(
-                                      controller: dogWeightCtrl,
-                                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))],
-                                      decoration: const InputDecoration(labelText: 'Dog Weight (kg) *', border: OutlineInputBorder(), hintText: 'e.g., 14.5'),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                            const SizedBox(height: 16),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                                    decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400), borderRadius: BorderRadius.circular(4)),
-                                    child: DropdownButtonHideUnderline(
-                                      child: DropdownButton<String>(
-                                        value: selectedGender,
-                                        items: const [
-                                          DropdownMenuItem(value: 'MALE', child: Text('Male')),
-                                          DropdownMenuItem(value: 'FEMALE', child: Text('Female')),
-                                          DropdownMenuItem(value: 'UNKNOWN', child: Text('Unknown')),
-                                        ],
-                                        onChanged: (v) => setDialogState(() => selectedGender = v!),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
+                                const SizedBox(height: 16),
                                 Row(
                                   children: [
-                                    Checkbox(value: isDesexed, onChanged: (v) => setDialogState(() => isDesexed = v!)),
-                                    const Text('Desexed', style: TextStyle(fontSize: 13)),
+                                    Expanded(
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                                        decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400), borderRadius: BorderRadius.circular(4)),
+                                        child: DropdownButtonHideUnderline(
+                                          child: DropdownButton<String>(
+                                            value: selectedGender,
+                                            items: const [
+                                              DropdownMenuItem(value: 'MALE', child: Text('Male')),
+                                              DropdownMenuItem(value: 'FEMALE', child: Text('Female')),
+                                              DropdownMenuItem(value: 'UNKNOWN', child: Text('Unknown')),
+                                            ],
+                                            onChanged: (v) => setDialogState(() => selectedGender = v!),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Row(
+                                      children: [
+                                        Checkbox(value: isDesexed, onChanged: (v) => setDialogState(() => isDesexed = v!)),
+                                        const Text('Desexed', style: TextStyle(fontSize: 13)),
+                                      ],
+                                    ),
                                   ],
+                                ),
+                                const SizedBox(height: 16),
+                                TextField(controller: ownerNameCtrl, decoration: const InputDecoration(labelText: 'Owner Full Name *', border: OutlineInputBorder())),
+                                const SizedBox(height: 16),
+                                
+                                isMobileDialog
+                                    ? Column(
+                                        children: [
+                                          TextField(
+                                            controller: ownerPhoneCtrl, 
+                                            keyboardType: TextInputType.number, 
+                                            maxLength: 10, 
+                                            inputFormatters: [FilteringTextInputFormatter.digitsOnly], 
+                                            decoration: const InputDecoration(labelText: 'Owner Phone * (04..)', hintText: '0412345678', counterText: '', border: OutlineInputBorder())
+                                          ),
+                                          const SizedBox(height: 12),
+                                          TextField(
+                                            controller: ownerEmailCtrl, 
+                                            keyboardType: TextInputType.emailAddress,
+                                            decoration: const InputDecoration(labelText: 'Owner Email *', hintText: 'example@domain.com', border: OutlineInputBorder())
+                                          ),
+                                        ],
+                                      )
+                                    : Row(
+                                        children: [
+                                          Expanded(
+                                            child: TextField(
+                                              controller: ownerPhoneCtrl, 
+                                              keyboardType: TextInputType.number, 
+                                              maxLength: 10, 
+                                              inputFormatters: [FilteringTextInputFormatter.digitsOnly], 
+                                              decoration: const InputDecoration(labelText: 'Owner Phone * (04..)', hintText: '0412345678', counterText: '', border: OutlineInputBorder())
+                                            )
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: TextField(
+                                              controller: ownerEmailCtrl, 
+                                              keyboardType: TextInputType.emailAddress,
+                                              decoration: const InputDecoration(labelText: 'Owner Email *', hintText: 'example@domain.com', border: OutlineInputBorder())
+                                            )
+                                          ),
+                                        ],
+                                      ),
+                                const SizedBox(height: 16),
+                                TextField(
+                                  controller: dogDescCtrl,
+                                  maxLines: 2,
+                                  decoration: const InputDecoration(labelText: 'Dog Special Notes / Requests', alignLabelWithHint: true, border: OutlineInputBorder()),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 16),
-                            TextField(controller: ownerNameCtrl, decoration: const InputDecoration(labelText: 'Owner Full Name *', border: OutlineInputBorder())),
-                            const SizedBox(height: 16),
-                            
-                            isMobileDialog
-                                ? Column(
-                                    children: [
-                                      TextField(
-                                        controller: ownerPhoneCtrl, 
-                                        keyboardType: TextInputType.number, 
-                                        maxLength: 10, 
-                                        inputFormatters: [FilteringTextInputFormatter.digitsOnly], 
-                                        decoration: const InputDecoration(labelText: 'Owner Phone * (04..)', hintText: '0412345678', counterText: '', border: OutlineInputBorder())
-                                      ),
-                                      const SizedBox(height: 12),
-                                      TextField(
-                                        controller: ownerEmailCtrl, 
-                                        keyboardType: TextInputType.emailAddress,
-                                        decoration: const InputDecoration(labelText: 'Owner Email *', hintText: 'example@domain.com', border: OutlineInputBorder())
-                                      ),
-                                    ],
-                                  )
-                                : Row(
-                                    children: [
-                                      Expanded(
-                                        child: TextField(
-                                          controller: ownerPhoneCtrl, 
-                                          keyboardType: TextInputType.number, 
-                                          maxLength: 10, 
-                                          inputFormatters: [FilteringTextInputFormatter.digitsOnly], 
-                                          decoration: const InputDecoration(labelText: 'Owner Phone * (04..)', hintText: '0412345678', counterText: '', border: OutlineInputBorder())
-                                        )
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: TextField(
-                                          controller: ownerEmailCtrl, 
-                                          keyboardType: TextInputType.emailAddress,
-                                          decoration: const InputDecoration(labelText: 'Owner Email *', hintText: 'example@domain.com', border: OutlineInputBorder())
-                                        )
-                                      ),
-                                    ],
-                                  ),
-                            const SizedBox(height: 16),
-                            TextField(
-                              controller: dogDescCtrl,
-                              maxLines: 2,
-                              decoration: const InputDecoration(labelText: 'Dog Special Notes / Requests', alignLabelWithHint: true, border: OutlineInputBorder()),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context), 
+                              child: const Text('Abort'),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: isDayClosed ? Colors.grey : widget.config.primaryColor, 
+                                foregroundColor: Colors.white
+                              ),
+                              onPressed: isDayClosed ? null : () async {
+                                final cleanPhone = ownerPhoneCtrl.text.trim();
+                                final cleanEmail = ownerEmailCtrl.text.trim();
+                                final weightText = dogWeightCtrl.text.trim();
+
+                                // Block validation if no groomer is selected
+                                if (selectedGroomerId == null) {
+                                  _showSnackBar('⚠️ A valid active groomer staff member must be assigned.');
+                                  return;
+                                }
+
+                                if (dogNameCtrl.text.isEmpty || 
+                                    dogBreedCtrl.text.isEmpty || 
+                                    weightText.isEmpty ||
+                                    selectedDogDob == null ||
+                                    ownerNameCtrl.text.isEmpty || 
+                                    cleanPhone.isEmpty || 
+                                    cleanEmail.isEmpty) {
+                                  _showSnackBar('⚠️ Please complete all mandatory fields marked with an asterisk (*).');
+                                  return;
+                                }
+
+                                if (selectedOperationalTime == null || selectedOperationalTime!.isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('⚠️ Please pick a generated business hour time slot.')),
+                                  );
+                                  return;
+                                }
+
+                                final String digitsOnlyPhone = cleanPhone.replaceAll(RegExp(r'\D'), '');
+                                if (digitsOnlyPhone.length != 10 || !digitsOnlyPhone.startsWith('04')) {
+                                  _showSnackBar('⚠️ Invalid Phone number. Must be a valid 10-digit Australian mobile number starting with 04.');
+                                  return;
+                                }
+
+                                final RegExp emailRegex = RegExp(r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+");
+                                if (!emailRegex.hasMatch(cleanEmail)) {
+                                  _showSnackBar('⚠️ Invalid Email pattern structure detected.');
+                                  return;
+                                }
+
+                                final double? parsedWeight = double.tryParse(weightText);
+                                if (parsedWeight == null) {
+                                  _showSnackBar('⚠️ Invalid Weight value. Must be a valid decimal number.');
+                                  return;
+                                }
+
+                                final parts = selectedOperationalTime!.split(' ');
+                                final timeParts = parts[0].split(':');
+                                int hour = int.parse(timeParts[0]);
+                                final int minute = int.parse(timeParts[1]);
+                                final String amPm = parts[1];
+
+                                if (amPm == 'PM' && hour < 12) {
+                                  hour += 12;
+                                } else if (amPm == 'AM' && hour == 12) {
+                                  hour = 0;
+                                }
+
+                                final targetDateTime = DateTime(
+                                  selectedBookingDate.year, 
+                                  selectedBookingDate.month, 
+                                  selectedBookingDate.day, 
+                                  hour, 
+                                  minute
+                                );
+
+                                final payload = {
+                                  'merchantId': widget.config.merchantId,
+                                  'bookedById': widget.config.userId,
+                                  'servicePricingMatrixId': selectedMatrixRow?['id'],
+                                  'dogName': dogNameCtrl.text.trim(),
+                                  'dogBreed': dogBreedCtrl.text.trim(),
+                                  'dogGender': selectedGender,
+                                  'isDesexed': isDesexed,
+                                  'dogWeight': parsedWeight,
+                                  'dogDob': selectedDogDob!.toIso8601String(),
+                                  'ownerName': ownerNameCtrl.text.trim(),
+                                  'ownerPhone': digitsOnlyPhone, 
+                                  'ownerEmail': cleanEmail,
+                                  'serviceTime': targetDateTime.toIso8601String(),
+                                  'groomerId': selectedGroomerId, 
+                                  'note': dogDescCtrl.text.trim(),
+                                };
+
+                                try {
+                                  final response = await http.post(
+                                    Uri.parse('$_baseUrl/api/v1/bookings/add'),
+                                    headers: {
+                                      'Content-Type': 'application/json',
+                                      'Authorization': 'Bearer ${widget.authToken}',
+                                    },
+                                    body: jsonEncode(payload),
+                                  );
+
+                                  final responseData = jsonDecode(response.body);
+                                  if (response.statusCode == 200 || response.statusCode == 201) {
+                                    Navigator.pop(context);
+                                    _showSnackBar('🚀 Administrative appointment successfully recorded.');
+                                    _fetchDashboardAppointments();
+                                  } else {
+                                    _showSnackBar('❌ Submission Rejected: ${responseData['message'] ?? 'Check input parameters.'}');
+                                  }
+                                } catch (err) {
+                                  _showSnackBar('❌ Error: Could not connect to target administrative cluster route.');
+                                }
+                              },
+                              child: const Text('Place Booking'),
                             ),
                           ],
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context), 
-                          child: const Text('Abort'),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: isDayClosed ? Colors.grey : widget.config.primaryColor, 
-                            foregroundColor: Colors.white
-                          ),
-                          onPressed: isDayClosed ? null : () async {
-                            final cleanPhone = ownerPhoneCtrl.text.trim();
-                            final cleanEmail = ownerEmailCtrl.text.trim();
-                            final weightText = dogWeightCtrl.text.trim();
-
-                            if (dogNameCtrl.text.isEmpty || 
-                                dogBreedCtrl.text.isEmpty || 
-                                weightText.isEmpty ||
-                                selectedDogDob == null ||
-                                ownerNameCtrl.text.isEmpty || 
-                                cleanPhone.isEmpty || 
-                                cleanEmail.isEmpty) {
-                              _showSnackBar('⚠️ Please complete all mandatory fields marked with an asterisk (*).');
-                              return;
-                            }
-
-                            if (selectedOperationalTime == null || selectedOperationalTime!.isEmpty) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('⚠️ Please pick a generated business hour time slot.')),
-                              );
-                              return;
-                            }
-
-                            final String digitsOnlyPhone = cleanPhone.replaceAll(RegExp(r'\D'), '');
-                            if (digitsOnlyPhone.length != 10 || !digitsOnlyPhone.startsWith('04')) {
-                              _showSnackBar('⚠️ Invalid Phone number. Must be a valid 10-digit Australian mobile number starting with 04.');
-                              return;
-                            }
-
-                            final RegExp emailRegex = RegExp(r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+");
-                            if (!emailRegex.hasMatch(cleanEmail)) {
-                              _showSnackBar('⚠️ Invalid Email pattern structure detected.');
-                              return;
-                            }
-
-                            final double? parsedWeight = double.tryParse(weightText);
-                            if (parsedWeight == null) {
-                              _showSnackBar('⚠️ Invalid Weight value. Must be a valid decimal number.');
-                              return;
-                            }
-
-                            final parts = selectedOperationalTime!.split(' ');
-                            final timeParts = parts[0].split(':');
-                            int hour = int.parse(timeParts[0]);
-                            final int minute = int.parse(timeParts[1]);
-                            final String amPm = parts[1];
-
-                            if (amPm == 'PM' && hour < 12) {
-                              hour += 12;
-                            } else if (amPm == 'AM' && hour == 12) {
-                              hour = 0;
-                            }
-
-                            final targetDateTime = DateTime(
-                              selectedBookingDate.year, 
-                              selectedBookingDate.month, 
-                              selectedBookingDate.day, 
-                              hour, 
-                              minute
-                            );
-
-                            final payload = {
-                              'merchantId': widget.config.merchantId,
-                              'bookedById': widget.config.userId,
-                              'servicePricingMatrixId': selectedMatrixRow?['id'],
-                              'dogName': dogNameCtrl.text.trim(),
-                              'dogBreed': dogBreedCtrl.text.trim(),
-                              'dogGender': selectedGender,
-                              'isDesexed': isDesexed,
-                              'dogWeight': parsedWeight,
-                              'dogDob': selectedDogDob!.toIso8601String(),
-                              'ownerName': ownerNameCtrl.text.trim(),
-                              'ownerPhone': digitsOnlyPhone, 
-                              'ownerEmail': cleanEmail,
-                              'serviceTime': targetDateTime.toIso8601String(),
-                              'groomerId': null,
-                              'note': dogDescCtrl.text.trim(),
-                            };
-
-                            try {
-                              final response = await http.post(
-                                Uri.parse('$_baseUrl/api/v1/bookings/add'),
-                                headers: {
-                                  'Content-Type': 'application/json',
-                                  'Authorization': 'Bearer ${widget.authToken}',
-                                },
-                                body: jsonEncode(payload),
-                              );
-
-                              final responseData = jsonDecode(response.body);
-                              if (response.statusCode == 200 || response.statusCode == 201) {
-                                Navigator.pop(context);
-                                _showSnackBar('🚀 Administrative appointment successfully recorded.');
-                                _fetchDashboardAppointments();
-                              } else {
-                                _showSnackBar('❌ Submission Rejected: ${responseData['message'] ?? 'Check input parameters.'}');
-                              }
-                            } catch (err) {
-                              _showSnackBar('❌ Error: Could not connect to target administrative cluster route.');
-                            }
-                          },
-                          child: const Text('Place Booking'),
-                        ),
                       ],
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
+                    );
+                  },
+                ),
+              ),
+            );
+          },
         );
-      },
-    );
+        }
+        catch (error) {
+          _showSnackBar("Failed to fetch staff list before opening dialog:");
+        }
   }
 
   Widget _buildTimeSlotDropdown(bool isClosed, bool isLoading, List<String> options, String? selected, ValueChanged<String?> onChanged) {
@@ -1168,6 +1261,49 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
       _showSnackBar('❌ Transport Layer Error.');
     } finally {
       if (mounted) setState(() => _isServiceLoading = false);
+    }
+  }
+  Future<void> _fetchStaffList() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/api/v1/merchant/staff'),
+        headers: {
+          'Authorization': 'Bearer ${widget.authToken}',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        if (responseData['success'] == true && responseData['data'] != null) {
+          final List<dynamic> rawList = responseData['data'];
+          
+          // Map across items to safely extract user.employee.isActive into user.isActive
+          final flattenedList = rawList.map((user) {
+            bool extractedStatus = false;
+            
+            if (user['employee'] != null && user['employee']['isActive'] != null) {
+              extractedStatus = user['employee']['isActive'] as bool;
+            } else if (user['isActive'] != null) {
+              extractedStatus = user['isActive'] as bool;
+            }
+
+            return {
+              'id': user['id'],
+              'name': user['name'],
+              'email': user['email'],
+              'role': user['role'],
+              'isActive': extractedStatus,
+            };
+          }).toList();
+
+          setState(() {
+            _invitedStaff = flattenedList;
+          });
+        }
+      }
+    } catch (_) {
+      // Gracefully catch background framework transport network drops
     }
   }
 
