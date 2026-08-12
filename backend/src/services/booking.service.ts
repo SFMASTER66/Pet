@@ -152,8 +152,6 @@ export const BookingService = {
       try { 
         // 1. Resolve customer profile record details safely by phone OR email
         // ===================================================================
-        // 🔥 FIX: Check both phone and email to avoid unique constraint violations
-        // ===================================================================
         let userProfile = await prisma.user.findFirst({
           where: { 
             merchantId: input.merchantId,
@@ -222,9 +220,7 @@ export const BookingService = {
         const parsedStartTime = new Date(input.serviceTime);
         const calculatedEndTime = new Date(parsedStartTime.getTime() + (matrixRow.durationMinutes * 60000));
 
-        // ///////////////////////////////////////////////////////////////////////////
-        // 🟢 FIX: Query DateTime range using pure Date objects only
-        // ///////////////////////////////////////////////////////////////////////////
+        // Query DateTime range using pure Date objects only
         const startOfDay = new Date(parsedStartTime);
         startOfDay.setHours(0, 0, 0, 0);
 
@@ -249,27 +245,31 @@ export const BookingService = {
           select: { employeeId: true }
         });
 
-        let totalStaffCount = 0;
+        // 5. Build eligible active staff pool based on shifts or fallback definitions
+        let eligibleStaffIds: string[] = [];
 
         if (shiftsOnDay.length > 0) {
-          // Count distinct scheduled employees on this date
-          const uniqueEmployeeIds = new Set(shiftsOnDay.map((s) => s.employeeId));
-          totalStaffCount = uniqueEmployeeIds.size;
+          // Get distinct scheduled employee IDs on this date
+          eligibleStaffIds = Array.from(new Set(shiftsOnDay.map((s) => s.employeeId)));
         } else {
           // Fallback: Default to all active MERCHANT_STAFF employees if no shifts are recorded
-          totalStaffCount = await prisma.employee.count({
+          const fallbackStaff = await prisma.employee.findMany({
             where: { 
               merchantId: input.merchantId, 
               isActive: true,
               user: {
                 role: UserRole.MERCHANT_STAFF 
               }
-            }
+            },
+            select: { id: true }
           });
+          eligibleStaffIds = fallbackStaff.map((s) => s.id);
         }
-        // ///////////////////////////////////////////////////////////////////////////
 
-        const concurrentBookings = await prisma.appointment.count({
+        const totalStaffCount = eligibleStaffIds.length;
+
+        // Fetch existing concurrent bookings to check capacity and handle auto-assignment
+        const conflictingBookings = await prisma.appointment.findMany({
           where: {
             merchantId: input.merchantId,
             status: { in: [AppointmentStatus.PENDING, AppointmentStatus.PAID, AppointmentStatus.COMPLETED] },
@@ -283,12 +283,39 @@ export const BookingService = {
                 endTime: { gte: calculatedEndTime }
               }
             ]
-          }
+          },
+          select: { groomerId: true }
         });
 
-        if (concurrentBookings >= totalStaffCount) {
+        if (conflictingBookings.length >= totalStaffCount) {
           throw new Error(`❌ Slot fully booked. Capacity reached for the selected time window.`);
         }
+
+        // ===================================================================
+        // ⚙️ AUTO-ASSIGN GROOMER LOGIC
+        // ===================================================================
+        let assignedGroomerId = input.groomerId || undefined;
+
+        if (!assignedGroomerId) {
+          // Identify groomer IDs that are currently occupied during this time frame
+          const occupiedGroomerIds = new Set(
+            conflictingBookings
+              .map((b) => b.groomerId)
+              .filter((id): id is string => !!id)
+          );
+
+          // Find the first eligible staff member who doesn't have a conflict
+          const availableGroomerId = eligibleStaffIds.find((staffId) => !occupiedGroomerIds.has(staffId));
+
+          if (availableGroomerId) {
+            assignedGroomerId = availableGroomerId;
+          } else {
+            // Fallback protection: If the total staff count capacity isn't hit but all scheduled
+            // staff show a hard time conflict (e.g. unassigned bookings), pick the first active staff member.
+            assignedGroomerId = eligibleStaffIds[0];
+          }
+        }
+        // ===================================================================
 
         // 6. Atomic transaction write directly to database cluster rows
         const appointment = await prisma.appointment.create({
@@ -303,8 +330,8 @@ export const BookingService = {
               }
             },
             servicePricingMatrix: { connect: { id: matrixRow.id } },
-            groomer: input.groomerId 
-              ? { connect: { id: input.groomerId } } 
+            groomer: assignedGroomerId 
+              ? { connect: { id: assignedGroomerId } } 
               : undefined, 
             startTime: parsedStartTime,
             endTime: calculatedEndTime,
