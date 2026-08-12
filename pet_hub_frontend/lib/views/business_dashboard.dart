@@ -206,6 +206,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
               'isReadyForPickup': item['isReadyToPickup'] ?? false,
               'isLoyaltyWaived': item['isLoyaltyWaived'] ?? false,
               'staffTags': item['internalTags'] != null ? List<String>.from(item['internalTags']) : [],
+              'groomerId': item['groomerId'] ?? ''
             });
           }
 
@@ -1801,662 +1802,491 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     );
   }
 
-  void _showUpdateBookingOptionsDialog(Map<String, dynamic> app) {
-    bool isCheckedIn = app['isCheckedIn'] ?? false;
-    bool depositPaid = app['isDepositPaid'] ?? false;
-    bool isReadyForPickup = app['isReadyForPickup'] ?? false;
-    bool isLoyaltyWaived = app['isLoyaltyWaived'] ?? false;
-    String currentStatus = app['status'] ?? 'PENDING';
+  Future<void> _showUpdateBookingOptionsDialog(Map<String, dynamic> app) async {
+    try {
+      await _fetchStaffList();
+      bool isCheckedIn = app['isCheckedIn'] ?? false;
+      bool depositPaid = app['isDepositPaid'] ?? false;
+      bool isReadyForPickup = app['isReadyForPickup'] ?? false;
+      bool isLoyaltyWaived = app['isLoyaltyWaived'] ?? false;
+      String currentStatus = app['status'] ?? 'PENDING';
 
-    final tagsController = TextEditingController(
-      text: (app['staffTags'] as List? ?? []).join(', '),
-    );
+      final tagsController = TextEditingController(
+        text: (app['staffTags'] as List? ?? []).join(', '),
+      );
 
-    DateTime updatedBookingDate = app['rawStartTime'] is DateTime
-        ? app['rawStartTime']
-        : (DateTime.tryParse(app['rawStartTime']?.toString() ?? '') ?? DateTime.now());
+      DateTime updatedBookingDate = app['rawStartTime'] is DateTime
+          ? app['rawStartTime']
+          : (DateTime.tryParse(app['rawStartTime']?.toString() ?? '') ?? DateTime.now());
 
-    String updatedBookingTimeSlot =
-        "${updatedBookingDate.hour.toString().padLeft(2, '0')}:${updatedBookingDate.minute.toString().padLeft(2, '0')}";
+      String updatedBookingTimeSlot =
+          "${updatedBookingDate.hour.toString().padLeft(2, '0')}:${updatedBookingDate.minute.toString().padLeft(2, '0')}";
 
-    List<String> operationalHoursTimeOptions = [updatedBookingTimeSlot];
+      List<String> operationalHoursTimeOptions = [updatedBookingTimeSlot];
 
-    bool isLoadingSlots = false;
-    bool isDayClosed = false;
-    bool hasInitialFetched = false;
+      bool isLoadingSlots = false;
+      bool isDayClosed = false;
+      bool hasInitialFetched = false;
 
-    Future<void> loadInitialSlots(StateSetter setModalState) async {
-      if (hasInitialFetched) return;
-      hasInitialFetched = true;
+      // Track staff selection states inside the modal instance
+      bool isLoadingStaff = _invitedStaff == null;
+      dynamic selectedGroomerId = app['groomerId'];
 
-      setModalState(() {
-        isLoadingSlots = true;
-        isDayClosed = false;
-      });
+      Future<void> loadInitialSlots(StateSetter setModalState) async {
+        if (hasInitialFetched) return;
+        hasInitialFetched = true;
 
-      try {
-        final String formattedDate = "${updatedBookingDate.year}-"
-            "${updatedBookingDate.month.toString().padLeft(2, '0')}-"
-            "${updatedBookingDate.day.toString().padLeft(2, '0')}";
+        setModalState(() {
+          isLoadingSlots = true;
+          isDayClosed = false;
+        });
 
-        final int durationMinutes = app['durationMinutes'] ?? 60;
-        final String targetUrl = '$_baseUrl/api/v1/bookings/available-slots'
-            '?merchantId=${widget.config.merchantId}'
-            '&date=$formattedDate'
-            '&duration=$durationMinutes';
+        try {
+          final String formattedDate = "${updatedBookingDate.year}-"
+              "${updatedBookingDate.month.toString().padLeft(2, '0')}-"
+              "${updatedBookingDate.day.toString().padLeft(2, '0')}";
 
-        final response = await http.get(
-          Uri.parse(targetUrl),
-          headers: {'Content-Type': 'application/json'},
-        );
+          final int durationMinutes = app['durationMinutes'] ?? 60;
+          final String targetUrl = '$_baseUrl/api/v1/bookings/available-slots'
+              '?merchantId=${widget.config.merchantId}'
+              '&date=$formattedDate'
+              '&duration=$durationMinutes';
 
-        if (response.statusCode == 200) {
-          final Map<String, dynamic> parsedBody = json.decode(response.body);
-          if (parsedBody['success'] == true && parsedBody['data'] is List) {
-            final List<dynamic> backendSlots = parsedBody['data'];
+          final response = await http.get(
+            Uri.parse(targetUrl),
+            headers: {'Content-Type': 'application/json'},
+          );
 
-            setModalState(() {
-              isLoadingSlots = false;
-              if (backendSlots.isNotEmpty) {
-                isDayClosed = false;
-                operationalHoursTimeOptions =
-                    backendSlots.map<String>((slot) => slot.toString()).toList();
+          if (response.statusCode == 200) {
+            final Map<String, dynamic> parsedBody = json.decode(response.body);
+            if (parsedBody['success'] == true && parsedBody['data'] is List) {
+              final List<dynamic> backendSlots = parsedBody['data'];
 
-                if (!operationalHoursTimeOptions.contains(updatedBookingTimeSlot)) {
-                  updatedBookingTimeSlot = operationalHoursTimeOptions.first;
+              setModalState(() {
+                isLoadingSlots = false;
+                if (backendSlots.isNotEmpty) {
+                  isDayClosed = false;
+                  operationalHoursTimeOptions =
+                      backendSlots.map<String>((slot) => slot.toString()).toList();
+
+                  if (!operationalHoursTimeOptions.contains(updatedBookingTimeSlot)) {
+                    updatedBookingTimeSlot = operationalHoursTimeOptions.first;
+                  }
+                } else {
+                  isDayClosed = true;
+                  operationalHoursTimeOptions = [];
                 }
-              } else {
-                isDayClosed = true;
-                operationalHoursTimeOptions = [];
-              }
-            });
-            return;
-          }
-        }
-        setModalState(() => isLoadingSlots = false);
-      } catch (e) {
-        setModalState(() => isLoadingSlots = false);
-      }
-    }
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        final screenWidth = MediaQuery.of(context).size.width;
-        final isCompact = screenWidth < 600;
-
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            if (!hasInitialFetched) {
-              Future.delayed(Duration.zero, () => loadInitialSlots(setModalState));
+              });
+              return;
             }
+          }
+          setModalState(() => isLoadingSlots = false);
+        } catch (e) {
+          setModalState(() => isLoadingSlots = false);
+        }
+      }
 
-            return AlertDialog(
-              insetPadding: const EdgeInsets.all(16),
-              title: Row(
-                children: [
-                  const Icon(Icons.edit_calendar, color: Colors.indigo),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Manage Booking: Dog Name: ${app['petName']} (Breed: ${app['breed']})',
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-              content: SizedBox(
-                width: isCompact ? screenWidth : 520,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Owner Account: ${app['ownerName']} (${app['ownerPhone']})',
-                        style: const TextStyle(color: Colors.grey, fontSize: 13),
+      showDialog(
+        context: context,
+        builder: (context) {
+          final screenWidth = MediaQuery.of(context).size.width;
+          final isCompact = screenWidth < 600;
+
+          return StatefulBuilder(
+            builder: (context, setModalState) {
+              // Async helper to pull the staff list records down and rebuild layout state
+              Future<void> loadStaffDataForDialog() async {
+                await _fetchStaffList();
+                if (context.mounted) {
+                  setModalState(() {
+                    isLoadingStaff = false;
+                    final active = (_invitedStaff ?? []).where((s) => s['isActive'] == true).toList();
+                    if (selectedGroomerId == null && active.isNotEmpty) {
+                      selectedGroomerId = active.first['id'];
+                    }
+                  });
+                }
+              }
+
+              if (isLoadingStaff) {
+                loadStaffDataForDialog();
+              }
+
+              if (!hasInitialFetched) {
+                Future.delayed(Duration.zero, () => loadInitialSlots(setModalState));
+              }
+
+              final activeGroomers = (_invitedStaff ?? [])
+                  .where((staff) => staff['isActive'] == true)
+                  .toList();
+
+              if (selectedGroomerId == null && activeGroomers.isNotEmpty) {
+                selectedGroomerId = activeGroomers.first['id'];
+              }
+
+              return AlertDialog(
+                insetPadding: const EdgeInsets.all(16),
+                title: Row(
+                  children: [
+                    const Icon(Icons.edit_calendar, color: Colors.indigo),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Manage Booking: Dog Name: ${app['petName']} (Breed: ${app['breed']})',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(Icons.layers_outlined, size: 14, color: Colors.grey.shade600),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              'Service: ${app['service'] ?? 'General'} [${app['time']}]',
-                              style: TextStyle(
-                                  color: Colors.grey.shade700,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500),
-                              overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+                content: SizedBox(
+                  width: isCompact ? screenWidth : 520,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Owner Account: ${app['ownerName']} (${app['ownerPhone']})',
+                          style: const TextStyle(color: Colors.grey, fontSize: 13),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.layers_outlined, size: 14, color: Colors.grey.shade600),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                'Service: ${app['service'] ?? 'General'} [${app['time']}]',
+                                style: TextStyle(
+                                    color: Colors.grey.shade700,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Divider(height: 24),
+                        const Text(
+                          'Reschedule Date & Time Layout',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569)),
+                        ),
+                        const SizedBox(height: 6),
+
+                        isCompact
+                            ? Column(
+                                children: [
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: OutlinedButton.icon(
+                                      icon: const Icon(Icons.calendar_today, size: 14),
+                                      label: Text(
+                                          '${updatedBookingDate.day}/${updatedBookingDate.month}/${updatedBookingDate.year}'),
+                                      onPressed: () async {
+                                        final pickedDate = await showDatePicker(
+                                          context: context,
+                                          initialDate: updatedBookingDate,
+                                          firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                                          lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                                        );
+                                        if (pickedDate != null) {
+                                          setModalState(() {
+                                            updatedBookingDate = pickedDate;
+                                            hasInitialFetched = false;
+                                          });
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  _buildTimeSlotDropdown(
+                                      isDayClosed,
+                                      isLoadingSlots,
+                                      operationalHoursTimeOptions,
+                                      updatedBookingTimeSlot,
+                                      (val) => setModalState(() => updatedBookingTimeSlot = val!)),
+                                ],
+                              )
+                            : Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      icon: const Icon(Icons.calendar_today, size: 14),
+                                      label: Text(
+                                          '${updatedBookingDate.day}/${updatedBookingDate.month}/${updatedBookingDate.year}'),
+                                      onPressed: () async {
+                                        final pickedDate = await showDatePicker(
+                                          context: context,
+                                          initialDate: updatedBookingDate,
+                                          firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                                          lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                                        );
+                                        if (pickedDate != null) {
+                                          setModalState(() {
+                                            updatedBookingDate = pickedDate;
+                                            hasInitialFetched = false;
+                                          });
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: _buildTimeSlotDropdown(
+                                        isDayClosed,
+                                        isLoadingSlots,
+                                        operationalHoursTimeOptions,
+                                        updatedBookingTimeSlot,
+                                        (val) => setModalState(() => updatedBookingTimeSlot = val!)),
+                                  ),
+                                ],
+                              ),
+                        const SizedBox(height: 16),
+
+                        // --- New Selection Dropdown of Staff ---
+                        // --- New Selection Dropdown of Staff ---
+const Text(
+  'Assigned Staff Member *',
+  style: TextStyle(
+      fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569)),
+),
+const SizedBox(height: 6),
+Container(
+  padding: const EdgeInsets.symmetric(horizontal: 12),
+  decoration: BoxDecoration(
+      border: Border.all(color: Colors.grey.shade400),
+      borderRadius: BorderRadius.circular(4)),
+  child: DropdownButtonHideUnderline(
+    child: isLoadingStaff
+        ? const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12.0),
+            child: Row(
+              children: [
+                SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2)),
+                SizedBox(width: 12),
+                Text('Syncing active staff...',
+                    style: TextStyle(fontSize: 14, color: Colors.grey)),
+              ],
+            ),
+          )
+        : activeGroomers.isEmpty
+            ? const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12.0),
+                child: Text(
+                  'No active staff members available',
+                  style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.redAccent,
+                      fontWeight: FontWeight.w500),
+                ),
+              )
+            : (() {
+                // Check if the current selectedGroomerId exists within our active staff items.
+                // If it is null, '', or a non-matching ID, we safely fall back to null.
+                final dynamic effectiveSelectedId = (selectedGroomerId == null || selectedGroomerId == '')
+                    ? null
+                    : (activeGroomers.any((g) => g['id'] == selectedGroomerId) ? selectedGroomerId : null);
+
+                return DropdownButton<dynamic>(
+                  isExpanded: true,
+                  value: effectiveSelectedId,
+                  hint: const Text('Select an assigned professional'),
+                  items: activeGroomers.map((groomer) {
+                    return DropdownMenuItem<dynamic>(
+                      value: groomer['id'],
+                      child: Text('${groomer['name']}'),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    setModalState(() => selectedGroomerId = val);
+                  },
+                );
+              }()),
+  ),
+),
+                        const SizedBox(height: 16),
+
+                        // --- Administrative Pipeline Status ---
+                        const Text(
+                          'Administrative Pipeline Status',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569)),
+                        ),
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey.shade300),
+                              borderRadius: BorderRadius.circular(4)),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              isExpanded: true,
+                              value: currentStatus,
+                              items: const [
+                                DropdownMenuItem(value: 'PENDING', child: Text('Pending Approval')),
+                                DropdownMenuItem(value: 'PAID', child: Text('Paid / Settled')),
+                                DropdownMenuItem(value: 'COMPLETED', child: Text('Completed')),
+                                DropdownMenuItem(value: 'CANCELLED', child: Text('Cancelled')),
+                                DropdownMenuItem(value: 'NOSHOW', child: Text('No Show')),
+                              ],
+                              onChanged: (v) => setModalState(() => currentStatus = v!),
                             ),
                           ),
-                        ],
-                      ),
-                      const Divider(height: 24),
-                      const Text(
-                        'Reschedule Date & Time Layout',
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569)),
-                      ),
-                      const SizedBox(height: 6),
-
-                      isCompact
-                          ? Column(
+                        ),
+                        const SizedBox(height: 16),
+                        CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Pet Checked In', style: TextStyle(fontSize: 14)),
+                          value: isCheckedIn,
+                          onChanged: (val) => setModalState(() => isCheckedIn = val!),
+                        ),
+                        CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Deposit Amount Paid', style: TextStyle(fontSize: 14)),
+                          value: depositPaid,
+                          onChanged: (val) => setModalState(() => depositPaid = val!),
+                        ),
+                        CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Ready For Pickup', style: TextStyle(fontSize: 14)),
+                          value: isReadyForPickup,
+                          onChanged: (val) => setModalState(() => isReadyForPickup = val!),
+                        ),
+                        CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Loyalty Fee Waived', style: TextStyle(fontSize: 14)),
+                          value: isLoyaltyWaived,
+                          onChanged: (val) => setModalState(() => isLoyaltyWaived = val!),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: tagsController,
+                          decoration: const InputDecoration(
+                            labelText: 'Internal Staff Flow Tags (comma separated)',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            if (widget.isAdmin)
+                              OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(foregroundColor: Colors.red.shade700),
+                                icon: const Icon(Icons.delete_forever_outlined, size: 16),
+                                label: const Text('Delete'),
+                                onPressed: () {
+                                  _confirmActionGuard(
+                                    title: 'Purge Booking Instance?',
+                                    body: 'This action completely erases this booking records.',
+                                    onConfirm: () async {
+                                      try {
+                                        final res = await http.delete(
+                                          Uri.parse('$_baseUrl/api/v1/bookings/${app['id']}'),
+                                          headers: {
+                                            'Authorization': 'Bearer ${widget.authToken}',
+                                          },
+                                        );
+                                        if (res.statusCode == 200) {
+                                          Navigator.pop(context);
+                                          _showSnackBar('🗑️ Booking successfully purged.');
+                                          _fetchDashboardAppointments();
+                                        }
+                                      } catch (_) {}
+                                    },
+                                  );
+                                },
+                              )
+                            else
+                              const SizedBox.shrink(),
+                            Row(
                               children: [
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: OutlinedButton.icon(
-                                    icon: const Icon(Icons.calendar_today, size: 14),
-                                    label: Text(
-                                        '${updatedBookingDate.day}/${updatedBookingDate.month}/${updatedBookingDate.year}'),
-                                    onPressed: () async {
-                                      final pickedDate = await showDatePicker(
-                                        context: context,
-                                        initialDate: updatedBookingDate,
-                                        firstDate:
-                                            DateTime.now().subtract(const Duration(days: 365)),
-                                        lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                                TextButton(
+                                    onPressed: () => Navigator.pop(context),
+                                    child: const Text('Cancel')),
+                                const SizedBox(width: 8),
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: widget.config.primaryColor,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                  onPressed: () async {
+                                    if (selectedGroomerId == null) {
+                                      _showSnackBar('⚠️ A valid active staff member must be assigned.');
+                                      return;
+                                    }
+
+                                    final timeParts = updatedBookingTimeSlot.split(':');
+                                    final targetDateTime = DateTime(
+                                      updatedBookingDate.year,
+                                      updatedBookingDate.month,
+                                      updatedBookingDate.day,
+                                      int.parse(timeParts[0]),
+                                      int.parse(timeParts[1]),
+                                    );
+
+                                    final cleanTags = tagsController.text
+                                        .split(',')
+                                        .map((e) => e.trim())
+                                        .where((e) => e.isNotEmpty)
+                                        .toList();
+
+                                    final payload = {
+                                      'status': currentStatus,
+                                      'startTime': targetDateTime.toIso8601String(),
+                                      'isCheckedIn': isCheckedIn,
+                                      'depositPaid': depositPaid,
+                                      'isReadyToPickup': isReadyForPickup,
+                                      'isLoyaltyWaived': isLoyaltyWaived,
+                                      'groomerId': selectedGroomerId,
+                                      'internalTags': cleanTags,
+                                    };
+
+                                    try {
+                                      final response = await http.put(
+                                        Uri.parse('$_baseUrl/api/v1/bookings/update/${app['id']}'),
+                                        headers: {
+                                          'Content-Type': 'application/json',
+                                          'Authorization': 'Bearer ${widget.authToken}',
+                                        },
+                                        body: jsonEncode(payload),
                                       );
 
-                                      if (pickedDate != null) {
-                                        setModalState(() {
-                                          updatedBookingDate = pickedDate;
-                                          isLoadingSlots = true;
-                                          isDayClosed = false;
-                                        });
-
-                                        try {
-                                          final String formattedDate = "${pickedDate.year}-"
-                                              "${pickedDate.month.toString().padLeft(2, '0')}-"
-                                              "${pickedDate.day.toString().padLeft(2, '0')}";
-
-                                          final int durationMinutes = app['durationMinutes'] ?? 60;
-                                          final String targetUrl =
-                                              '$_baseUrl/api/v1/bookings/available-slots'
-                                              '?merchantId=${widget.config.merchantId}'
-                                              '&date=$formattedDate'
-                                              '&duration=$durationMinutes';
-
-                                          final response = await http.get(
-                                            Uri.parse(targetUrl),
-                                            headers: {'Content-Type': 'application/json'},
-                                          );
-
-                                          if (response.statusCode == 200) {
-                                            final Map<String, dynamic> parsedBody =
-                                                json.decode(response.body);
-                                            if (parsedBody['success'] == true &&
-                                                parsedBody['data'] is List) {
-                                              final List<dynamic> backendSlots = parsedBody['data'];
-
-                                              setModalState(() {
-                                                isLoadingSlots = false;
-                                                if (backendSlots.isNotEmpty) {
-                                                  isDayClosed = false;
-                                                  operationalHoursTimeOptions = backendSlots
-                                                      .map<String>((slot) => slot.toString())
-                                                      .toList();
-
-                                                  if (operationalHoursTimeOptions.isNotEmpty) {
-                                                    updatedBookingTimeSlot =
-                                                        operationalHoursTimeOptions.first;
-                                                  }
-                                                } else {
-                                                  isDayClosed = true;
-                                                  operationalHoursTimeOptions = [];
-                                                }
-                                              });
-                                            } else {
-                                              setModalState(() => isLoadingSlots = false);
-                                            }
-                                          } else {
-                                            setModalState(() => isLoadingSlots = false);
-                                          }
-                                        } catch (e) {
-                                          setModalState(() => isLoadingSlots = false);
-                                        }
+                                      if (response.statusCode == 200) {
+                                        Navigator.pop(context);
+                                        _showSnackBar('🎉 Booking details successfully updated.');
+                                        _fetchDashboardAppointments();
+                                      } else {
+                                        _showSnackBar('❌ Failed to save pipeline parameters.');
                                       }
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                                  decoration: BoxDecoration(
-                                    border: Border.all(
-                                        color: isDayClosed
-                                            ? Colors.red.shade300
-                                            : Colors.grey.shade300),
-                                    borderRadius: BorderRadius.circular(4),
-                                    color: isDayClosed
-                                        ? Colors.red.shade50
-                                        : (isLoadingSlots ? Colors.grey.shade100 : Colors.white),
-                                  ),
-                                  child: DropdownButtonHideUnderline(
-                                    child: isDayClosed
-                                        ? const Padding(
-                                            padding: EdgeInsets.symmetric(vertical: 12.0),
-                                            child: Text(
-                                              'SHOP CLOSED',
-                                              style: TextStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: Colors.redAccent),
-                                            ),
-                                          )
-                                        : (isLoadingSlots
-                                            ? const SizedBox(
-                                                height: 20,
-                                                width: 20,
-                                                child: Center(
-                                                  child: SizedBox(
-                                                    height: 16,
-                                                    width: 16,
-                                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                                  ),
-                                                ),
-                                              )
-                                            : DropdownButton<String>(
-                                                isExpanded: true,
-                                                hint: const Text('No slots',
-                                                    style: TextStyle(
-                                                        fontSize: 12, color: Colors.redAccent)),
-                                                value: operationalHoursTimeOptions
-                                                        .contains(updatedBookingTimeSlot)
-                                                    ? updatedBookingTimeSlot
-                                                    : null,
-                                                items: operationalHoursTimeOptions.map((raw24hTime) {
-                                                  String displayTime = raw24hTime;
-                                                  try {
-                                                    final parts = raw24hTime.split(':');
-                                                    final int hour = int.parse(parts[0]);
-                                                    final String minute = parts[1];
-
-                                                    final int displayHour = hour > 12
-                                                        ? hour - 12
-                                                        : (hour == 0 ? 12 : hour);
-                                                    final String amPm = hour >= 12 ? 'PM' : 'AM';
-                                                    final String paddedHour =
-                                                        displayHour.toString().padLeft(2, '0');
-
-                                                    displayTime = '$paddedHour:$minute $amPm';
-                                                  } catch (_) {}
-
-                                                  return DropdownMenuItem<String>(
-                                                    value: raw24hTime,
-                                                    child: Text('Time: $displayTime'),
-                                                  );
-                                                }).toList(),
-                                                onChanged: (val) {
-                                                  if (val != null) {
-                                                    setModalState(
-                                                        () => updatedBookingTimeSlot = val);
-                                                  }
-                                                },
-                                              )),
-                                  ),
+                                    } catch (_) {
+                                      _showSnackBar('❌ Network failure syncing data elements.');
+                                    }
+                                  },
+                                  child: const Text('Save Changes'),
                                 ),
                               ],
                             )
-                          : Row(
-                              children: [
-                                Expanded(
-                                  child: OutlinedButton.icon(
-                                    icon: const Icon(Icons.calendar_today, size: 14),
-                                    label: Text(
-                                        '${updatedBookingDate.day}/${updatedBookingDate.month}/${updatedBookingDate.year}'),
-                                    onPressed: () async {
-                                      final pickedDate = await showDatePicker(
-                                        context: context,
-                                        initialDate: updatedBookingDate,
-                                        firstDate:
-                                            DateTime.now().subtract(const Duration(days: 365)),
-                                        lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
-                                      );
-
-                                      if (pickedDate != null) {
-                                        setModalState(() {
-                                          updatedBookingDate = pickedDate;
-                                          isLoadingSlots = true;
-                                          isDayClosed = false;
-                                        });
-
-                                        try {
-                                          final String formattedDate = "${pickedDate.year}-"
-                                              "${pickedDate.month.toString().padLeft(2, '0')}-"
-                                              "${pickedDate.day.toString().padLeft(2, '0')}";
-
-                                          final int durationMinutes = app['durationMinutes'] ?? 60;
-                                          final String targetUrl =
-                                              '$_baseUrl/api/v1/bookings/available-slots'
-                                              '?merchantId=${widget.config.merchantId}'
-                                              '&date=$formattedDate'
-                                              '&duration=$durationMinutes';
-
-                                          final response = await http.get(
-                                            Uri.parse(targetUrl),
-                                            headers: {'Content-Type': 'application/json'},
-                                          );
-
-                                          if (response.statusCode == 200) {
-                                            final Map<String, dynamic> parsedBody =
-                                                json.decode(response.body);
-                                            if (parsedBody['success'] == true &&
-                                                parsedBody['data'] is List) {
-                                              final List<dynamic> backendSlots = parsedBody['data'];
-
-                                              setModalState(() {
-                                                isLoadingSlots = false;
-                                                if (backendSlots.isNotEmpty) {
-                                                  isDayClosed = false;
-                                                  operationalHoursTimeOptions = backendSlots
-                                                      .map<String>((slot) => slot.toString())
-                                                      .toList();
-
-                                                  if (operationalHoursTimeOptions.isNotEmpty) {
-                                                    updatedBookingTimeSlot =
-                                                        operationalHoursTimeOptions.first;
-                                                  }
-                                                } else {
-                                                  isDayClosed = true;
-                                                  operationalHoursTimeOptions = [];
-                                                }
-                                              });
-                                            } else {
-                                              setModalState(() => isLoadingSlots = false);
-                                            }
-                                          } else {
-                                            setModalState(() => isLoadingSlots = false);
-                                          }
-                                        } catch (e) {
-                                          setModalState(() => isLoadingSlots = false);
-                                        }
-                                      }
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                                    decoration: BoxDecoration(
-                                      border: Border.all(
-                                          color: isDayClosed
-                                              ? Colors.red.shade300
-                                              : Colors.grey.shade300),
-                                      borderRadius: BorderRadius.circular(4),
-                                      color: isDayClosed
-                                          ? Colors.red.shade50
-                                          : (isLoadingSlots ? Colors.grey.shade100 : Colors.white),
-                                    ),
-                                    child: DropdownButtonHideUnderline(
-                                      child: isDayClosed
-                                          ? const Padding(
-                                              padding: EdgeInsets.symmetric(vertical: 12.0),
-                                              child: Text(
-                                                'SHOP CLOSED',
-                                                style: TextStyle(
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: Colors.redAccent),
-                                              ),
-                                            )
-                                          : (isLoadingSlots
-                                              ? const SizedBox(
-                                                  height: 20,
-                                                  width: 20,
-                                                  child: Center(
-                                                    child: SizedBox(
-                                                      height: 16,
-                                                      width: 16,
-                                                      child: CircularProgressIndicator(strokeWidth: 2),
-                                                    ),
-                                                  ),
-                                                )
-                                              : DropdownButton<String>(
-                                                  isExpanded: true,
-                                                  hint: const Text('No slots',
-                                                      style: TextStyle(
-                                                          fontSize: 12, color: Colors.redAccent)),
-                                                  value: operationalHoursTimeOptions
-                                                          .contains(updatedBookingTimeSlot)
-                                                      ? updatedBookingTimeSlot
-                                                      : null,
-                                                  items:
-                                                      operationalHoursTimeOptions.map((raw24hTime) {
-                                                    String displayTime = raw24hTime;
-                                                    try {
-                                                      final parts = raw24hTime.split(':');
-                                                      final int hour = int.parse(parts[0]);
-                                                      final String minute = parts[1];
-
-                                                      final int displayHour = hour > 12
-                                                          ? hour - 12
-                                                          : (hour == 0 ? 12 : hour);
-                                                      final String amPm =
-                                                          hour >= 12 ? 'PM' : 'AM';
-                                                      final String paddedHour =
-                                                          displayHour.toString().padLeft(2, '0');
-
-                                                      displayTime = '$paddedHour:$minute $amPm';
-                                                    } catch (_) {}
-
-                                                    return DropdownMenuItem<String>(
-                                                      value: raw24hTime,
-                                                      child: Text('Time: $displayTime'),
-                                                    );
-                                                  }).toList(),
-                                                  onChanged: (val) {
-                                                    if (val != null) {
-                                                      setModalState(
-                                                          () => updatedBookingTimeSlot = val);
-                                                    }
-                                                  },
-                                                )),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                      const Divider(height: 24),
-
-                      const Text('Administrative Pipeline Status',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                      DropdownButton<String>(
-                        value: currentStatus,
-                        isExpanded: true,
-                        items: const [
-                          DropdownMenuItem(value: 'PENDING', child: Text('PENDING')),
-                          DropdownMenuItem(value: 'PAID', child: Text('PAID')),
-                          DropdownMenuItem(value: 'COMPLETED', child: Text('COMPLETED')),
-                          DropdownMenuItem(value: 'CANCELLED', child: Text('CANCELLED')),
-                        ],
-                        onChanged: (val) => setModalState(() => currentStatus = val!),
-                      ),
-                      const SizedBox(height: 12),
-
-                      SwitchListTile(
-                        title: const Text('Client Checked In', style: TextStyle(fontSize: 13)),
-                        value: isCheckedIn,
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        onChanged: (v) => setModalState(() => isCheckedIn = v),
-                      ),
-                      SwitchListTile(
-                        title: const Text('Deposit Paid Status', style: TextStyle(fontSize: 13)),
-                        value: depositPaid,
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        onChanged: (v) => setModalState(() => depositPaid = v),
-                      ),
-                      SwitchListTile(
-                        title: const Text('Pet Ready For Pickup', style: TextStyle(fontSize: 13)),
-                        value: isReadyForPickup,
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        onChanged: (v) => setModalState(() => isReadyForPickup = v),
-                      ),
-                      SwitchListTile(
-                        title: const Text('Waive Fee (Free Loyalty Reward Groom)',
-                            style: TextStyle(fontSize: 13)),
-                        value: isLoyaltyWaived,
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        onChanged: (v) => setModalState(() => isLoyaltyWaived = v),
-                      ),
-                      const SizedBox(height: 12),
-
-                      TextField(
-                        controller: tagsController,
-                        decoration: const InputDecoration(
-                          labelText: 'Internal Staff/Admin Tags (comma separated)',
-                          border: OutlineInputBorder(),
-                          hintText: 'Aggressive, HighAnxiety, SpecialCare',
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Center(
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red.shade800,
-                            foregroundColor: Colors.white,
-                          ),
-                          onPressed: () async {
-                            Navigator.pop(context);
-                            _confirmActionGuard(
-                                title: 'Purge Operational Record',
-                                body:
-                                    'This operation will delete booking identifier ${app['id']} permanently from the production cluster.',
-                                onConfirm: () async {
-                                  try {
-                                    await http.delete(
-                                      Uri.parse('$_baseUrl/api/v1/bookings/delete/${app['id']}'),
-                                      headers: {'Authorization': 'Bearer ${widget.authToken}'},
-                                    );
-                                    _showSnackBar('🚀 Purge schema sync completed.');
-                                    _fetchDashboardAppointments();
-                                  } catch (e) {
-                                    setState(() {
-                                      mockAppointments
-                                          .removeWhere((item) => item['id'] == app['id']);
-                                    });
-                                    _showSnackBar('Removed local record object safely.');
-                                  }
-                                });
-                          },
-                          child: const Text('Delete Permanently'),
-                        ),
-                      )
-                    ],
+                          ],
+                        )
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    tagsController.dispose();
-                    Navigator.pop(context);
-                  },
-                  child: const Text('Discard'),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0F172A),
-                    foregroundColor: Colors.white,
-                  ),
-                  onPressed: () async {
-                    final parsedTags = tagsController.text
-                        .split(',')
-                        .map((t) => t.trim())
-                        .where((t) => t.isNotEmpty)
-                        .toList();
-
-                    final timeParts = updatedBookingTimeSlot.split(':');
-                    final hour = int.parse(timeParts[0]);
-                    final minute = int.parse(timeParts[1]);
-
-                    final targetFullDateTime = DateTime(
-                      updatedBookingDate.year,
-                      updatedBookingDate.month,
-                      updatedBookingDate.day,
-                      hour,
-                      minute,
-                    );
-
-                    final updatePayload = {
-                      'status': currentStatus,
-                      'startTime': targetFullDateTime.toIso8601String(),
-                      'isCheckedIn': isCheckedIn,
-                      'depositPaid': depositPaid,
-                      'isReadyToPickup': isReadyForPickup,
-                      'isLoyaltyWaived': isLoyaltyWaived,
-                      'internalTags': parsedTags,
-                    };
-
-                    int serverVerifiedDuration = app['durationMinutes'] ?? 60;
-
-                    try {
-                      final response = await http.put(
-                        Uri.parse('$_baseUrl/api/v1/bookings/update/${app['id']}'),
-                        headers: {
-                          'Content-Type': 'application/json',
-                          'Authorization': 'Bearer ${widget.authToken}',
-                        },
-                        body: jsonEncode(updatePayload),
-                      );
-
-                      if (response.statusCode == 200) {
-                        final Map<String, dynamic> responseData = jsonDecode(response.body);
-                        if (responseData['success'] == true && responseData['data'] != null) {
-                          final appointmentSnapshot = responseData['data'];
-                          if (appointmentSnapshot['durationMinutes'] != null) {
-                            serverVerifiedDuration =
-                                appointmentSnapshot['durationMinutes'] as int;
-                          }
-                        }
-                        _showSnackBar('🚀 Cloud database schema updated safely.');
-                      } else {
-                        _showSnackBar('⚠️ Live sync rejected; falling back to local simulation.');
-                      }
-                    } catch (e) {
-                      _showSnackBar('🔄 Connection error; processing local simulation safely.');
-                    }
-
-                    setState(() {
-                      final targetIdx =
-                          mockAppointments.indexWhere((element) => element['id'] == app['id']);
-                      if (targetIdx != -1) {
-                        mockAppointments[targetIdx]['isCheckedIn'] = isCheckedIn;
-                        mockAppointments[targetIdx]['isDepositPaid'] = depositPaid;
-                        mockAppointments[targetIdx]['isReadyForPickup'] = isReadyForPickup;
-                        mockAppointments[targetIdx]['isLoyaltyWaived'] = isLoyaltyWaived;
-                        mockAppointments[targetIdx]['status'] = currentStatus;
-                        mockAppointments[targetIdx]['staffTags'] = parsedTags;
-                        mockAppointments[targetIdx]['rawStartTime'] = targetFullDateTime;
-                        mockAppointments[targetIdx]['durationMinutes'] = serverVerifiedDuration;
-
-                        final rangeEnd = targetFullDateTime
-                            .add(Duration(minutes: serverVerifiedDuration));
-                        mockAppointments[targetIdx]['rawEndTime'] = rangeEnd;
-
-                        mockAppointments[targetIdx]['time'] =
-                            "${targetFullDateTime.hour.toString().padLeft(2, '0')}:${targetFullDateTime.minute.toString().padLeft(2, '0')} - ${rangeEnd.hour.toString().padLeft(2, '0')}:${rangeEnd.minute.toString().padLeft(2, '0')}";
-                      }
-                    });
-
-                    tagsController.dispose();
-                    Navigator.pop(context);
-                  },
-                  child: const Text('Commit Changes'),
-                )
-              ],
-            );
-          },
-        );
-      },
-    );
+              );
+            },
+          );
+        },
+      );
+      }
+      catch (error) {
+        _showSnackBar("Failed to fetch staff list before opening dialog:");
+      }
   }
 
   void _showAddServiceMatrixDialog(BuildContext context) {

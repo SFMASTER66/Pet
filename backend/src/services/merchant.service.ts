@@ -24,6 +24,7 @@ export interface FormattedAppointment {
   depositPaid: boolean;
   isReadyToPickup: boolean;
   internalTags: string[];
+  groomerId: string;
 }
 
 export interface ClientContact {
@@ -95,7 +96,8 @@ export class MerchantService {
         isCheckedIn: app.isCheckedIn ?? false,
         depositPaid: app.depositPaid ?? false,
         isReadyToPickup: app.isReadyToPickup ?? false,
-        internalTags: app.internalTags || []
+        internalTags: app.internalTags || [],
+        groomerId: app.groomerId || ''
       };
     });
 

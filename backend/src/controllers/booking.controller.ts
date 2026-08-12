@@ -95,6 +95,7 @@ export const updateBooking = async (req: Request, res: Response): Promise<void> 
       depositPaid,
       isReadyToPickup,
       isLoyaltyWaived,
+      groomerId,
       internalTags,
       paymentIntentId
     } = req.body;
@@ -114,6 +115,7 @@ export const updateBooking = async (req: Request, res: Response): Promise<void> 
       isLoyaltyWaived: isLoyaltyWaived !== undefined ? Boolean(isLoyaltyWaived) : undefined,
       internalTags: Array.isArray(internalTags) ? internalTags : undefined,
       paymentIntentId: paymentIntentId !== undefined ? String(paymentIntentId) : undefined,
+      groomerId: groomerId !== undefined ? String(groomerId) : undefined,
     });
 
     res.status(200).json(payload);

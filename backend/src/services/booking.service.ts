@@ -43,6 +43,7 @@ interface AdminUpdateBookingInput {
   isLoyaltyWaived?: boolean;
   internalTags?: string[];
   paymentIntentId?: string;
+  groomerId?: string;
 }
 
 export const BookingService = {
@@ -337,7 +338,9 @@ export const BookingService = {
       const existingAppointment = await prisma.appointment.findUnique({ where: { id } });
       if (!existingAppointment) throw new Error(`❌ Appointment [${id}] not found.`);
 
-      const updateData: any = { ...input };
+      // 1. Separate groomerId out from the rest of the inputs
+      const { groomerId, ...restOfInput } = input;
+      const updateData: any = { ...restOfInput };
 
       // ==========================================
       // 🔥 CAPACITY GUARD RUNS ONLY ON TIME CHANGE
@@ -417,6 +420,15 @@ export const BookingService = {
         updateData.endTime = calculatedEndTime;
       }
       // ==========================================
+
+      // 2. Safely evaluate groomerId relation strategy before executing update
+      if (groomerId !== undefined) {
+        const hasGroomer = groomerId !== null && groomerId !== '';
+        
+        updateData.groomer = hasGroomer 
+          ? { connect: { id: groomerId } } 
+          : { disconnect: true }; // Breaks relation if empty string/null passed from front-end
+      }
 
       const updatedAppointment = await prisma.appointment.update({
         where: { id },
