@@ -149,213 +149,219 @@ export const BookingService = {
      * 🚀 Dynamic Administrative Manual Booking Engine Core
      */
     async portalBooking(input: AdminCreateBookingInput) {
-      try { 
-        // 1. Resolve customer profile record details safely by phone OR email
-        // ===================================================================
-        let userProfile = await prisma.user.findFirst({
-          where: { 
-            merchantId: input.merchantId,
-            OR: [
-              { phoneNumber: input.ownerPhone.trim() },
-              { email: input.ownerEmail.trim().toLowerCase() }
-            ]
-          }
-        });
-
-        if (!userProfile) {
-          userProfile = await prisma.user.create({
-            data: {
-              merchantId: input.merchantId,
-              name: input.ownerName.trim(),
-              email: input.ownerEmail.trim().toLowerCase(),
-              phoneNumber: input.ownerPhone.trim(),
-              passwordHash: '$2b$10$UnusableFallbackHashValuePlaceholderEngineToken', 
-              role: 'CUSTOMER'
-            }
-          });
-        }
-        // ===================================================================
-
-        // 2. Resolve or dynamically bundle target pet profile records under the master layout customer profile
-        let petProfile = await prisma.pet.findFirst({
-          where: {
-            merchantId: input.merchantId,
-            ownerId: userProfile.id,
-            name: { equals: input.dogName.trim(), mode: 'insensitive' }
-          }
-        });
-
-        if (!petProfile) {
-          const defaultSpecies = await prisma.species.findFirst({ where: { name: 'Dog' } });
-          if (!defaultSpecies) {
-            throw new Error("System fault: Master core database record configurations for 'Dog' options are missing.");
-          }
-
-          petProfile = await prisma.pet.create({
-            data: {
-              merchantId: input.merchantId,
-              ownerId: userProfile.id,
-              speciesId: defaultSpecies.id,
-              name: input.dogName.trim(),
-              breed: input.dogBreed.trim(),
-              dob: input.dogDob,
-              weight: input.dogWeight,
-              gender: input.dogGender,
-              isDesexed: input.isDesexed,
-              status: 'ACTIVE'
-            }
-          });
-        }
-
-        // 3. Resolve master base duration matrix parameters
-        const matrixRow = await prisma.servicePricingMatrix.findUnique({
-          where: { id: input.servicePricingMatrixId }
-        });
-
-        if (!matrixRow) {
-          throw new Error(`❌ Pricing matrix target key row configuration [${input.servicePricingMatrixId}] was not found.`);
-        }
-
-        // 4. Calculate isolated snapshot scheduling durations
-        const parsedStartTime = new Date(input.serviceTime);
-        const calculatedEndTime = new Date(parsedStartTime.getTime() + (matrixRow.durationMinutes * 60000));
-
-        // Query DateTime range using pure Date objects only
-        const startOfDay = new Date(parsedStartTime);
-        startOfDay.setHours(0, 0, 0, 0);
-
-        const endOfDay = new Date(parsedStartTime);
-        endOfDay.setHours(23, 59, 59, 999);
-
-        // Query shift records falling within the target date range
-        const shiftsOnDay = await prisma.shift.findMany({
-          where: {
-            date: {
-              gte: startOfDay,
-              lte: endOfDay
-            },
-            employee: {
-              merchantId: input.merchantId,
-              isActive: true,
-              user: {
-                role: UserRole.MERCHANT_STAFF
-              }
-            }
-          },
-          select: { employeeId: true }
-        });
-
-        // 5. Build eligible active staff pool based on shifts or fallback definitions
-        let eligibleStaffIds: string[] = [];
-
-        if (shiftsOnDay.length > 0) {
-          // Get distinct scheduled employee IDs on this date
-          eligibleStaffIds = Array.from(new Set(shiftsOnDay.map((s) => s.employeeId)));
-        } else {
-          // Fallback: Default to all active MERCHANT_STAFF employees if no shifts are recorded
-          const fallbackStaff = await prisma.employee.findMany({
-            where: { 
-              merchantId: input.merchantId, 
-              isActive: true,
-              user: {
-                role: UserRole.MERCHANT_STAFF 
-              }
-            },
-            select: { id: true }
-          });
-          eligibleStaffIds = fallbackStaff.map((s) => s.id);
-        }
-
-        const totalStaffCount = eligibleStaffIds.length;
-
-        // Fetch existing concurrent bookings to check capacity and handle auto-assignment
-        const conflictingBookings = await prisma.appointment.findMany({
-          where: {
-            merchantId: input.merchantId,
-            status: { in: [AppointmentStatus.PENDING, AppointmentStatus.PAID, AppointmentStatus.COMPLETED] },
-            OR: [
-              {
-                startTime: { lte: parsedStartTime },
-                endTime: { gt: parsedStartTime }
-              },
-              {
-                startTime: { lt: calculatedEndTime },
-                endTime: { gte: calculatedEndTime }
-              }
-            ]
-          },
-          select: { groomerId: true }
-        });
-
-        if (conflictingBookings.length >= totalStaffCount) {
-          throw new Error(`❌ Slot fully booked. Capacity reached for the selected time window.`);
-        }
-
-        // ===================================================================
-        // ⚙️ AUTO-ASSIGN GROOMER LOGIC
-        // ===================================================================
-        let assignedGroomerId = input.groomerId || undefined;
-
-        if (!assignedGroomerId) {
-          // Identify groomer IDs that are currently occupied during this time frame
-          const occupiedGroomerIds = new Set(
-            conflictingBookings
-              .map((b) => b.groomerId)
-              .filter((id): id is string => !!id)
-          );
-
-          // Find the first eligible staff member who doesn't have a conflict
-          const availableGroomerId = eligibleStaffIds.find((staffId) => !occupiedGroomerIds.has(staffId));
-
-          if (availableGroomerId) {
-            assignedGroomerId = availableGroomerId;
-          } else {
-            // Fallback protection: If the total staff count capacity isn't hit but all scheduled
-            // staff show a hard time conflict (e.g. unassigned bookings), pick the first active staff member.
-            assignedGroomerId = eligibleStaffIds[0];
-          }
-        }
-        // ===================================================================
-
-        // 6. Atomic transaction write directly to database cluster rows
-        const appointment = await prisma.appointment.create({
-          data: {
-            pet: { connect: { id: petProfile.id } },
-            merchant: { connect: { id: input.merchantId } },
-            bookedBy: {
-              connect: {
-                id: (input.bookedById && input.bookedById.trim() !== "") 
-                  ? input.bookedById 
-                  : userProfile.id
-              }
-            },
-            servicePricingMatrix: { connect: { id: matrixRow.id } },
-            groomer: assignedGroomerId 
-              ? { connect: { id: assignedGroomerId } } 
-              : undefined, 
-            startTime: parsedStartTime,
-            endTime: calculatedEndTime,
-            status: AppointmentStatus.PENDING,
-            priceCentsAud: matrixRow.priceCentsAud, 
-            durationMinutes: matrixRow.durationMinutes, 
-            notes: input.note ?? null
-          },
-          include: {
-            pet: true,
-            servicePricingMatrix: true
-          }
-        });
-
-        return {
-          success: true,
-          message: 'Administrative booking saved and snapshot values written successfully.',
-          data: appointment
-        };
+  try { 
+    // 1. Resolve customer profile record details safely by phone OR email
+    // ===================================================================
+    let userProfile = await prisma.user.findFirst({
+      where: { 
+        merchantId: input.merchantId,
+        OR: [
+          { phoneNumber: input.ownerPhone.trim() },
+          { email: input.ownerEmail.trim().toLowerCase() }
+        ]
       }
-      catch (error: any) {
-        throw new Error(error.message);
+    });
+
+    if (!userProfile) {
+      userProfile = await prisma.user.create({
+        data: {
+          merchantId: input.merchantId,
+          name: input.ownerName.trim(),
+          email: input.ownerEmail.trim().toLowerCase(),
+          phoneNumber: input.ownerPhone.trim(),
+          passwordHash: '$2b$10$UnusableFallbackHashValuePlaceholderEngineToken', 
+          role: 'CUSTOMER'
+        }
+      });
+    }
+    // ===================================================================
+
+    // 2. Resolve or dynamically bundle target pet profile records under the master layout customer profile
+    let petProfile = await prisma.pet.findFirst({
+      where: {
+        merchantId: input.merchantId,
+        ownerId: userProfile.id,
+        name: { equals: input.dogName.trim(), mode: 'insensitive' }
       }
-    },
+    });
+
+    if (!petProfile) {
+      const defaultSpecies = await prisma.species.findFirst({ where: { name: 'Dog' } });
+      if (!defaultSpecies) {
+        throw new Error("System fault: Master core database record configurations for 'Dog' options are missing.");
+      }
+
+      petProfile = await prisma.pet.create({
+        data: {
+          merchantId: input.merchantId,
+          ownerId: userProfile.id,
+          speciesId: defaultSpecies.id,
+          name: input.dogName.trim(),
+          breed: input.dogBreed.trim(),
+          dob: input.dogDob,
+          weight: input.dogWeight,
+          gender: input.dogGender,
+          isDesexed: input.isDesexed,
+          status: 'ACTIVE'
+        }
+      });
+    }
+
+    // 3. Resolve master base duration matrix parameters
+    const matrixRow = await prisma.servicePricingMatrix.findUnique({
+      where: { id: input.servicePricingMatrixId }
+    });
+
+    if (!matrixRow) {
+      throw new Error(`❌ Pricing matrix target key row configuration [${input.servicePricingMatrixId}] was not found.`);
+    }
+
+    // 4. Calculate isolated snapshot scheduling durations
+    const parsedStartTime = new Date(input.serviceTime);
+    const calculatedEndTime = new Date(parsedStartTime.getTime() + (matrixRow.durationMinutes * 60000));
+
+    // Query DateTime range using pure Date objects only
+    const startOfDay = new Date(parsedStartTime);
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const endOfDay = new Date(parsedStartTime);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    // Query shift records falling within the target date range
+    const shiftsOnDay = await prisma.shift.findMany({
+      where: {
+        date: {
+          gte: startOfDay,
+          lte: endOfDay
+        },
+        employee: {
+          merchantId: input.merchantId,
+          isActive: true,
+          user: {
+            role: UserRole.MERCHANT_STAFF
+          }
+        }
+      },
+      select: { employeeId: true }
+    });
+
+    // 5. Build eligible active staff pool based on shifts or fallback definitions
+    let eligibleStaffIds: string[] = [];
+
+    if (shiftsOnDay.length > 0) {
+      // Get distinct scheduled employee IDs on this date
+      eligibleStaffIds = Array.from(new Set(shiftsOnDay.map((s) => s.employeeId)));
+    } else {
+      // Fallback: Default to all active MERCHANT_STAFF employees if no shifts are recorded
+      const fallbackStaff = await prisma.employee.findMany({
+        where: { 
+          merchantId: input.merchantId, 
+          isActive: true,
+          user: {
+            role: UserRole.MERCHANT_STAFF 
+          }
+        },
+        select: { id: true }
+      });
+      eligibleStaffIds = fallbackStaff.map((s) => s.id);
+    }
+
+    const totalStaffCount = eligibleStaffIds.length;
+
+    // Fetch existing concurrent bookings to check capacity and handle auto-assignment
+    const conflictingBookings = await prisma.appointment.findMany({
+      where: {
+        merchantId: input.merchantId,
+        status: { in: [AppointmentStatus.PENDING, AppointmentStatus.PAID, AppointmentStatus.COMPLETED] },
+        OR: [
+          {
+            startTime: { lte: parsedStartTime },
+            endTime: { gt: parsedStartTime }
+          },
+          {
+            startTime: { lt: calculatedEndTime },
+            endTime: { gte: calculatedEndTime }
+          }
+        ]
+      },
+      select: { groomerId: true }
+    });
+
+    // 🟢 CHECK IF BOOKING IS CREATED BY AN ADMIN / STAFF MEMBER
+    const isAdminBooking = Boolean(input.bookedById && input.bookedById.trim() !== "");
+
+    // 🟢 BYPASS CAPACITY CHECK IF IT'S AN ADMIN BOOKING
+    if (!isAdminBooking) {
+      if (conflictingBookings.length >= totalStaffCount) {
+        throw new Error(`❌ Slot fully booked. Capacity reached for the selected time window.`);
+      }
+    }
+
+    // ===================================================================
+    // ⚙️ AUTO-ASSIGN GROOMER LOGIC
+    // ===================================================================
+    let assignedGroomerId = input.groomerId || undefined;
+
+    if (!assignedGroomerId) {
+      // Identify groomer IDs that are currently occupied during this time frame
+      const occupiedGroomerIds = new Set(
+        conflictingBookings
+          .map((b) => b.groomerId)
+          .filter((id): id is string => !!id)
+      );
+
+      // Find the first eligible staff member who doesn't have a conflict
+      const availableGroomerId = eligibleStaffIds.find((staffId) => !occupiedGroomerIds.has(staffId));
+
+      if (availableGroomerId) {
+        assignedGroomerId = availableGroomerId;
+      } else {
+        // Fallback protection: If capacity limit is bypassed or all staff show a conflict,
+        // assign to the first active staff member if available.
+        assignedGroomerId = eligibleStaffIds[0];
+      }
+    }
+    // ===================================================================
+
+    // 6. Atomic transaction write directly to database cluster rows
+    const appointment = await prisma.appointment.create({
+      data: {
+        pet: { connect: { id: petProfile.id } },
+        merchant: { connect: { id: input.merchantId } },
+        bookedBy: {
+          connect: {
+            id: isAdminBooking 
+              ? input.bookedById! 
+              : userProfile.id
+          }
+        },
+        servicePricingMatrix: { connect: { id: matrixRow.id } },
+        groomer: assignedGroomerId 
+          ? { connect: { id: assignedGroomerId } } 
+          : undefined, 
+        startTime: parsedStartTime,
+        endTime: calculatedEndTime,
+        status: AppointmentStatus.PENDING,
+        priceCentsAud: matrixRow.priceCentsAud, 
+        durationMinutes: matrixRow.durationMinutes, 
+        notes: input.note ?? null
+      },
+      include: {
+        pet: true,
+        servicePricingMatrix: true
+      }
+    });
+
+    return {
+      success: true,
+      message: 'Administrative booking saved and snapshot values written successfully.',
+      data: appointment
+    };
+  }
+  catch (error: any) {
+    throw new Error(error.message);
+  }
+},
 
   /**
    * 🔄 Modifies an existing booking state matrix parameter layout row
@@ -658,5 +664,68 @@ export const BookingService = {
     }
 
     return availableSlots;
+  },
+
+  async getAdminBusinessSlots(merchantId: string, dateStr: string): Promise<string[]> {
+    const targetDate = new Date(`${dateStr}T00:00:00`);
+    if (isNaN(targetDate.getTime())) {
+      throw new Error('Invalid date format provided.');
+    }
+
+    // 1. DYNAMIC BUSINESS HOURS FETCHING & SEEDING LOGIC
+    let businessHours = await prisma.businessHours.findMany({
+      where: { merchantId },
+      orderBy: { dayOfWeek: 'asc' },
+    });
+
+    if (businessHours.length === 0) {
+      const defaults = Array.from({ length: 7 }, (_, i) => ({
+        merchantId,
+        dayOfWeek: i + 1,
+        openTime: '09:00',
+        closeTime: '17:00',
+        isClosed: (i + 1) > 5, // Sat & Sun closed by default
+      }));
+
+      await prisma.businessHours.createMany({ data: defaults });
+      
+      businessHours = await prisma.businessHours.findMany({
+        where: { merchantId },
+        orderBy: { dayOfWeek: 'asc' },
+      });
+    }
+
+    // Map JS Sunday (0) to DB format (7)
+    const currentDayOfWeek = targetDate.getDay() === 0 ? 7 : targetDate.getDay();
+    const todayHours = businessHours.find(bh => bh.dayOfWeek === currentDayOfWeek);
+
+    // If the day is explicitly marked as closed, return no slots
+    if (!todayHours || todayHours.isClosed) {
+      return [];
+    }
+
+    // 2. PARSE STRINGS INTO DATE OBJECTS FOR TIME CALCULATIONS
+    const businessStart = new Date(`${dateStr}T${todayHours.openTime}:00`);
+    const businessEnd = new Date(`${dateStr}T${todayHours.closeTime}:00`);
+    
+    // Exactly 1-hour step conversions
+    const stepMs = 60 * 60000; 
+
+    const adminSlots: string[] = [];
+    let currentSlotStart = new Date(businessStart.getTime());
+
+    // 3. TIMELINE SEGMENTATION ENGINE
+    while (currentSlotStart.getTime() + stepMs <= businessEnd.getTime()) {
+      // 🟢 UPDATED: Output 24-hour format with 2-digit padding matching getAvailableSlots
+      const hoursStr = String(currentSlotStart.getHours()).padStart(2, '0');
+      const minsStr = String(currentSlotStart.getMinutes()).padStart(2, '0');
+
+      adminSlots.push(`${hoursStr}:${minsStr}`);
+
+      // Step forward by exactly 1 hour
+      currentSlotStart = new Date(currentSlotStart.getTime() + stepMs);
+    }
+
+    return adminSlots;
   }
 };

@@ -231,6 +231,32 @@ export const fetchAvailableSlots = async (req: Request, res: Response): Promise<
   }
 };
 
+export const fetchAdminAvailableSlots = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { merchantId, date} = req.query;
+    if (!merchantId || !date) {
+      res.status(400).json({ 
+        success: false, 
+        message: 'Missing parameters: merchantId, date, and duration are required.' 
+      });
+      return;
+    }
+
+    // Delegate calculation entirely to the service layer
+    const availableSlots = await BookingService.getAdminBusinessSlots(
+      String(merchantId),
+      String(date)
+    );
+
+    res.status(200).json({ success: true, data: availableSlots });
+  } catch (error: any) {
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Error processing slot visibility values.' 
+    });
+  }
+};
+
 // export const fetchAvailableSlots = async (req: Request, res: Response): Promise<void> => {
 //   try {
 //     const { merchantId, date, duration } = req.query;
