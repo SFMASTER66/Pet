@@ -243,49 +243,49 @@ class _ManageTeamPanelState extends State<ManageTeamPanel> {
                 const SizedBox(height: 12),
                 _invitedStaff.isEmpty 
                   ? const Text('No active staff profiles found for this workspace.', style: TextStyle(color: Colors.grey))
-                  : ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _invitedStaff.length,
-                      separatorBuilder: (_, __) => const Divider(),
-                      itemBuilder: (context, index) {
-                        final staff = _invitedStaff[index];
-                        final bool isActive = staff['isActive'] ?? false;
+                  : Expanded(
+                      child: ListView.separated(
+                        itemCount: _invitedStaff.length,
+                        separatorBuilder: (_, __) => const Divider(),
+                        itemBuilder: (context, index) {
+                          final staff = _invitedStaff[index];
+                          final bool isActive = staff['isActive'] ?? false;
 
-                        return ListTile(
-                          title: Text(
-                            staff['name'] ?? '', 
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: isActive ? Colors.black : Colors.grey,
+                          return ListTile(
+                            title: Text(
+                              staff['name'] ?? '', 
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: isActive ? Colors.black : Colors.grey,
+                              ),
                             ),
-                          ),
-                          subtitle: Text(
-                            staff['email'] ?? '',
-                            style: TextStyle(
-                              color: isActive ? Colors.black54 : Colors.grey,
+                            subtitle: Text(
+                              staff['email'] ?? '',
+                              style: TextStyle(
+                                color: isActive ? Colors.black54 : Colors.grey,
+                              ),
                             ),
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                isActive ? 'Active' : 'Inactive',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  color: isActive ? Colors.green : Colors.grey,
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  isActive ? 'Active' : 'Inactive',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: isActive ? Colors.green : Colors.grey,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              Switch(
-                                value: isActive,
-                                activeColor: const Color(0xFF0F172A),
-                                onChanged: (bool value) => _toggleStaffStatus(index, staff['id'], value),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
+                                const SizedBox(width: 8),
+                                Switch(
+                                  value: isActive,
+                                  activeColor: const Color(0xFF0F172A),
+                                  onChanged: (bool value) => _toggleStaffStatus(index, staff['id'], value),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
                     ),
               ],
             ),
