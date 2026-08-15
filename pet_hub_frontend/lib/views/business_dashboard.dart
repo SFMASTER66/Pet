@@ -1373,7 +1373,11 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
 
   Widget _buildToggleableServiceCatalogSection(Color col) {
     return Container(
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1388,9 +1392,24 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                   Expanded(
                     child: Row(
                       children: [
-                        Icon(_isServiceMatrixVisible ? Icons.keyboard_arrow_down_rounded : Icons.keyboard_arrow_right_rounded, color: const Color(0xFF475569)),
+                        Icon(
+                          _isServiceMatrixVisible
+                              ? Icons.keyboard_arrow_down_rounded
+                              : Icons.keyboard_arrow_right_rounded,
+                          color: const Color(0xFF475569),
+                        ),
                         const SizedBox(width: 8),
-                        const Flexible(child: Text('Service Pricing Configuration Matrix', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)), overflow: TextOverflow.ellipsis)),
+                        const Flexible(
+                          child: Text(
+                            'Service Pricing Configuration Matrix',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF0F172A),
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -1398,7 +1417,10 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                     ElevatedButton.icon(
                       icon: const Icon(Icons.add_business_outlined, size: 16),
                       label: const Text('Add Entry'),
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F172A), foregroundColor: Colors.white),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0F172A),
+                        foregroundColor: Colors.white,
+                      ),
                       onPressed: () => _showAddServiceMatrixDialog(context),
                     ),
                 ],
@@ -1421,6 +1443,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                 itemBuilder: (context, index) {
                   final matrix = liveServiceMatrices[index];
                   final bool active = matrix['isActive'] ?? true;
+                  final String? description = matrix['description']?.toString().trim();
 
                   return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
@@ -1430,16 +1453,46 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(matrix['name'] ?? 'Unnamed Template', style: TextStyle(fontWeight: FontWeight.w600, color: active ? const Color(0xFF1E293B) : Colors.grey)),
+                              Text(
+                                matrix['name'] ?? 'Unnamed Template',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: active ? const Color(0xFF1E293B) : Colors.grey,
+                                ),
+                              ),
                               const SizedBox(height: 4),
-                              Text('Weight: ${matrix['weightTier']} • Coat: ${matrix['coatType']} • Duration: ${matrix['durationMinutes']}m', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                              Text(
+                                'Weight: ${matrix['weightTier']} • Coat: ${matrix['coatType']} • Duration: ${matrix['durationMinutes']}m',
+                                style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                              ),
+                              if (description != null && description.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  description,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: active ? Colors.grey.shade700 : Colors.grey.shade400,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         ),
-                        Text('\$${((matrix['priceCentsAud'] ?? 0) / 100).toStringAsFixed(2)}', style: TextStyle(fontWeight: FontWeight.bold, color: active ? const Color(0xFF0F172A) : Colors.grey)),
+                        Text(
+                          '\$${((matrix['priceCentsAud'] ?? 0) / 100).toStringAsFixed(2)}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: active ? const Color(0xFF0F172A) : Colors.grey,
+                          ),
+                        ),
                         if (widget.isAdmin) ...[
                           const SizedBox(width: 12),
-                          Switch(value: active, activeColor: col, onChanged: (v) => _toggleServiceActiveStatus(matrix['id'], active)),
+                          Switch(
+                            value: active,
+                            activeColor: col,
+                            onChanged: (v) => _toggleServiceActiveStatus(matrix['id'], active),
+                          ),
                         ],
                       ],
                     ),
