@@ -51,13 +51,13 @@ model Appointment {
   durationMinutes        Int
   isLoyaltyWaived        Boolean              @default(false)
   depositPaid            Boolean              @default(false)
-  paymentIntentId        String?
   internalTags           String[]
   isCheckedIn            Boolean              @default(false)
   isReadyToPickup        Boolean              @default(false)
   bookedById             String
   notes                  String?
   servicePricingMatrixId Int
+  paymentIntentId        String?
   bookedBy               User                 @relation("CreatedAppointments", fields: [bookedById], references: [id])
   groomer                Employee?            @relation(fields: [groomerId], references: [id])
   merchant               Merchant             @relation(fields: [merchantId], references: [id])
@@ -76,9 +76,10 @@ model ServicePricingMatrix {
   coatType              CoatType?
   durationMinutes       Int
   priceCentsAud         Int
-  depositCentsAud       Int                @default(30) //
   name                  String
   isActive              Boolean            @default(true)
+  depositCentsAud       Int                @default(30)
+  description           String?
   appointments          Appointment[]
   appointmentsWithAddOn AppointmentAddOn[]
   merchant              Merchant           @relation(fields: [merchantId], references: [id])
@@ -131,9 +132,9 @@ model Merchant {
   pets             Pet[]
   rosterExceptions RosterException[]
   pricingMatrices  ServicePricingMatrix[]
+  shifts           Shift[]
   users            User[]
   waiverSignatures WaiverSignature[]
-  shifts           Shift[]
 }
 
 model Employee {
@@ -223,14 +224,12 @@ model Shift {
   id         String   @id @default(uuid())
   merchantId String
   employeeId String
-  date       DateTime // The specific day they are scheduled
-  startTime  String   @default("09:00") // Optional fine-grained tracking
-  endTime    String   @default("17:00") 
-  
+  date       DateTime
+  startTime  String   @default("09:00")
+  endTime    String   @default("17:00")
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
 
-  // Prevents scheduling the same employee twice on the same day for a merchant
   @@unique([merchantId, employeeId, date])
   @@index([merchantId, date])
 }
