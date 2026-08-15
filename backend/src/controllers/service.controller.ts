@@ -20,6 +20,7 @@ export class ServiceController {
       const { 
         merchantId, 
         name, 
+        description,
         speciesId, 
         weightTier, 
         coatType, 
@@ -31,6 +32,7 @@ export class ServiceController {
       const matrix = await serviceService.createPricingMatrix({
         merchantId: String(merchantId),
         name: String(name),
+        description: String(description),
         speciesId: speciesId ? Number(speciesId) : undefined,
         weightTier: weightTier ? (String(weightTier) as WeightTier) : undefined,
         coatType: coatType ? (String(coatType) as CoatType) : undefined,

@@ -20,6 +20,7 @@ export class ServiceService {
   async createPricingMatrix(data: {
     merchantId: string;
     name: string;
+    description: string;
     speciesId?: number;
     weightTier?: WeightTier;
     coatType?: CoatType;
@@ -31,6 +32,7 @@ export class ServiceService {
       data: {
         merchantId: data.merchantId,
         name: data.name,
+        description: data.description,
         speciesId: data.speciesId,
         weightTier: data.weightTier,
         coatType: data.coatType,

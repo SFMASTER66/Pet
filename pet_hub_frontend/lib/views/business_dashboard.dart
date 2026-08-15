@@ -235,6 +235,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
 
   Future<void> _createServiceMatrixTier({
     required String name,
+    required String? description,
     required String coatType,
     required String weightTier,
     required int duration,
@@ -244,7 +245,8 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     setState(() => _isServiceLoading = true);
     final Map<String, dynamic> payload = {
       'merchantId': widget.config.merchantId, 
-      'name': name,    
+      'name': name,
+      'description': description,
       'speciesId': 1,                     
       'coatType': coatType,
       'weightTier': weightTier,
@@ -2481,6 +2483,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
 
   void _showAddServiceMatrixDialog(BuildContext context) {
     final nameController = TextEditingController();
+    final descriptionController = TextEditingController();
     final priceController = TextEditingController();
     final depositController = TextEditingController();
 
@@ -2539,6 +2542,27 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                           filled: true,
                           fillColor: const Color(0xFFE8E3EE),
                           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey.shade400),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey.shade400),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      TextField(
+                        controller: descriptionController,
+                        maxLines: 2,
+                        decoration: InputDecoration(
+                          hintText: 'Service Description (Optional)',
+                          hintStyle: TextStyle(color: Colors.grey.shade600, fontSize: 15),
+                          filled: true,
+                          fillColor: const Color(0xFFE8E3EE),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
                             borderSide: BorderSide(color: Colors.grey.shade400),
@@ -2689,6 +2713,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                           TextButton(
                             onPressed: () {
                               nameController.dispose();
+                              descriptionController.dispose();
                               priceController.dispose();
                               depositController.dispose();
                               Navigator.pop(context);
@@ -2702,6 +2727,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                           ElevatedButton(
                             onPressed: () async {
                               final name = nameController.text.trim();
+                              final description = descriptionController.text.trim();
                               final price = double.tryParse(priceController.text.trim()) ?? 0.0;
                               final deposit = double.tryParse(depositController.text.trim()) ?? 0.0;
 
@@ -2711,12 +2737,14 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                               }
 
                               nameController.dispose();
+                              descriptionController.dispose();
                               priceController.dispose();
                               depositController.dispose();
                               Navigator.pop(context);
 
                               await _createServiceMatrixTier(
                                 name: name,
+                                description: description.isEmpty ? null : description,
                                 coatType: selectedCoat,
                                 weightTier: selectedWeight,
                                 duration: selectedDuration,
