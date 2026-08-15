@@ -204,7 +204,7 @@ void main() async {
 
 void _loadDefaultConfig() {
   globalMerchantConfig = MerchantConfig.fromJson({
-    'businessName': 'My Workspace',
+    'businessName': 'Pawparazzipet',
     'logoIcon': '💼',
     'primaryColor': '0xFF1E293B',
     'tags': ['General'],
