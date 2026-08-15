@@ -5,7 +5,7 @@ import {
   forgotPassword, 
   resetPassword 
 } from '../controllers/merchant-auth.controller';
-import { requireAdmin } from '../middlewares/auth.middleware';
+import { requireAdmin, requireRole } from '../middlewares/auth.middleware';
 import { 
   createStaffProfile, 
   getStaffDirectory, 
@@ -20,6 +20,7 @@ import {
   getScheduledShifts
 } from '../controllers/merchant.controller';
 import { requestLogger, LoggedRequest } from '../middlewares/activity-log.middleware';
+import { UserRole } from '@prisma/client';
 
 const router = Router();
 
@@ -33,7 +34,7 @@ router.get('/:merchantId/dashboard', getMerchantDashboard);
 router.get('/merchant/:merchantId/customers', requireAdmin as any, getPaginatedCustomersList as any);
 
 // Protected Staff Management API Operations
-router.get('/merchant/staff', requireAdmin, getStaffDirectory);
+router.get('/merchant/staff', requireRole([UserRole.MERCHANT_ADMIN, UserRole.MERCHANT_STAFF]), getStaffDirectory);
 // 📝 Configured with Express-specific types to clear the overload mismatch
 router.post(
   '/merchant/staff', 

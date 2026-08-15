@@ -44,3 +44,36 @@ export const requireAdmin = (req: AuthenticatedRequest, res: Response, next: Nex
     });
   }
 };
+
+export const requireRole = (allowedRoles: UserRole[]) => {
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ 
+          success: false, 
+          message: 'Authorization token missing or malformed.' 
+        });
+      }
+
+      const token = authHeader.split(' ')[1];
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
+
+      // Check if the user's role exists in the allowed roles array
+      if (!allowedRoles.includes(decoded.role)) {
+        return res.status(403).json({ 
+          success: false, 
+          message: 'Access denied. You do not have permission to perform this action.' 
+        });
+      }
+
+      req.user = decoded;
+      next();
+    } catch (error) {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Invalid or expired authorization session token.' 
+      });
+    }
+  };
+};
