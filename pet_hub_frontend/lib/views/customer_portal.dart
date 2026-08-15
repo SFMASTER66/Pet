@@ -109,13 +109,20 @@ class _CustomerPortalPageState extends State<CustomerPortalPage> {
                   ),
                   const SizedBox(height: 16),
                   
-                  // Main catalog table showing only service names
+                  // Main catalog table showing service names and descriptions
                   Expanded(
                     child: ListView.builder(
                       itemCount: uniqueServiceNames.length,
                       itemBuilder: (context, index) {
                         final serviceName = uniqueServiceNames[index];
                         
+                        // Find the first matching service item to extract its description
+                        final serviceItem = displayedServices.firstWhere(
+                          (s) => (s['name'] ?? s['title'] ?? '').toString().trim() == serviceName,
+                          orElse: () => {},
+                        );
+                        final String? description = serviceItem['description']?.toString().trim();
+
                         return Container(
                           margin: const EdgeInsets.only(bottom: 12),
                           decoration: BoxDecoration(
@@ -134,6 +141,18 @@ class _CustomerPortalPageState extends State<CustomerPortalPage> {
                               serviceName,
                               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                             ),
+                            subtitle: (description != null && description.isNotEmpty)
+                                ? Padding(
+                                    padding: const EdgeInsets.only(top: 4.0),
+                                    child: Text(
+                                      description,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                  )
+                                : null,
                             trailing: ElevatedButton(
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: themeColor,
