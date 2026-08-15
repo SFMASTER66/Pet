@@ -535,7 +535,7 @@ export const BookingService = {
     }
 
     // ///////////////////////////////////////////////////////////////////////////
-    // 🟢 HIGHLIGHTED CHANGE: Read Shift records to find active capacity for slot lookup
+    // 🟢 Read Shift records to find active capacity for slot lookup
     // ///////////////////////////////////////////////////////////////////////////
     const startOfDay = new Date(`${dateStr}T00:00:00.000Z`);
     const endOfDay = new Date(`${dateStr}T23:59:59.999Z`);
@@ -583,16 +583,23 @@ export const BookingService = {
     const businessEnd = new Date(`${dateStr}T${todayHours.closeTime}:00`);
     const durationMs = duration * 60000;
     
-    // 🔥 FIXED CHANGELOG: Shifted step from 30 minutes to 60 minutes (1-hour gap)
+    // Shifted step from 30 minutes to 60 minutes (1-hour gap)
     const stepMs = 60 * 60000; 
 
     // 3. BULK FETCH BOOKINGS FOR PERFORMANCE
+    // Using groomerId (which maps to the assigned employee on Appointment)
     const activeBookings = await prisma.appointment.findMany({
       where: {
         merchantId,
         status: { in: [AppointmentStatus.PENDING, AppointmentStatus.PAID, AppointmentStatus.COMPLETED] },
         startTime: { lt: businessEnd },
         endTime: { gt: businessStart }
+      },
+      select: {
+        id: true,
+        startTime: true,
+        endTime: true,
+        groomerId: true,
       }
     });
 
@@ -637,17 +644,28 @@ export const BookingService = {
         const t2 = sortedTimePoints[i + 1];
         const midpoint = (t1 + t2) / 2;
 
-        let concurrentLoad = 0;
+        const busyStaffSet = new Set<string>();
+        let unassignedBookingsCount = 0;
+
         for (const appt of overlappingBookings) {
           const apptStartMs = new Date(appt.startTime).getTime();
           const apptEndMs = new Date(appt.endTime).getTime();
           if (apptStartMs <= midpoint && apptEndMs >= midpoint) {
-            concurrentLoad++;
+            if (appt.groomerId) {
+              // Deduplicate assigned staff using groomerId
+              busyStaffSet.add(appt.groomerId);
+            } else {
+              // Unassigned bookings occupy 1 generic staff unit
+              unassignedBookingsCount++;
+            }
           }
         }
 
-        // If load reaches or exceeds staff limits at any point in the hour, block it
-        if (concurrentLoad >= totalStaff) {
+        // Effective capacity used = unique assigned staff + unassigned pool bookings
+        const occupiedStaffCapacity = busyStaffSet.size + unassignedBookingsCount;
+
+        // If occupied capacity meets or exceeds total active staff, block this slot
+        if (occupiedStaffCapacity >= totalStaff) {
           isSlotAvailable = false;
           break;
         }
