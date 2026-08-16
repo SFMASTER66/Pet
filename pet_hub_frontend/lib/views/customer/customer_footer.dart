@@ -1,15 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class CustomerFooter extends StatelessWidget {
   const CustomerFooter({super.key});
+
+  Future<void> _openPdfInNewTab(String relativePath) async {
+    // Resolve path against current base URL (e.g. http://localhost:3000)
+    final Uri absoluteUrl = Uri.base.resolve(relativePath);
+
+    try {
+      final bool launched = await launchUrl(
+        absoluteUrl,
+        mode: LaunchMode.externalApplication,
+        webOnlyWindowName: '_blank',
+      );
+
+      if (!launched) {
+        debugPrint('⚠️ Could not launch $absoluteUrl');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error launching PDF: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 700;
 
-    const headerColor = Color(0xFF91A382); // Sage green from the design
+    const headerColor = Color(0xFF91A382);
     const textColor = Color(0xFF333333);
 
     return Container(
@@ -78,7 +98,7 @@ class CustomerFooter extends StatelessWidget {
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
-                          Icons.camera_alt, // Represents Instagram icon
+                          Icons.camera_alt,
                           color: Colors.white,
                           size: 20,
                         ),
@@ -155,17 +175,17 @@ class CustomerFooter extends StatelessWidget {
                   children: [
                     _buildFooterLink(
                       label: "Terms and Conditions",
-                      onTap: () => context.go('/policy'),
+                      onTap: () => context.go('/about-terms-conditions'),
                     ),
                     const SizedBox(height: 16),
                     _buildFooterLink(
                       label: "Grooming Agreement",
-                      onTap: () => context.go('/policy'),
+                      onTap: () => _openPdfInNewTab('assets/grooming_agreement.pdf'),
                     ),
                     const SizedBox(height: 16),
                     _buildFooterLink(
                       label: "Booking Cancellation Policy",
-                      onTap: () => context.go('/policy'),
+                      onTap: () => context.go('/about-cancellation-policy'),
                     ),
                   ],
                 ),

@@ -18,6 +18,7 @@ import 'views/customer/customer_book_page.dart';
 import 'views/customer/customer_contact_page.dart';
 import 'views/customer/customer_career_page.dart';
 import 'views/customer/customer_cancellation_policy_page.dart';
+import 'views/customer/customer_terms_conditions_page.dart';
 
 String? jwtToken;
 bool isAdmin = false; 
@@ -111,6 +112,12 @@ final GoRouter _router = GoRouter(
     GoRoute(
       path: '/about-cancellation-policy',
       builder: (context, state) => CustomerCancellationPolicyPage(
+        config: globalMerchantConfig,
+      ),
+    ),
+    GoRoute(
+      path: '/about-terms-conditions',
+      builder: (context, state) => CustomerTermsConditionsPage(
         config: globalMerchantConfig,
       ),
     ),
