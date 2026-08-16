@@ -244,6 +244,23 @@ class _BookingFormPageState extends State<BookingFormPage> {
     );
   }
 
+  /// Redirects to /about-cancellation-policy in a new tab safely on Flutter Web and Mobile
+  void _openCancellationPolicyInNewTab() {
+    final Uri baseUri = Uri.base;
+
+    // Checks if current web app is using hash routing (/#/...)
+    final bool hasHashRouting = kIsWeb && baseUri.fragment.isNotEmpty;
+    
+    final Uri cancelPolicyUri = hasHashRouting
+        ? Uri.parse('${baseUri.scheme}://${baseUri.host}:${baseUri.port}/#/about-cancellation-policy')
+        : Uri.parse('${baseUri.scheme}://${baseUri.host}:${baseUri.port}/about-cancellation-policy');
+
+    launchUrl(
+      cancelPolicyUri,
+      webOnlyWindowName: '_blank',
+    );
+  }
+
   Future<void> _createBookingAndGoToPayment() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -763,7 +780,7 @@ class _BookingFormPageState extends State<BookingFormPage> {
                                   text: 'Cancellation Policy',
                                   style: TextStyle(color: widget.themeColor, fontWeight: FontWeight.bold, decoration: TextDecoration.underline),
                                   recognizer: TapGestureRecognizer()
-                                    ..onTap = _openPolicyInNewTab,
+                                    ..onTap = _openCancellationPolicyInNewTab,
                                 ),
                                 const TextSpan(text: ' *'),
                               ],
