@@ -219,7 +219,7 @@ void main() async {
 void _loadDefaultConfig() {
   globalMerchantConfig = MerchantConfig.fromJson({
     'businessName': 'Pawparazzipet',
-    'logoIcon': '💼',
+    'logoIcon': 'assets/images/gogologo.png',
     'primaryColor': '0xFF1E293B',
     'tags': ['General'],
     'uiDictionary': {

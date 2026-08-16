@@ -17,6 +17,56 @@ class CustomerLayoutWrapper extends StatelessWidget {
     required this.child,
   });
 
+  // Helper function to dynamically render the logo as an Image or Text
+  Widget _buildLogoWidget(String logoIcon, {double size = 24.0}) {
+    final cleanPath = logoIcon.trim();
+    final lower = cleanPath.toLowerCase();
+
+    // 1. Handle Network Images
+    if (lower.startsWith('http://') || lower.startsWith('https://')) {
+      return Image.network(
+        cleanPath,
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          debugPrint('❌ Network logo failed to load ($cleanPath): $error');
+          return Icon(Icons.pets, size: size, color: config.primaryColor);
+        },
+      );
+    }
+
+    // 2. Handle Local Assets (checks path prefix or image extensions)
+    final isImageAsset = lower.startsWith('assets/') ||
+        lower.endsWith('.png') ||
+        lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.webp') ||
+        lower.endsWith('.svg');
+
+    if (isImageAsset) {
+      // Ensure path starts with 'assets/'
+      final assetPath = lower.startsWith('assets/') ? cleanPath : 'assets/$cleanPath';
+
+      return Image.asset(
+        assetPath,
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          debugPrint('❌ Asset logo failed to load at path "$assetPath". Error: $error');
+          return Icon(Icons.pets, size: size, color: config.primaryColor);
+        },
+      );
+    }
+
+    // 3. Fallback for Emojis or String Icons
+    return Text(
+      cleanPath,
+      style: TextStyle(fontSize: size),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 850;
@@ -33,7 +83,7 @@ class CustomerLayoutWrapper extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(config.logoIcon, style: const TextStyle(fontSize: 22)),
+              _buildLogoWidget(config.logoIcon, size: 28),
               const SizedBox(width: 8),
               Flexible(
                 child: Text(
@@ -118,7 +168,7 @@ class CustomerLayoutWrapper extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(config.logoIcon, style: const TextStyle(fontSize: 32)),
+                _buildLogoWidget(config.logoIcon, size: 36),
                 const SizedBox(height: 8),
                 Text(
                   config.businessName,
