@@ -24,6 +24,24 @@ class CustomerFooter extends StatelessWidget {
     }
   }
 
+  Future<void> _openInstagram() async {
+    final Uri url = Uri.parse('https://www.instagram.com/pawparazzipetbraddon/');
+
+    try {
+      final bool launched = await launchUrl(
+        url,
+        mode: LaunchMode.externalApplication,
+        webOnlyWindowName: '_blank',
+      );
+
+      if (!launched) {
+        debugPrint('⚠️ Could not launch $url');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error launching Instagram: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -88,9 +106,7 @@ class CustomerFooter extends StatelessWidget {
                     ),
                     const SizedBox(height: 20),
                     InkWell(
-                      onTap: () {
-                        // Add Instagram redirect URL logic here
-                      },
+                      onTap: _openInstagram,
                       child: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: const BoxDecoration(
