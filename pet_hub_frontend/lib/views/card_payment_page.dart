@@ -295,7 +295,22 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(payload.variantTitle, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                    // Display Service Name if available (e.g. payload.serviceTitle)
+                    if (payload.serviceName != null && payload.serviceName!.isNotEmpty) ...[
+                      Text(
+                        payload.serviceName!,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      ),
+                      const SizedBox(height: 2),
+                    ],
+                    Text(
+                      payload.variantTitle,
+                      style: TextStyle(
+                        fontWeight: payload.serviceName != null ? FontWeight.w500 : FontWeight.w600,
+                        fontSize: 14,
+                        color: payload.serviceName != null ? Colors.grey.shade800 : Colors.black,
+                      ),
+                    ),
                     const SizedBox(height: 4),
                     Text('Deposit: \$${payload.depositAmount.toStringAsFixed(2)}', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
                     Text(_formatFormattedDate(payload.serviceTime), style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
@@ -416,24 +431,24 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
               ],
             ),
           ),
-          Divider(height: 1, color: Colors.grey.shade200),
-          RadioListTile<PaymentMethodType>(
-            value: PaymentMethodType.applePay,
-            groupValue: _selectedMethod,
-            onChanged: (val) => setState(() => _selectedMethod = val!),
-            activeColor: Colors.blue,
-            title: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(4)),
-                  child: const Text('Pay', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                ),
-                const SizedBox(width: 8),
-                const Text('Apple Pay', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-              ],
-            ),
-          ),
+          // Divider(height: 1, color: Colors.grey.shade200),
+          // RadioListTile<PaymentMethodType>(
+          //   value: PaymentMethodType.applePay,
+          //   groupValue: _selectedMethod,
+          //   onChanged: (val) => setState(() => _selectedMethod = val!),
+          //   activeColor: Colors.blue,
+          //   title: Row(
+          //     children: [
+          //       Container(
+          //         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          //         decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(4)),
+          //         child: const Text('Pay', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+          //       ),
+          //       const SizedBox(width: 8),
+          //       const Text('Apple Pay', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+          //     ],
+          //   ),
+          // ),
         ],
       ),
     );
