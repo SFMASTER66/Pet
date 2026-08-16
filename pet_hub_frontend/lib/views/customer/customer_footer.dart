@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -6,7 +7,6 @@ class CustomerFooter extends StatelessWidget {
   const CustomerFooter({super.key});
 
   Future<void> _openPdfInNewTab(String relativePath) async {
-    // Resolve path against current base URL (e.g. http://localhost:3000)
     final Uri absoluteUrl = Uri.base.resolve(relativePath);
 
     try {
@@ -113,8 +113,8 @@ class CustomerFooter extends StatelessWidget {
                           color: Colors.black,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(
-                          Icons.camera_alt,
+                        child: const FaIcon(
+                          FontAwesomeIcons.instagram,
                           color: Colors.white,
                           size: 20,
                         ),

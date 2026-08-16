@@ -28,13 +28,14 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
-  url_launcher: ^6.2.5
   flutter:
     sdk: flutter
-  flutter_stripe: ^11.0.0
-  flutter_stripe_web: ^6.5.1 # 👈 Add this for Web support
-  flutter_map: ^6.1.0
-  latlong2: ^0.9.1
+  url_launcher: ^6.2.5
+  font_awesome_flutter: ^11.0.0
+  flutter_stripe: ^14.0.0
+  flutter_stripe_web: ^8.2.0 # 👈 Add this for Web support
+  flutter_map: ^8.3.1
+  latlong2: ^0.10.1
   flutter_web_plugins:
     sdk: flutter
 
