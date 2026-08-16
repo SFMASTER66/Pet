@@ -3,7 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../models/merchant_config.dart';
 import 'customer_footer.dart';
 
-enum CustomerTab { home, service, policy, book, contact, career }
+enum CustomerTab { home, service, policy, book, contact, career, none }
 
 class CustomerLayoutWrapper extends StatelessWidget {
   final MerchantConfig config;

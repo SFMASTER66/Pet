@@ -12,7 +12,7 @@ class CustomerTermsConditionsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return CustomerLayoutWrapper(
       config: config,
-      activeTab: CustomerTab.policy,
+      activeTab: CustomerTab.none,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final isMobile = constraints.maxWidth < 600;
