@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 import '../models/merchant_config.dart';
 import 'card_payment_page.dart';
 
@@ -12,7 +14,7 @@ class BookingFormPage extends StatefulWidget {
   final Color themeColor;
   final MerchantConfig config;
   final String baseUrl;
-  final String merchantId; // Optional merchantId for API calls
+  final String merchantId; // Required for API calls
 
   const BookingFormPage({
     super.key,
@@ -21,7 +23,7 @@ class BookingFormPage extends StatefulWidget {
     required this.themeColor,
     required this.config,
     required this.baseUrl,
-    required this.merchantId, // Required in constructor
+    required this.merchantId,
   });
 
   @override
@@ -48,6 +50,11 @@ class _BookingFormPageState extends State<BookingFormPage> {
 
   String? _selectedWeightTier;
   String? _selectedCoatType;
+
+  // Checkbox state variables
+  bool _acceptedTerms = false;
+  bool _acceptedGroomingPolicy = false;
+  bool _acceptedCancellationPolicy = false;
 
   List<String> _dynamicAvailableSlots = [];
   bool _isLoadingHours = false;
@@ -220,6 +227,23 @@ class _BookingFormPageState extends State<BookingFormPage> {
     }
   }
 
+  /// Redirects to /policy in a new tab safely on Flutter Web and Mobile
+  void _openPolicyInNewTab() {
+    final Uri baseUri = Uri.base;
+
+    // Checks if current web app is using hash routing (/#/...)
+    final bool hasHashRouting = kIsWeb && baseUri.fragment.isNotEmpty;
+    
+    final Uri policyUri = hasHashRouting
+        ? Uri.parse('${baseUri.scheme}://${baseUri.host}:${baseUri.port}/#/policy')
+        : Uri.parse('${baseUri.scheme}://${baseUri.host}:${baseUri.port}/policy');
+
+    launchUrl(
+      policyUri,
+      webOnlyWindowName: '_blank',
+    );
+  }
+
   Future<void> _createBookingAndGoToPayment() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -235,6 +259,10 @@ class _BookingFormPageState extends State<BookingFormPage> {
     }
     if (_dogDob == null) {
       _showSnackBar('Please select your dog\'s date of birth.');
+      return;
+    }
+    if (!_acceptedTerms || !_acceptedGroomingPolicy || !_acceptedCancellationPolicy) {
+      _showSnackBar('Please accept all policies and terms to proceed.');
       return;
     }
 
@@ -279,6 +307,9 @@ class _BookingFormPageState extends State<BookingFormPage> {
         'ownerEmail': _ownerEmailCtrl.text.trim(),
         'serviceTime': targetDateTime.toIso8601String(),
         'note': _dogTagsCtrl.text.trim(),
+        'termsAccepted': _acceptedTerms,
+        'groomingPolicyAccepted': _acceptedGroomingPolicy,
+        'cancellationPolicyAccepted': _acceptedCancellationPolicy,
       };
 
       final bookingResponse = await http.post(
@@ -297,7 +328,7 @@ class _BookingFormPageState extends State<BookingFormPage> {
       final int priceCents = matchedRecord['priceCentsAud'] ?? matchedRecord['priceCents'] ?? 0;
       final double totalAmount = (priceCents / 100).toDouble();
 
-      final int depositCents = matchedRecord['depositCentsAud'] ?? matchedRecord['depositCentsAud'] ?? 30.00;
+      final int depositCents = matchedRecord['depositCentsAud'] ?? matchedRecord['depositCentsAud'] ?? 3000;
       final double depositAmount = (depositCents / 100).toDouble();
 
       final payload = CardCheckoutPayload(
@@ -617,6 +648,143 @@ class _BookingFormPageState extends State<BookingFormPage> {
                     hintText: 'e.g. None, Aggressive, Sensitive Skin',
                     border: OutlineInputBorder(),
                   ),
+                ),
+                const SizedBox(height: 16),
+                _buildSectionHeader('5. Terms & Health Conditions'),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text(
+                        '1. All new clients must present proof of current vaccinations at the first visit. Dogs should receive an annual veterinary health check and up-to-date vaccinations.',
+                        style: TextStyle(fontSize: 13, color: Colors.black87, height: 1.4),
+                      ),
+                      SizedBox(height: 10),
+                      Text(
+                        '2. Please inform us of any diagnosed serious conditions (e.g., heart disease, epilepsy, cancer) and provide relevant veterinary documentation. We reserve the right to decline services when grooming would, in our professional judgment, pose a health risk.',
+                        style: TextStyle(fontSize: 13, color: Colors.black87, height: 1.4),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                FormField<bool>(
+                  initialValue: _acceptedTerms,
+                  validator: (value) => !_acceptedTerms ? 'You must accept the terms & conditions' : null,
+                  builder: (state) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text(
+                            'I have read and agree to the Terms & Health Conditions *',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                          ),
+                          value: _acceptedTerms,
+                          onChanged: (val) {
+                            setState(() => _acceptedTerms = val ?? false);
+                            state.didChange(val);
+                          },
+                          controlAffinity: ListTileControlAffinity.leading,
+                          activeColor: widget.themeColor,
+                        ),
+                        if (state.hasError)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 12.0),
+                            child: Text(state.errorText!, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+                          ),
+                      ],
+                    );
+                  },
+                ),
+                FormField<bool>(
+                  initialValue: _acceptedGroomingPolicy,
+                  validator: (value) => !_acceptedGroomingPolicy ? 'You must agree to the Grooming Policy' : null,
+                  builder: (state) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: RichText(
+                            text: TextSpan(
+                              style: const TextStyle(fontSize: 13, color: Colors.black87),
+                              children: [
+                                const TextSpan(text: 'I read and agree to Pawparazzi Pet '),
+                                TextSpan(
+                                  text: 'Grooming policy',
+                                  style: TextStyle(color: widget.themeColor, fontWeight: FontWeight.bold, decoration: TextDecoration.underline),
+                                  recognizer: TapGestureRecognizer()
+                                    ..onTap = _openPolicyInNewTab,
+                                ),
+                                const TextSpan(text: ' *'),
+                              ],
+                            ),
+                          ),
+                          value: _acceptedGroomingPolicy,
+                          onChanged: (val) {
+                            setState(() => _acceptedGroomingPolicy = val ?? false);
+                            state.didChange(val);
+                          },
+                          controlAffinity: ListTileControlAffinity.leading,
+                          activeColor: widget.themeColor,
+                        ),
+                        if (state.hasError)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 12.0),
+                            child: Text(state.errorText!, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+                          ),
+                      ],
+                    );
+                  },
+                ),
+                FormField<bool>(
+                  initialValue: _acceptedCancellationPolicy,
+                  validator: (value) => !_acceptedCancellationPolicy ? 'You must agree to the Cancellation Policy' : null,
+                  builder: (state) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: RichText(
+                            text: TextSpan(
+                              style: const TextStyle(fontSize: 13, color: Colors.black87),
+                              children: [
+                                const TextSpan(text: 'I agree to No cancellations or changes allowed within 24 hours of the appointment. '),
+                                TextSpan(
+                                  text: 'Cancellation Policy',
+                                  style: TextStyle(color: widget.themeColor, fontWeight: FontWeight.bold, decoration: TextDecoration.underline),
+                                  recognizer: TapGestureRecognizer()
+                                    ..onTap = _openPolicyInNewTab,
+                                ),
+                                const TextSpan(text: ' *'),
+                              ],
+                            ),
+                          ),
+                          value: _acceptedCancellationPolicy,
+                          onChanged: (val) {
+                            setState(() => _acceptedCancellationPolicy = val ?? false);
+                            state.didChange(val);
+                          },
+                          controlAffinity: ListTileControlAffinity.leading,
+                          activeColor: widget.themeColor,
+                        ),
+                        if (state.hasError)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 12.0),
+                            child: Text(state.errorText!, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+                          ),
+                      ],
+                    );
+                  },
                 ),
               ],
             ),
