@@ -18,7 +18,7 @@ class CustomerLayoutWrapper extends StatelessWidget {
   });
 
   // Helper function to dynamically render the logo as an Image or Text
-  Widget _buildLogoWidget(String logoIcon, {double size = 80.0}) {
+  Widget _buildLogoWidget(String logoIcon, {double size = 140.0}) {
     final cleanPath = logoIcon.trim();
     final lower = cleanPath.toLowerCase();
 
@@ -97,7 +97,7 @@ class CustomerLayoutWrapper extends StatelessWidget {
                               const Spacer(),
                               InkWell(
                                 onTap: () => context.go('/'),
-                                child: _buildLogoWidget(config.logoIcon, size: 50),
+                                child: _buildLogoWidget(config.logoIcon, size: 65),
                               ),
                               const Spacer(),
                               const SizedBox(width: 48), // Balance drawer icon
@@ -108,14 +108,14 @@ class CustomerLayoutWrapper extends StatelessWidget {
                     else
                       // Desktop/Tablet Centered Header Layout
                       Padding(
-                        padding: const EdgeInsets.only(top: 24.0, bottom: 12.0),
+                        padding: const EdgeInsets.only(top: 28.0, bottom: 16.0),
                         child: Center(
                           child: InkWell(
                             onTap: () => context.go('/'),
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                _buildLogoWidget(config.logoIcon, size: 90),
+                                _buildLogoWidget(config.logoIcon, size: 140),
                               ],
                             ),
                           ),
@@ -224,7 +224,7 @@ class CustomerLayoutWrapper extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _buildLogoWidget(config.logoIcon, size: 48),
+                _buildLogoWidget(config.logoIcon, size: 60),
                 const SizedBox(height: 8),
                 Text(
                   config.businessName,
