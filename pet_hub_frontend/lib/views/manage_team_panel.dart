@@ -34,7 +34,7 @@ class _ManageTeamPanelState extends State<ManageTeamPanel> {
   @override
   void initState() {
     super.initState();
-    _emailController.text = "${widget.config.businessName?.replaceAll(' ', '').toLowerCase() ?? 'staff'}@example.com"; 
+    // _emailController.text = "${widget.config.businessName?.replaceAll(' ', '').toLowerCase() ?? 'staff'}@example.com"; 
     _fetchStaffList();
   }
 
