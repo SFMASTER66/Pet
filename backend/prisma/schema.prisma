@@ -257,6 +257,7 @@ enum AppointmentStatus {
   PAID
   COMPLETED
   CANCELLED
+  NOSHOW
 }
 
 enum WeightTier {
