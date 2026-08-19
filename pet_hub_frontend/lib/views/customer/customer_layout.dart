@@ -18,7 +18,7 @@ class CustomerLayoutWrapper extends StatelessWidget {
   });
 
   // Helper function to dynamically render the logo as an Image or Text
-  Widget _buildLogoWidget(String logoIcon, {double size = 24.0}) {
+  Widget _buildLogoWidget(String logoIcon, {double size = 80.0}) {
     final cleanPath = logoIcon.trim();
     final lower = cleanPath.toLowerCase();
 
@@ -72,71 +72,112 @@ class CustomerLayoutWrapper extends StatelessWidget {
     final isMobile = MediaQuery.of(context).size.width < 850;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        elevation: 1,
-        backgroundColor: Colors.white,
-        centerTitle: false,
-        iconTheme: IconThemeData(color: config.primaryColor),
-        title: InkWell(
-          onTap: () => context.go('/'),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildLogoWidget(config.logoIcon, size: 28),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  config.businessName,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: config.primaryColor,
-                    fontSize: 18,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: isMobile
-            ? null
-            : [
-                _navBtn(context, 'Home', '/', activeTab == CustomerTab.home),
-                _navBtn(context, 'Service', '/service', activeTab == CustomerTab.service),
-                _navBtn(context, 'Our Policy', '/policy', activeTab == CustomerTab.policy),
-                _navBtn(context, 'Book', '/book', activeTab == CustomerTab.book),
-                _navBtn(context, 'Contact', '/contact', activeTab == CustomerTab.contact),
-                _navBtn(context, 'Career', '/career', activeTab == CustomerTab.career),
-                const SizedBox(width: 16),
-              ],
-      ),
+      backgroundColor: Colors.white,
       drawer: isMobile ? _buildMobileDrawer(context) : null,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1000),
-              child: Column(
-                children: [
-                  child,
-                  const SizedBox(height: 40),
-                  // Footer section
-                  const CustomerFooter(),
-                  const SizedBox(height: 16),
-                  Divider(color: Colors.grey.shade300),
-                  const SizedBox(height: 16),
-                  // "All rights reserved" placed below the footer
-                  Text(
-                    "© ${DateTime.now().year} ${config.businessName}. All rights reserved.",
-                    style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                ],
+          child: Column(
+            children: [
+              // HEADER SECTION
+              Container(
+                color: Colors.white,
+                child: Column(
+                  children: [
+                    // Mobile Top App Bar with Drawer Icon
+                    if (isMobile)
+                      Builder(
+                        builder: (context) => Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+                          child: Row(
+                            children: [
+                              IconButton(
+                                icon: Icon(Icons.menu, color: config.primaryColor),
+                                onPressed: () => Scaffold.of(context).openDrawer(),
+                              ),
+                              const Spacer(),
+                              InkWell(
+                                onTap: () => context.go('/'),
+                                child: _buildLogoWidget(config.logoIcon, size: 50),
+                              ),
+                              const Spacer(),
+                              const SizedBox(width: 48), // Balance drawer icon
+                            ],
+                          ),
+                        ),
+                      )
+                    else
+                      // Desktop/Tablet Centered Header Layout
+                      Padding(
+                        padding: const EdgeInsets.only(top: 24.0, bottom: 12.0),
+                        child: Center(
+                          child: InkWell(
+                            onTap: () => context.go('/'),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _buildLogoWidget(config.logoIcon, size: 90),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+
+                    // Divider Line above Nav Bar
+                    const Divider(height: 1, thickness: 1, color: Color(0xFFE2E8F0)),
+
+                    // Navigation Bar (Desktop / Tablet)
+                    if (!isMobile)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            _navBtn(context, 'Home', '/', activeTab == CustomerTab.home),
+                            const SizedBox(width: 28),
+                            _navBtn(context, 'Service', '/service', activeTab == CustomerTab.service),
+                            const SizedBox(width: 28),
+                            _navBtn(context, 'Our Policy', '/policy', activeTab == CustomerTab.policy),
+                            const SizedBox(width: 28),
+                            _navBtn(context, 'Book', '/book', activeTab == CustomerTab.book),
+                            const SizedBox(width: 28),
+                            _navBtn(context, 'Contact', '/contact', activeTab == CustomerTab.contact),
+                            const SizedBox(width: 28),
+                            _navBtn(context, 'Career', '/career', activeTab == CustomerTab.career),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
+
+              // MAIN CONTENT SECTION
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1000),
+                    child: Column(
+                      children: [
+                        child,
+                        const SizedBox(height: 40),
+                        // Footer section
+                        const CustomerFooter(),
+                        const SizedBox(height: 16),
+                        Divider(color: Colors.grey.shade300),
+                        const SizedBox(height: 16),
+                        // "All rights reserved" placed below the footer
+                        Text(
+                          "© ${DateTime.now().year} ${config.businessName}. All rights reserved.",
+                          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -144,15 +185,30 @@ class CustomerLayoutWrapper extends StatelessWidget {
   }
 
   Widget _navBtn(BuildContext context, String title, String route, bool isActive) {
-    return TextButton(
-      onPressed: () => context.go(route),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
-          color: isActive ? config.primaryColor : const Color(0xFF475569),
-          decoration: isActive ? TextDecoration.underline : TextDecoration.none,
-        ),
+    return InkWell(
+      onTap: () => context.go(route),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Top indicator line matching screenshot style
+          Container(
+            height: 3,
+            width: 40,
+            decoration: BoxDecoration(
+              color: isActive ? config.primaryColor : Colors.transparent,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: isActive ? FontWeight.bold : FontWeight.w600,
+              color: isActive ? const Color(0xFF1E293B) : const Color(0xFF475569),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -168,7 +224,7 @@ class CustomerLayoutWrapper extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _buildLogoWidget(config.logoIcon, size: 36),
+                _buildLogoWidget(config.logoIcon, size: 48),
                 const SizedBox(height: 8),
                 Text(
                   config.businessName,
