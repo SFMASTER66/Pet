@@ -60,9 +60,42 @@ export class ServiceController {
   async deletePricingMatrix(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      // Highlights: Now fires the soft deactivation service layer routine instead of erasing data
       await serviceService.deletePricingMatrix(Number(id));
       res.status(200).json({ success: true, message: 'Service set to inactive status successfully.' });
+    } catch (error: any) {
+      res.status(400).json({ success: false, message: error.message });
+    }
+  }
+
+  // --- ADD-ON CONTROLLERS ---
+  async getMerchantAddOns(req: Request, res: Response): Promise<void> {
+    try {
+      const merchantId = String(req.params.merchantId || req.query.merchantId);
+      if (!merchantId) {
+        res.status(400).json({ success: false, message: 'Missing merchantId parameter.' });
+        return;
+      }
+      
+      await serviceService.seedDefaultAddOnsIfEmpty(merchantId);
+      const addOns = await serviceService.getMerchantAddOns(merchantId);
+      res.status(200).json({ success: true, data: addOns });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  async createAddOn(req: Request, res: Response): Promise<void> {
+    try {
+      const { merchantId, name, description, priceCentsAud, pricingType, durationMinutes } = req.body;
+      const addOn = await serviceService.createAddOn({
+        merchantId: String(merchantId),
+        name: String(name),
+        description,
+        priceCentsAud: Number(priceCentsAud),
+        pricingType,
+        durationMinutes: durationMinutes ? Number(durationMinutes) : undefined,
+      });
+      res.status(201).json({ success: true, data: addOn });
     } catch (error: any) {
       res.status(400).json({ success: false, message: error.message });
     }

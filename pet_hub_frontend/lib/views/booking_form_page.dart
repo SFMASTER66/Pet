@@ -8,6 +8,41 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/merchant_config.dart';
 import 'card_payment_page.dart';
 
+class AddOnModel {
+  final String id;
+  final String name;
+  final int priceCentsAud;
+  final String pricingType; // 'FIXED' or 'PER_MINUTE'
+  final String? description;
+
+  AddOnModel({
+    required this.id,
+    required this.name,
+    required this.priceCentsAud,
+    required this.pricingType,
+    this.description,
+  });
+
+  factory AddOnModel.fromJson(Map<String, dynamic> json) {
+    return AddOnModel(
+      id: json['id'].toString(),
+      name: json['name'] ?? '',
+      priceCentsAud: json['priceCentsAud'] ?? 0,
+      pricingType: json['pricingType'] ?? 'FIXED',
+      description: json['description'],
+    );
+  }
+
+  String get displayPriceLabel {
+    final double price = priceCentsAud / 100.0;
+    final String formattedPrice = price % 1 == 0 ? '\$${price.toInt()}' : '\$${price.toStringAsFixed(2)}';
+    if (pricingType == 'PER_MINUTE') {
+      return '$name ($formattedPrice per minute)';
+    }
+    return '$name ($formattedPrice)';
+  }
+}
+
 class BookingFormPage extends StatefulWidget {
   final String serviceName;
   final List<Map<String, dynamic>> variantsMatrix;
@@ -41,6 +76,7 @@ class _BookingFormPageState extends State<BookingFormPage> {
   final _dogBreedCtrl = TextEditingController();
   final _dogWeightCtrl = TextEditingController();
   final _dogTagsCtrl = TextEditingController();
+  final _specialReqCtrl = TextEditingController(text: "NONE");
 
   DateTime? _selectedDate;
   String? _selectedTimeSlot;
@@ -50,6 +86,12 @@ class _BookingFormPageState extends State<BookingFormPage> {
 
   String? _selectedWeightTier;
   String? _selectedCoatType;
+
+  // Add-on state management
+  List<AddOnModel> _availableAddOns = [];
+  final Map<String, bool> _selectedAddOnIds = {};
+  final Map<String, int> _addOnQuantities = {}; // Stores minutes for PER_MINUTE items
+  bool _isLoadingAddOns = false;
 
   // Checkbox state variables
   bool _acceptedTerms = false;
@@ -66,6 +108,57 @@ class _BookingFormPageState extends State<BookingFormPage> {
   void initState() {
     super.initState();
     _fetchLiveOperationalHours();
+    _fetchAddOns();
+  }
+
+  Future<void> _fetchAddOns() async {
+    setState(() => _isLoadingAddOns = true);
+    try {
+      final response = await http.get(
+        Uri.parse('${widget.baseUrl}/api/v1/services/addons/${widget.merchantId}'),
+      );
+      if (response.statusCode == 200) {
+        final body = json.decode(response.body);
+        if (body['success'] == true && body['data'] is List) {
+          final List<dynamic> list = body['data'];
+          setState(() {
+            _availableAddOns = list.map((item) => AddOnModel.fromJson(item)).toList();
+            for (var item in _availableAddOns) {
+              _selectedAddOnIds[item.id] = false;
+              _addOnQuantities[item.id] = item.pricingType == 'PER_MINUTE' ? 15 : 1;
+            }
+          });
+        }
+      }
+    } catch (_) {
+      // Fallback defaults matching UI design if backend server is unreachable
+      setState(() {
+        _availableAddOns = [
+          AddOnModel(id: '1', name: 'Teeth brush', priceCentsAud: 1500, pricingType: 'FIXED'),
+          AddOnModel(id: '2', name: 'De-shedding', priceCentsAud: 150, pricingType: 'PER_MINUTE'),
+          AddOnModel(id: '3', name: 'Poodle feet', priceCentsAud: 2000, pricingType: 'FIXED'),
+          AddOnModel(id: '4', name: 'De-matting', priceCentsAud: 150, pricingType: 'PER_MINUTE'),
+          AddOnModel(id: '5', name: 'Ear hair plucking', priceCentsAud: 2000, pricingType: 'FIXED'),
+        ];
+        for (var item in _availableAddOns) {
+          _selectedAddOnIds[item.id] = (item.name == 'De-shedding'); // Default selected per screenshot
+          _addOnQuantities[item.id] = item.pricingType == 'PER_MINUTE' ? 15 : 1;
+        }
+      });
+    } finally {
+      if (mounted) setState(() => _isLoadingAddOns = false);
+    }
+  }
+
+  int _calculateAddOnsTotalCents() {
+    int total = 0;
+    for (var addOn in _availableAddOns) {
+      if (_selectedAddOnIds[addOn.id] == true) {
+        final qty = _addOnQuantities[addOn.id] ?? 1;
+        total += (addOn.priceCentsAud * qty);
+      }
+    }
+    return total;
   }
 
   Future<void> _fetchLiveOperationalHours() async {
@@ -199,6 +292,7 @@ class _BookingFormPageState extends State<BookingFormPage> {
     _dogBreedCtrl.dispose();
     _dogWeightCtrl.dispose();
     _dogTagsCtrl.dispose();
+    _specialReqCtrl.dispose();
     super.dispose();
   }
 
@@ -227,38 +321,26 @@ class _BookingFormPageState extends State<BookingFormPage> {
     }
   }
 
-  /// Redirects to /policy in a new tab safely on Flutter Web and Mobile
   void _openPolicyInNewTab() {
     final Uri baseUri = Uri.base;
-
-    // Checks if current web app is using hash routing (/#/...)
     final bool hasHashRouting = kIsWeb && baseUri.fragment.isNotEmpty;
     
     final Uri policyUri = hasHashRouting
         ? Uri.parse('${baseUri.scheme}://${baseUri.host}:${baseUri.port}/#/policy')
         : Uri.parse('${baseUri.scheme}://${baseUri.host}:${baseUri.port}/policy');
 
-    launchUrl(
-      policyUri,
-      webOnlyWindowName: '_blank',
-    );
+    launchUrl(policyUri, webOnlyWindowName: '_blank');
   }
 
-  /// Redirects to /about-cancellation-policy in a new tab safely on Flutter Web and Mobile
   void _openCancellationPolicyInNewTab() {
     final Uri baseUri = Uri.base;
-
-    // Checks if current web app is using hash routing (/#/...)
     final bool hasHashRouting = kIsWeb && baseUri.fragment.isNotEmpty;
     
     final Uri cancelPolicyUri = hasHashRouting
         ? Uri.parse('${baseUri.scheme}://${baseUri.host}:${baseUri.port}/#/about-cancellation-policy')
         : Uri.parse('${baseUri.scheme}://${baseUri.host}:${baseUri.port}/about-cancellation-policy');
 
-    launchUrl(
-      cancelPolicyUri,
-      webOnlyWindowName: '_blank',
-    );
+    launchUrl(cancelPolicyUri, webOnlyWindowName: '_blank');
   }
 
   Future<void> _createBookingAndGoToPayment() async {
@@ -309,6 +391,18 @@ class _BookingFormPageState extends State<BookingFormPage> {
         minute,
       );
 
+      // Collect selected add-ons payload
+      final List<Map<String, dynamic>> selectedAddOnsPayload = [];
+      for (var addOn in _availableAddOns) {
+        if (_selectedAddOnIds[addOn.id] == true) {
+          selectedAddOnsPayload.add({
+            'addOnId': addOn.id,
+            'quantity': _addOnQuantities[addOn.id] ?? 1,
+            'unitPriceCents': addOn.priceCentsAud,
+          });
+        }
+      }
+
       final bookingPayload = {
         'merchantId': widget.merchantId,
         'bookedById': widget.config.userId,
@@ -324,6 +418,8 @@ class _BookingFormPageState extends State<BookingFormPage> {
         'ownerEmail': _ownerEmailCtrl.text.trim(),
         'serviceTime': targetDateTime.toIso8601String(),
         'note': _dogTagsCtrl.text.trim(),
+        'specialRequirements': _specialReqCtrl.text.trim(),
+        'addOns': selectedAddOnsPayload,
         'termsAccepted': _acceptedTerms,
         'groomingPolicyAccepted': _acceptedGroomingPolicy,
         'cancellationPolicyAccepted': _acceptedCancellationPolicy,
@@ -342,10 +438,11 @@ class _BookingFormPageState extends State<BookingFormPage> {
 
       final String appointmentId = bookingData['data']['id'].toString();
 
-      final int priceCents = matchedRecord['priceCentsAud'] ?? matchedRecord['priceCents'] ?? 0;
-      final double totalAmount = (priceCents / 100).toDouble();
+      final int basePriceCents = matchedRecord['priceCentsAud'] ?? matchedRecord['priceCents'] ?? 0;
+      final int addOnsPriceCents = _calculateAddOnsTotalCents();
+      final double totalAmount = ((basePriceCents + addOnsPriceCents) / 100).toDouble();
 
-      final int depositCents = matchedRecord['depositCentsAud'] ?? matchedRecord['depositCentsAud'] ?? 3000;
+      final int depositCents = matchedRecord['depositCentsAud'] ?? matchedRecord['depositCents'] ?? 3000;
       final double depositAmount = (depositCents / 100).toDouble();
 
       final payload = CardCheckoutPayload(
@@ -441,6 +538,10 @@ class _BookingFormPageState extends State<BookingFormPage> {
       );
     }
 
+    final int baseCents = (matchedVariant?['priceCentsAud'] ?? matchedVariant?['priceCents'] ?? 0);
+    final int addOnCents = _calculateAddOnsTotalCents();
+    final double totalDisplayPrice = ((baseCents + addOnCents) / 100).toDouble();
+
     return Form(
       key: _formKey,
       child: Column(
@@ -492,9 +593,9 @@ class _BookingFormPageState extends State<BookingFormPage> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Text('Matrix Base Fee', style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
+                            Text('Total Calculated Fee', style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
                             Text(
-                                '\$${((matchedVariant['priceCentsAud'] ?? matchedVariant['priceCents'] ?? 0) / 100).toStringAsFixed(2)} AUD',
+                                '\$${totalDisplayPrice.toStringAsFixed(2)} AUD',
                                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: widget.themeColor)),
                           ],
                         )
@@ -667,13 +768,26 @@ class _BookingFormPageState extends State<BookingFormPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                _buildSectionHeader('5. Terms & Health Conditions'),
+                
+                // --- ANY SPECIAL REQUIREMENT FIELD ---
+                TextFormField(
+                  controller: _specialReqCtrl,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Any special requirement? *',
+                    alignLabelWithHint: true,
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Special requirement field is required' : null,
+                ),
+                const SizedBox(height: 16),
+
+                // --- TERMS & HEALTH CONDITIONS LIST ---
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey.shade300),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -682,7 +796,7 @@ class _BookingFormPageState extends State<BookingFormPage> {
                         '1. All new clients must present proof of current vaccinations at the first visit. Dogs should receive an annual veterinary health check and up-to-date vaccinations.',
                         style: TextStyle(fontSize: 13, color: Colors.black87, height: 1.4),
                       ),
-                      SizedBox(height: 10),
+                      SizedBox(height: 12),
                       Text(
                         '2. Please inform us of any diagnosed serious conditions (e.g., heart disease, epilepsy, cancer) and provide relevant veterinary documentation. We reserve the right to decline services when grooming would, in our professional judgment, pose a health risk.',
                         style: TextStyle(fontSize: 13, color: Colors.black87, height: 1.4),
@@ -690,7 +804,13 @@ class _BookingFormPageState extends State<BookingFormPage> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 16),
+
+                // --- ADD ON SERVICE (EXTRA CHARGE) SECTION ---
+                _buildAddOnServicesSection(),
+                const SizedBox(height: 16),
+
+                // --- CHECKBOX POLICIES ---
                 FormField<bool>(
                   initialValue: _acceptedTerms,
                   validator: (value) => !_acceptedTerms ? 'You must accept the terms & conditions' : null,
@@ -833,6 +953,76 @@ class _BookingFormPageState extends State<BookingFormPage> {
             ),
           )
         ],
+      ),
+    );
+  }
+
+  Widget _buildAddOnServicesSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Add on service (extra charge)',
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Colors.black87),
+        ),
+        const SizedBox(height: 12),
+        if (_isLoadingAddOns)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8.0),
+            child: CircularProgressIndicator(),
+          )
+        else
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final bool isWide = constraints.maxWidth > 500;
+              final items = _availableAddOns;
+
+              if (isWide) {
+                // Render side-by-side two column grid matching screenshot layout
+                final int half = (items.length / 2).ceil();
+                final leftCol = items.sublist(0, half);
+                final rightCol = items.sublist(half);
+
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: Column(children: leftCol.map(_buildAddOnCheckboxTile).toList())),
+                    const SizedBox(width: 16),
+                    Expanded(child: Column(children: rightCol.map(_buildAddOnCheckboxTile).toList())),
+                  ],
+                );
+              }
+
+              return Column(
+                children: items.map(_buildAddOnCheckboxTile).toList(),
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget _buildAddOnCheckboxTile(AddOnModel addOn) {
+    final bool isSelected = _selectedAddOnIds[addOn.id] ?? false;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: CheckboxListTile(
+        dense: true,
+        contentPadding: EdgeInsets.zero,
+        controlAffinity: ListTileControlAffinity.leading,
+        activeColor: Colors.black87,
+        checkColor: Colors.white,
+        title: Text(
+          addOn.displayPriceLabel,
+          style: const TextStyle(fontSize: 14, color: Colors.black87, fontWeight: FontWeight.normal),
+        ),
+        value: isSelected,
+        onChanged: (val) {
+          setState(() {
+            _selectedAddOnIds[addOn.id] = val ?? false;
+          });
+        },
       ),
     );
   }

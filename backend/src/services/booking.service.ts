@@ -151,7 +151,6 @@ export const BookingService = {
     async portalBooking(input: AdminCreateBookingInput) {
   try { 
     // 1. Resolve customer profile record details safely by phone OR email
-    // ===================================================================
     let userProfile = await prisma.user.findFirst({
       where: { 
         merchantId: input.merchantId,
@@ -174,9 +173,8 @@ export const BookingService = {
         }
       });
     }
-    // ===================================================================
 
-    // 2. Resolve or dynamically bundle target pet profile records under the master layout customer profile
+    // 2. Resolve or dynamically bundle target pet profile records
     let petProfile = await prisma.pet.findFirst({
       where: {
         merchantId: input.merchantId,
@@ -216,50 +214,38 @@ export const BookingService = {
       throw new Error(`❌ Pricing matrix target key row configuration [${input.servicePricingMatrixId}] was not found.`);
     }
 
-    // 4. Calculate isolated snapshot scheduling durations
+    // 4. Calculate snapshot scheduling durations
     const parsedStartTime = new Date(input.serviceTime);
     const calculatedEndTime = new Date(parsedStartTime.getTime() + (matrixRow.durationMinutes * 60000));
 
-    // Query DateTime range using pure Date objects only
     const startOfDay = new Date(parsedStartTime);
     startOfDay.setHours(0, 0, 0, 0);
 
     const endOfDay = new Date(parsedStartTime);
     endOfDay.setHours(23, 59, 59, 999);
 
-    // Query shift records falling within the target date range
     const shiftsOnDay = await prisma.shift.findMany({
       where: {
-        date: {
-          gte: startOfDay,
-          lte: endOfDay
-        },
+        date: { gte: startOfDay, lte: endOfDay },
         employee: {
           merchantId: input.merchantId,
           isActive: true,
-          user: {
-            role: UserRole.MERCHANT_STAFF
-          }
+          user: { role: UserRole.MERCHANT_STAFF }
         }
       },
       select: { employeeId: true }
     });
 
-    // 5. Build eligible active staff pool based on shifts or fallback definitions
+    // 5. Build eligible active staff pool
     let eligibleStaffIds: string[] = [];
-
     if (shiftsOnDay.length > 0) {
-      // Get distinct scheduled employee IDs on this date
       eligibleStaffIds = Array.from(new Set(shiftsOnDay.map((s) => s.employeeId)));
     } else {
-      // Fallback: Default to all active MERCHANT_STAFF employees if no shifts are recorded
       const fallbackStaff = await prisma.employee.findMany({
         where: { 
           merchantId: input.merchantId, 
           isActive: true,
-          user: {
-            role: UserRole.MERCHANT_STAFF 
-          }
+          user: { role: UserRole.MERCHANT_STAFF }
         },
         select: { id: true }
       });
@@ -268,97 +254,131 @@ export const BookingService = {
 
     const totalStaffCount = eligibleStaffIds.length;
 
-    // Fetch existing concurrent bookings to check capacity and handle auto-assignment
-    const conflictingBookings = await prisma.appointment.findMany({
+    // ===================================================================
+    // ⏱️ 30-MINUTE TIMEOUT & SAME-USER RE-BOOKING LOGIC
+    // ===================================================================
+    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+
+    // Fetch overlapping bookings
+    const overlappingBookings = await prisma.appointment.findMany({
       where: {
         merchantId: input.merchantId,
         status: { in: [AppointmentStatus.PENDING, AppointmentStatus.PAID, AppointmentStatus.COMPLETED] },
         OR: [
-          {
-            startTime: { lte: parsedStartTime },
-            endTime: { gt: parsedStartTime }
-          },
-          {
-            startTime: { lt: calculatedEndTime },
-            endTime: { gte: calculatedEndTime }
-          }
+          { startTime: { lte: parsedStartTime }, endTime: { gt: parsedStartTime } },
+          { startTime: { lt: calculatedEndTime }, endTime: { gte: calculatedEndTime } }
         ]
       },
-      select: { groomerId: true }
+      select: {
+        id: true,
+        groomerId: true,
+        status: true,
+        createdAt: true,
+        bookedById: true
+      }
     });
 
-    // 🟢 CHECK IF BOOKING IS CREATED BY AN ADMIN / STAFF MEMBER
-    const isAdminBooking = Boolean(input.bookedById && input.bookedById.trim() !== "");
+    // Check if the exact same user has an active pending reservation for this timeframe
+    const existingUserPendingBooking = overlappingBookings.find(
+      (b) => b.bookedById === userProfile.id && b.status === AppointmentStatus.PENDING
+    );
 
-    // 🟢 BYPASS CAPACITY CHECK IF IT'S AN ADMIN BOOKING
+    // Filter out active, valid conflicting bookings (excluding expired PENDINGs and the current user's draft)
+    const validConflictingBookings = overlappingBookings.filter((b) => {
+      // Ignore the user's own existing draft (we will update it instead)
+      if (b.bookedById === userProfile.id && b.status === AppointmentStatus.PENDING) {
+        return false;
+      }
+      // PENDING bookings older than 30 mins with no payment are treated as released
+      if (
+        b.status === AppointmentStatus.PENDING &&
+        b.createdAt &&
+        new Date(b.createdAt).getTime() < thirtyMinutesAgo.getTime()
+      ) {
+        return false;
+      }
+      return true;
+    });
+
+    // Capacity Check
+    const isAdminBooking = Boolean(input.bookedById && input.bookedById.trim() !== "");
     if (!isAdminBooking) {
-      if (conflictingBookings.length >= totalStaffCount) {
+      if (validConflictingBookings.length >= totalStaffCount) {
         throw new Error(`❌ Slot fully booked. Capacity reached for the selected time window.`);
       }
     }
 
-    // ===================================================================
-    // ⚙️ AUTO-ASSIGN GROOMER LOGIC
-    // ===================================================================
+    // Groomer Auto-Assignment
     let assignedGroomerId = input.groomerId || undefined;
-
     if (!assignedGroomerId) {
-      // Identify groomer IDs that are currently occupied during this time frame
       const occupiedGroomerIds = new Set(
-        conflictingBookings
+        validConflictingBookings
           .map((b) => b.groomerId)
           .filter((id): id is string => !!id)
       );
 
-      // Find the first eligible staff member who doesn't have a conflict
       const availableGroomerId = eligibleStaffIds.find((staffId) => !occupiedGroomerIds.has(staffId));
-
-      if (availableGroomerId) {
-        assignedGroomerId = availableGroomerId;
-      } else {
-        // Fallback protection: If capacity limit is bypassed or all staff show a conflict,
-        // assign to the first active staff member if available.
-        assignedGroomerId = eligibleStaffIds[0];
-      }
+      assignedGroomerId = availableGroomerId || eligibleStaffIds[0];
     }
-    // ===================================================================
 
-    // 6. Atomic transaction write directly to database cluster rows
-    const appointment = await prisma.appointment.create({
-      data: {
-        pet: { connect: { id: petProfile.id } },
-        merchant: { connect: { id: input.merchantId } },
-        bookedBy: {
-          connect: {
-            id: isAdminBooking 
-              ? input.bookedById! 
-              : userProfile.id
-          }
+    // ===================================================================
+    // 6. Write or Update Database Record
+    // ===================================================================
+    let appointment;
+
+    if (existingUserPendingBooking) {
+      // 🔄 SAME USER RE-BOOKING / REFRESH: Update existing draft appointment
+      appointment = await prisma.appointment.update({
+        where: { id: existingUserPendingBooking.id },
+        data: {
+          petId: petProfile.id,
+          servicePricingMatrixId: matrixRow.id,
+          groomerId: assignedGroomerId ?? null,
+          startTime: parsedStartTime,
+          endTime: calculatedEndTime,
+          priceCentsAud: matrixRow.priceCentsAud,
+          durationMinutes: matrixRow.durationMinutes,
+          notes: input.note ?? null
+          // Prisma automatically updates updatedAt = now() whenever this record changes!
         },
-        servicePricingMatrix: { connect: { id: matrixRow.id } },
-        groomer: assignedGroomerId 
-          ? { connect: { id: assignedGroomerId } } 
-          : undefined, 
-        startTime: parsedStartTime,
-        endTime: calculatedEndTime,
-        status: AppointmentStatus.PENDING,
-        priceCentsAud: matrixRow.priceCentsAud, 
-        durationMinutes: matrixRow.durationMinutes, 
-        notes: input.note ?? null
-      },
-      include: {
-        pet: true,
-        servicePricingMatrix: true
-      }
-    });
+        include: {
+          pet: true,
+          servicePricingMatrix: true
+        }
+      });
+    } else {
+      // 🆕 NEW BOOKING: Create fresh appointment row
+      appointment = await prisma.appointment.create({
+        data: {
+          pet: { connect: { id: petProfile.id } },
+          merchant: { connect: { id: input.merchantId } },
+          bookedBy: {
+            connect: { id: isAdminBooking ? input.bookedById! : userProfile.id }
+          },
+          servicePricingMatrix: { connect: { id: matrixRow.id } },
+          groomer: assignedGroomerId ? { connect: { id: assignedGroomerId } } : undefined,
+          startTime: parsedStartTime,
+          endTime: calculatedEndTime,
+          status: AppointmentStatus.PENDING,
+          priceCentsAud: matrixRow.priceCentsAud,
+          durationMinutes: matrixRow.durationMinutes,
+          notes: input.note ?? null
+        },
+        include: {
+          pet: true,
+          servicePricingMatrix: true
+        }
+      });
+    }
 
     return {
       success: true,
-      message: 'Administrative booking saved and snapshot values written successfully.',
+      message: existingUserPendingBooking
+        ? 'Pending reservation updated successfully.'
+        : 'Administrative booking saved and snapshot values written successfully.',
       data: appointment
     };
-  }
-  catch (error: any) {
+  } catch (error: any) {
     throw new Error(error.message);
   }
 },
@@ -498,191 +518,221 @@ export const BookingService = {
     }
   },
 
-  async getAvailableSlots(merchantId: string, dateStr: string, duration: number): Promise<string[]> {
-    const targetDate = new Date(`${dateStr}T00:00:00`);
-    if (isNaN(targetDate.getTime())) {
-      throw new Error('Invalid date format provided.');
-    }
+  async getAvailableSlots(
+    merchantId: string, 
+    dateStr: string, 
+    duration: number,
+    userId?: string // 👈 Added optional userId parameter to support same-user session lookup
+  ): Promise<string[]> {
+      const targetDate = new Date(`${dateStr}T00:00:00`);
+      if (isNaN(targetDate.getTime())) {
+        throw new Error('Invalid date format provided.');
+      }
 
-    // 1. DYNAMIC BUSINESS HOURS FETCHING & SEEDING LOGIC
-    let businessHours = await prisma.businessHours.findMany({
-      where: { merchantId },
-      orderBy: { dayOfWeek: 'asc' },
-    });
-
-    if (businessHours.length === 0) {
-      const defaults = Array.from({ length: 7 }, (_, i) => ({
-        merchantId,
-        dayOfWeek: i + 1,
-        openTime: '09:00',
-        closeTime: '17:00',
-        isClosed: (i + 1) > 5, // Sat & Sun closed by default
-      }));
-
-      await prisma.businessHours.createMany({ data: defaults });
-      
-      businessHours = await prisma.businessHours.findMany({
+      // 1. DYNAMIC BUSINESS HOURS FETCHING & SEEDING LOGIC
+      let businessHours = await prisma.businessHours.findMany({
         where: { merchantId },
         orderBy: { dayOfWeek: 'asc' },
       });
-    }
 
-    const currentDayOfWeek = targetDate.getDay() === 0 ? 7 : targetDate.getDay();
-    const todayHours = businessHours.find(bh => bh.dayOfWeek === currentDayOfWeek);
+      if (businessHours.length === 0) {
+        const defaults = Array.from({ length: 7 }, (_, i) => ({
+          merchantId,
+          dayOfWeek: i + 1,
+          openTime: '09:00',
+          closeTime: '17:00',
+          isClosed: (i + 1) > 5, // Sat & Sun closed by default
+        }));
 
-    if (!todayHours || todayHours.isClosed) {
-      return [];
-    }
-
-    // ///////////////////////////////////////////////////////////////////////////
-    // 🟢 Read Shift records to find active capacity for slot lookup
-    // ///////////////////////////////////////////////////////////////////////////
-    const startOfDay = new Date(`${dateStr}T00:00:00.000Z`);
-    const endOfDay = new Date(`${dateStr}T23:59:59.999Z`);
-
-    const shiftsOnDay = await prisma.shift.findMany({
-      where: {
-        date: {
-          gte: startOfDay,
-          lte: endOfDay
-        },
-        employee: {
-          merchantId: merchantId,
-          isActive: true,
-          user: {
-            role: UserRole.MERCHANT_STAFF
-          }
-        }
-      },
-      select: { employeeId: true }
-    });
-
-    let totalStaff = 0;
-
-    if (shiftsOnDay.length > 0) {
-      const uniqueEmployeeIds = new Set(shiftsOnDay.map((s) => s.employeeId));
-      totalStaff = uniqueEmployeeIds.size;
-    } else {
-      totalStaff = await prisma.employee.count({
-        where: { 
-          merchantId: merchantId, 
-          isActive: true,
-          user: {
-            role: UserRole.MERCHANT_STAFF 
-          }
-        }
-      });
-    }
-    // ///////////////////////////////////////////////////////////////////////////
-
-    if (totalStaff === 0) {
-      return [];
-    }
-
-    const businessStart = new Date(`${dateStr}T${todayHours.openTime}:00`);
-    const businessEnd = new Date(`${dateStr}T${todayHours.closeTime}:00`);
-    const durationMs = duration * 60000;
-    
-    // Shifted step from 30 minutes to 60 minutes (1-hour gap)
-    const stepMs = 60 * 60000; 
-
-    // 3. BULK FETCH BOOKINGS FOR PERFORMANCE
-    // Using groomerId (which maps to the assigned employee on Appointment)
-    const activeBookings = await prisma.appointment.findMany({
-      where: {
-        merchantId,
-        status: { in: [AppointmentStatus.PENDING, AppointmentStatus.PAID, AppointmentStatus.COMPLETED] },
-        startTime: { lt: businessEnd },
-        endTime: { gt: businessStart }
-      },
-      select: {
-        id: true,
-        startTime: true,
-        endTime: true,
-        groomerId: true,
-      }
-    });
-
-    const availableSlots: string[] = [];
-    let currentSlotStart = new Date(businessStart.getTime());
-
-    // 4. TIMELINE CONCURRENCY ENGINE (Checks 9, 10, 11... until 4)
-    while (currentSlotStart.getTime() + durationMs <= businessEnd.getTime()) {
-      const slotStartTime = new Date(currentSlotStart.getTime());
-      const slotEndTime = new Date(currentSlotStart.getTime() + durationMs);
-
-      // Filter appointments overlapping this specific hourly window
-      const overlappingBookings = activeBookings.filter(appt => {
-        const apptStart = new Date(appt.startTime);
-        const apptEnd = new Date(appt.endTime);
-        return apptStart < slotEndTime && apptEnd > slotStartTime;
-      });
-
-      // Break down the window into sub-intervals based on overlap transitions
-      const timePointsSet = new Set<number>();
-      timePointsSet.add(slotStartTime.getTime());
-      timePointsSet.add(slotEndTime.getTime());
-
-      for (const appt of overlappingBookings) {
-        const apptStartMs = new Date(appt.startTime).getTime();
-        const apptEndMs = new Date(appt.endTime).getTime();
+        await prisma.businessHours.createMany({ data: defaults });
         
-        if (apptStartMs > slotStartTime.getTime() && apptStartMs < slotEndTime.getTime()) {
-          timePointsSet.add(apptStartMs);
-        }
-        if (apptEndMs > slotStartTime.getTime() && apptEndMs < slotEndTime.getTime()) {
-          timePointsSet.add(apptEndMs);
-        }
+        businessHours = await prisma.businessHours.findMany({
+          where: { merchantId },
+          orderBy: { dayOfWeek: 'asc' },
+        });
       }
 
-      const sortedTimePoints = Array.from(timePointsSet).sort((a, b) => a - b);
-      let isSlotAvailable = true;
+      const currentDayOfWeek = targetDate.getDay() === 0 ? 7 : targetDate.getDay();
+      const todayHours = businessHours.find(bh => bh.dayOfWeek === currentDayOfWeek);
 
-      // Validate capacity inside every sub-interval segment
-      for (let i = 0; i < sortedTimePoints.length - 1; i++) {
-        const t1 = sortedTimePoints[i];
-        const t2 = sortedTimePoints[i + 1];
-        const midpoint = (t1 + t2) / 2;
+      if (!todayHours || todayHours.isClosed) {
+        return [];
+      }
 
-        const busyStaffSet = new Set<string>();
-        let unassignedBookingsCount = 0;
+      // ///////////////////////////////////////////////////////////////////////////
+      // 🟢 Read Shift records to find active capacity for slot lookup
+      // ///////////////////////////////////////////////////////////////////////////
+      const startOfDay = new Date(`${dateStr}T00:00:00.000Z`);
+      const endOfDay = new Date(`${dateStr}T23:59:59.999Z`);
+
+      const shiftsOnDay = await prisma.shift.findMany({
+        where: {
+          date: {
+            gte: startOfDay,
+            lte: endOfDay
+          },
+          employee: {
+            merchantId: merchantId,
+            isActive: true,
+            user: {
+              role: UserRole.MERCHANT_STAFF
+            }
+          }
+        },
+        select: { employeeId: true }
+      });
+
+      let totalStaff = 0;
+
+      if (shiftsOnDay.length > 0) {
+        const uniqueEmployeeIds = new Set(shiftsOnDay.map((s) => s.employeeId));
+        totalStaff = uniqueEmployeeIds.size;
+      } else {
+        totalStaff = await prisma.employee.count({
+          where: { 
+            merchantId: merchantId, 
+            isActive: true,
+            user: {
+              role: UserRole.MERCHANT_STAFF 
+            }
+          }
+        });
+      }
+      // ///////////////////////////////////////////////////////////////////////////
+
+      if (totalStaff === 0) {
+        return [];
+      }
+
+      const businessStart = new Date(`${dateStr}T${todayHours.openTime}:00`);
+      const businessEnd = new Date(`${dateStr}T${todayHours.closeTime}:00`);
+      const durationMs = duration * 60000;
+      
+      // Shifted step from 30 minutes to 60 minutes (1-hour gap)
+      const stepMs = 60 * 60000; 
+
+      // 3. BULK FETCH BOOKINGS WITH 30-MIN TIMEOUT LOGIC
+      const fetchedBookings = await prisma.appointment.findMany({
+        where: {
+          merchantId,
+          status: { in: [AppointmentStatus.PENDING, AppointmentStatus.PAID, AppointmentStatus.COMPLETED] },
+          startTime: { lt: businessEnd },
+          endTime: { gt: businessStart }
+        },
+        select: {
+          id: true,
+          startTime: true,
+          endTime: true,
+          groomerId: true,
+          status: true,
+          createdAt: true,
+          bookedById: true
+        }
+      });
+
+      // ===================================================================
+      // ⏱️ 30-MINUTE TIMEOUT & SAME-USER RE-BOOKING FILTER
+      // ===================================================================
+      const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+
+      const activeBookings = fetchedBookings.filter(appt => {
+        // 1. Ignore current user's existing draft so they aren't blocked by their own reservation
+        if (userId && appt.bookedById === userId && appt.status === AppointmentStatus.PENDING) {
+          return false;
+        }
+
+        // 2. Ignore PENDING appointments created over 30 mins ago (unpaid timeout release)
+        if (
+          appt.status === AppointmentStatus.PENDING &&
+          appt.createdAt &&
+          new Date(appt.createdAt).getTime() < thirtyMinutesAgo.getTime()
+        ) {
+          return false;
+        }
+
+        return true;
+      });
+
+      const availableSlots: string[] = [];
+      let currentSlotStart = new Date(businessStart.getTime());
+
+      // 4. TIMELINE CONCURRENCY ENGINE (Checks 9, 10, 11... until 4)
+      while (currentSlotStart.getTime() + durationMs <= businessEnd.getTime()) {
+        const slotStartTime = new Date(currentSlotStart.getTime());
+        const slotEndTime = new Date(currentSlotStart.getTime() + durationMs);
+
+        // Filter appointments overlapping this specific hourly window
+        const overlappingBookings = activeBookings.filter(appt => {
+          const apptStart = new Date(appt.startTime);
+          const apptEnd = new Date(appt.endTime);
+          return apptStart < slotEndTime && apptEnd > slotStartTime;
+        });
+
+        // Break down the window into sub-intervals based on overlap transitions
+        const timePointsSet = new Set<number>();
+        timePointsSet.add(slotStartTime.getTime());
+        timePointsSet.add(slotEndTime.getTime());
 
         for (const appt of overlappingBookings) {
           const apptStartMs = new Date(appt.startTime).getTime();
           const apptEndMs = new Date(appt.endTime).getTime();
-          if (apptStartMs <= midpoint && apptEndMs >= midpoint) {
-            if (appt.groomerId) {
-              // Deduplicate assigned staff using groomerId
-              busyStaffSet.add(appt.groomerId);
-            } else {
-              // Unassigned bookings occupy 1 generic staff unit
-              unassignedBookingsCount++;
-            }
+          
+          if (apptStartMs > slotStartTime.getTime() && apptStartMs < slotEndTime.getTime()) {
+            timePointsSet.add(apptStartMs);
+          }
+          if (apptEndMs > slotStartTime.getTime() && apptEndMs < slotEndTime.getTime()) {
+            timePointsSet.add(apptEndMs);
           }
         }
 
-        // Effective capacity used = unique assigned staff + unassigned pool bookings
-        const occupiedStaffCapacity = busyStaffSet.size + unassignedBookingsCount;
+        const sortedTimePoints = Array.from(timePointsSet).sort((a, b) => a - b);
+        let isSlotAvailable = true;
 
-        // If occupied capacity meets or exceeds total active staff, block this slot
-        if (occupiedStaffCapacity >= totalStaff) {
-          isSlotAvailable = false;
-          break;
+        // Validate capacity inside every sub-interval segment
+        for (let i = 0; i < sortedTimePoints.length - 1; i++) {
+          const t1 = sortedTimePoints[i];
+          const t2 = sortedTimePoints[i + 1];
+          const midpoint = (t1 + t2) / 2;
+
+          const busyStaffSet = new Set<string>();
+          let unassignedBookingsCount = 0;
+
+          for (const appt of overlappingBookings) {
+            const apptStartMs = new Date(appt.startTime).getTime();
+            const apptEndMs = new Date(appt.endTime).getTime();
+            if (apptStartMs <= midpoint && apptEndMs >= midpoint) {
+              if (appt.groomerId) {
+                // Deduplicate assigned staff using groomerId
+                busyStaffSet.add(appt.groomerId);
+              } else {
+                // Unassigned bookings occupy 1 generic staff unit
+                unassignedBookingsCount++;
+              }
+            }
+          }
+
+          // Effective capacity used = unique assigned staff + unassigned pool bookings
+          const occupiedStaffCapacity = busyStaffSet.size + unassignedBookingsCount;
+
+          // If occupied capacity meets or exceeds total active staff, block this slot
+          if (occupiedStaffCapacity >= totalStaff) {
+            isSlotAvailable = false;
+            break;
+          }
         }
+
+        if (isSlotAvailable) {
+          const hoursStr = String(slotStartTime.getHours()).padStart(2, '0');
+          const minsStr = String(slotStartTime.getMinutes()).padStart(2, '0');
+          availableSlots.push(`${hoursStr}:${minsStr}`);
+        }
+
+        // Step forward by exactly 1 hour
+        currentSlotStart = new Date(currentSlotStart.getTime() + stepMs);
       }
 
-      if (isSlotAvailable) {
-        const hoursStr = String(slotStartTime.getHours()).padStart(2, '0');
-        const minsStr = String(slotStartTime.getMinutes()).padStart(2, '0');
-        availableSlots.push(`${hoursStr}:${minsStr}`);
-      }
-
-      // Step forward by exactly 1 hour
-      currentSlotStart = new Date(currentSlotStart.getTime() + stepMs);
-    }
-
-    return availableSlots;
-  },
+      return availableSlots;
+    },
 
   async getAdminBusinessSlots(merchantId: string, dateStr: string): Promise<string[]> {
     const targetDate = new Date(`${dateStr}T00:00:00`);

@@ -14,6 +14,11 @@ router.post('/matrix', controller.createPricingMatrix);
 router.put('/matrix/:id', controller.updatePricingMatrix);
 router.delete('/matrix/:id', controller.deletePricingMatrix);
 
+// Add-On Service Endpoints
+router.get('/services/addons/:merchantId', controller.getMerchantAddOns);
+router.get('/addons', controller.getMerchantAddOns);
+router.post('/addons', controller.createAddOn);
+
 // GET /api/v1/matrix?merchantId=XYZ
 router.get('/matrix', async (req: Request, res: Response) => {
   try {
