@@ -2322,9 +2322,10 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<String>(
                             isExpanded: true,
-                            value: currentStatus,
+                            // Maps unlisted or legacy statuses to 'PENDING' without showing them in the menu
+                            value: currentStatus == 'DEPOSIT_NOT_PAID' ? 'PENDING' : currentStatus,
                             items: const [
-                              DropdownMenuItem(value: 'PENDING', child: Text('Pending Approval')),
+                              DropdownMenuItem(value: 'PENDING', child: Text('Pending')),
                               DropdownMenuItem(value: 'PAID', child: Text('Paid / Settled')),
                               DropdownMenuItem(value: 'COMPLETED', child: Text('Completed')),
                               DropdownMenuItem(value: 'CANCELLED', child: Text('Cancelled')),
@@ -2383,7 +2384,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                                   onConfirm: () async {
                                     try {
                                       final res = await http.delete(
-                                        Uri.parse('$_baseUrl/api/v1/bookings/${app['id']}'),
+                                        Uri.parse('$_baseUrl/api/v1/bookings/delete/${app['id']}'),
                                         headers: {
                                           'Authorization': 'Bearer ${widget.authToken}',
                                         },

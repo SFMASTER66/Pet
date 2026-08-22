@@ -148,7 +148,7 @@ export const BookingService = {
     /**
      * 🚀 Dynamic Administrative Manual Booking Engine Core
      */
-    async portalBooking(input: AdminCreateBookingInput) {
+   async portalBooking(input: AdminCreateBookingInput) {
   try { 
     // 1. Resolve customer profile record details safely by phone OR email
     let userProfile = await prisma.user.findFirst({
@@ -259,11 +259,18 @@ export const BookingService = {
     // ===================================================================
     const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
 
-    // Fetch overlapping bookings
+    // Fetch overlapping bookings (including DEPOSIT_NOT_PAID)
     const overlappingBookings = await prisma.appointment.findMany({
       where: {
         merchantId: input.merchantId,
-        status: { in: [AppointmentStatus.PENDING, AppointmentStatus.PAID, AppointmentStatus.COMPLETED] },
+        status: { 
+          in: [
+            AppointmentStatus.PENDING, 
+            AppointmentStatus.DEPOSIT_NOT_PAID, 
+            AppointmentStatus.PAID, 
+            AppointmentStatus.COMPLETED
+          ] 
+        },
         OR: [
           { startTime: { lte: parsedStartTime }, endTime: { gt: parsedStartTime } },
           { startTime: { lt: calculatedEndTime }, endTime: { gte: calculatedEndTime } }
@@ -278,20 +285,24 @@ export const BookingService = {
       }
     });
 
-    // Check if the exact same user has an active pending reservation for this timeframe
+    // Helper flag for unpaid statuses
+    const isUnpaidStatus = (status: AppointmentStatus) => 
+      status === AppointmentStatus.PENDING || status === AppointmentStatus.DEPOSIT_NOT_PAID;
+
+    // Check if the exact same user has an active unpaid reservation for this timeframe
     const existingUserPendingBooking = overlappingBookings.find(
-      (b) => b.bookedById === userProfile.id && b.status === AppointmentStatus.PENDING
+      (b) => b.bookedById === userProfile.id && isUnpaidStatus(b.status)
     );
 
-    // Filter out active, valid conflicting bookings (excluding expired PENDINGs and the current user's draft)
+    // Filter out active, valid conflicting bookings
     const validConflictingBookings = overlappingBookings.filter((b) => {
       // Ignore the user's own existing draft (we will update it instead)
-      if (b.bookedById === userProfile.id && b.status === AppointmentStatus.PENDING) {
+      if (b.bookedById === userProfile.id && isUnpaidStatus(b.status)) {
         return false;
       }
-      // PENDING bookings older than 30 mins with no payment are treated as released
+      // Unpaid bookings older than 30 mins are treated as released
       if (
-        b.status === AppointmentStatus.PENDING &&
+        isUnpaidStatus(b.status) &&
         b.createdAt &&
         new Date(b.createdAt).getTime() < thirtyMinutesAgo.getTime()
       ) {
@@ -310,15 +321,34 @@ export const BookingService = {
 
     // Groomer Auto-Assignment
     let assignedGroomerId = input.groomerId || undefined;
+
     if (!assignedGroomerId) {
+      // 1. Gather ALL staff members who currently have ANY valid overlapping booking
+      // (regardless of how many bookings they have)
       const occupiedGroomerIds = new Set(
-        validConflictingBookings
+        overlappingBookings
+          .filter((b) => {
+            // Ignore expired unpaid bookings (>30 mins)
+            if (
+              isUnpaidStatus(b.status) &&
+              b.createdAt &&
+              new Date(b.createdAt).getTime() < thirtyMinutesAgo.getTime()
+            ) {
+              return true;
+            }
+            return false;
+          })
           .map((b) => b.groomerId)
-          .filter((id): id is string => !!id)
+          .filter((id): id is string => Boolean(id))
       );
 
-      const availableGroomerId = eligibleStaffIds.find((staffId) => !occupiedGroomerIds.has(staffId));
-      assignedGroomerId = availableGroomerId || eligibleStaffIds[0];
+      // 2. Find a staff member from eligibleStaffIds who has ZERO bookings in this slot
+      const strictlyAvailableStaffId = eligibleStaffIds.find(
+        (staffId) => !occupiedGroomerIds.has(staffId)
+      );
+
+      // 3. Assign the completely free staff member
+      assignedGroomerId = strictlyAvailableStaffId;
     }
 
     // ===================================================================
@@ -336,10 +366,10 @@ export const BookingService = {
           groomerId: assignedGroomerId ?? null,
           startTime: parsedStartTime,
           endTime: calculatedEndTime,
+          status: isAdminBooking ? AppointmentStatus.PENDING : AppointmentStatus.DEPOSIT_NOT_PAID,
           priceCentsAud: matrixRow.priceCentsAud,
           durationMinutes: matrixRow.durationMinutes,
           notes: input.note ?? null
-          // Prisma automatically updates updatedAt = now() whenever this record changes!
         },
         include: {
           pet: true,
@@ -359,7 +389,7 @@ export const BookingService = {
           groomer: assignedGroomerId ? { connect: { id: assignedGroomerId } } : undefined,
           startTime: parsedStartTime,
           endTime: calculatedEndTime,
-          status: AppointmentStatus.PENDING,
+          status: isAdminBooking ? AppointmentStatus.PENDING : AppointmentStatus.DEPOSIT_NOT_PAID,
           priceCentsAud: matrixRow.priceCentsAud,
           durationMinutes: matrixRow.durationMinutes,
           notes: input.note ?? null
@@ -522,7 +552,7 @@ export const BookingService = {
     merchantId: string, 
     dateStr: string, 
     duration: number,
-    userId?: string // 👈 Added optional userId parameter to support same-user session lookup
+    userId?: string
   ): Promise<string[]> {
       const targetDate = new Date(`${dateStr}T00:00:00`);
       if (isNaN(targetDate.getTime())) {
@@ -559,9 +589,7 @@ export const BookingService = {
         return [];
       }
 
-      // ///////////////////////////////////////////////////////////////////////////
-      // 🟢 Read Shift records to find active capacity for slot lookup
-      // ///////////////////////////////////////////////////////////////////////////
+      // 2. Read Shift records to find active capacity for slot lookup
       const startOfDay = new Date(`${dateStr}T00:00:00.000Z`);
       const endOfDay = new Date(`${dateStr}T23:59:59.999Z`);
 
@@ -598,7 +626,6 @@ export const BookingService = {
           }
         });
       }
-      // ///////////////////////////////////////////////////////////////////////////
 
       if (totalStaff === 0) {
         return [];
@@ -607,15 +634,20 @@ export const BookingService = {
       const businessStart = new Date(`${dateStr}T${todayHours.openTime}:00`);
       const businessEnd = new Date(`${dateStr}T${todayHours.closeTime}:00`);
       const durationMs = duration * 60000;
-      
-      // Shifted step from 30 minutes to 60 minutes (1-hour gap)
-      const stepMs = 60 * 60000; 
+      const stepMs = 60 * 60000; // Step forward by 1 hour
 
       // 3. BULK FETCH BOOKINGS WITH 30-MIN TIMEOUT LOGIC
       const fetchedBookings = await prisma.appointment.findMany({
         where: {
           merchantId,
-          status: { in: [AppointmentStatus.PENDING, AppointmentStatus.PAID, AppointmentStatus.COMPLETED] },
+          status: { 
+            in: [
+              AppointmentStatus.PENDING, 
+              AppointmentStatus.DEPOSIT_NOT_PAID,
+              AppointmentStatus.PAID, 
+              AppointmentStatus.COMPLETED
+            ] 
+          },
           startTime: { lt: businessEnd },
           endTime: { gt: businessStart }
         },
@@ -625,8 +657,14 @@ export const BookingService = {
           endTime: true,
           groomerId: true,
           status: true,
+          depositPaid: true, // 👈 Added depositPaid check
           createdAt: true,
-          bookedById: true
+          bookedById: true,
+          bookedBy: {
+            select: {
+              role: true
+            }
+          }
         }
       });
 
@@ -636,14 +674,25 @@ export const BookingService = {
       const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
 
       const activeBookings = fetchedBookings.filter(appt => {
-        // 1. Ignore current user's existing draft so they aren't blocked by their own reservation
-        if (userId && appt.bookedById === userId && appt.status === AppointmentStatus.PENDING) {
+        // An appointment is treated as an unpaid draft only if depositPaid is false 
+        // AND status is PENDING or DEPOSIT_NOT_PAID
+        const isUnpaidStatus = 
+          !appt.depositPaid && 
+          (appt.status === AppointmentStatus.PENDING || appt.status === AppointmentStatus.DEPOSIT_NOT_PAID);
+
+        // 1. If it's an unpaid draft created by staff, ignore it (keep slot available)
+        if (isUnpaidStatus && appt.bookedBy?.role === UserRole.MERCHANT_STAFF) {
           return false;
         }
 
-        // 2. Ignore PENDING appointments created over 30 mins ago (unpaid timeout release)
+        // 2. Ignore current user's unpaid draft so they aren't blocked by their own pending reservation
+        if (userId && appt.bookedById === userId && isUnpaidStatus) {
+          return false;
+        }
+
+        // 3. Ignore customer unpaid appointments created over 30 mins ago
         if (
-          appt.status === AppointmentStatus.PENDING &&
+          isUnpaidStatus &&
           appt.createdAt &&
           new Date(appt.createdAt).getTime() < thirtyMinutesAgo.getTime()
         ) {
@@ -656,7 +705,7 @@ export const BookingService = {
       const availableSlots: string[] = [];
       let currentSlotStart = new Date(businessStart.getTime());
 
-      // 4. TIMELINE CONCURRENCY ENGINE (Checks 9, 10, 11... until 4)
+      // 4. TIMELINE CONCURRENCY ENGINE
       while (currentSlotStart.getTime() + durationMs <= businessEnd.getTime()) {
         const slotStartTime = new Date(currentSlotStart.getTime());
         const slotEndTime = new Date(currentSlotStart.getTime() + durationMs);
@@ -702,19 +751,15 @@ export const BookingService = {
             const apptEndMs = new Date(appt.endTime).getTime();
             if (apptStartMs <= midpoint && apptEndMs >= midpoint) {
               if (appt.groomerId) {
-                // Deduplicate assigned staff using groomerId
                 busyStaffSet.add(appt.groomerId);
               } else {
-                // Unassigned bookings occupy 1 generic staff unit
                 unassignedBookingsCount++;
               }
             }
           }
 
-          // Effective capacity used = unique assigned staff + unassigned pool bookings
           const occupiedStaffCapacity = busyStaffSet.size + unassignedBookingsCount;
 
-          // If occupied capacity meets or exceeds total active staff, block this slot
           if (occupiedStaffCapacity >= totalStaff) {
             isSlotAvailable = false;
             break;
@@ -727,7 +772,6 @@ export const BookingService = {
           availableSlots.push(`${hoursStr}:${minsStr}`);
         }
 
-        // Step forward by exactly 1 hour
         currentSlotStart = new Date(currentSlotStart.getTime() + stepMs);
       }
 

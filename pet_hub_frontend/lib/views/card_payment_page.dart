@@ -148,7 +148,7 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
         body: jsonEncode({
           'paymentIntentId': paymentIntentId,
           'depositPaid': true,
-          'status': 'PAID',
+          'status': 'PENDING',
         }),
       );
 
