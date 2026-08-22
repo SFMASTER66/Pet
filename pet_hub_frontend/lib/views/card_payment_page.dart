@@ -1,3 +1,4 @@
+import 'dart:async'; // Add this import at the top of your file
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -35,6 +36,10 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
   bool _isSubmitting = false;
   bool _showOrderDetails = false;
 
+  // 30-minute countdown timer state
+  Timer? _countdownTimer;
+  int _secondsRemaining = 30 * 60; // 30 minutes in seconds
+
   final List<String> _countries = ['Australia', 'New Zealand', 'United States', 'United Kingdom', 'Canada'];
 
   final Map<String, String> _countryIsoCodes = {
@@ -52,10 +57,42 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
     _firstNameCtrl.text = nameParts.isNotEmpty ? nameParts.first : '';
     _lastNameCtrl.text = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
     _phoneCtrl.text = widget.checkoutPayload.ownerPhone;
+
+    _startCountdownTimer();
+  }
+
+  void _startCountdownTimer() {
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_secondsRemaining <= 1) {
+        timer.cancel();
+        if (mounted) {
+          // Go back to the booking page when timer expires
+          Navigator.of(context).popUntil((route) => route.isFirst);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Session expired. Please try booking again.'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } else {
+        setState(() {
+          _secondsRemaining--;
+        });
+      }
+    });
+  }
+
+  String _formatTimer(int totalSeconds) {
+    final minutes = (totalSeconds ~/ 60).toString().padLeft(2, '0');
+    final seconds = (totalSeconds % 60).toString().padLeft(2, '0');
+    return "$minutes:$seconds";
   }
 
   @override
   void dispose() {
+    _countdownTimer?.cancel();
     _firstNameCtrl.dispose();
     _lastNameCtrl.dispose();
     _phoneCtrl.dispose();
@@ -159,6 +196,8 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
 
       if (!mounted) return;
 
+      _countdownTimer?.cancel();
+
       Navigator.of(context).popUntil((route) => route.isFirst);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -223,6 +262,8 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                _buildCountdownBanner(),
+                const SizedBox(height: 12),
                 _buildOrderSummaryCard(payload, payLater),
                 const SizedBox(height: 20),
                 _buildPaymentMethodSelector(),
@@ -265,6 +306,33 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
     );
   }
 
+  Widget _buildCountdownBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.amber.shade300),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.timer_outlined, size: 20, color: Colors.amber.shade900),
+          const SizedBox(width: 8),
+          Text(
+            'Time remaining to complete payment: ',
+            style: TextStyle(color: Colors.amber.shade900, fontSize: 13, fontWeight: FontWeight.w500),
+          ),
+          Text(
+            _formatTimer(_secondsRemaining),
+            style: TextStyle(color: Colors.amber.shade900, fontSize: 14, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildOrderSummaryCard(CardCheckoutPayload payload, double payLater) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -295,7 +363,6 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Display Service Name if available (e.g. payload.serviceTitle)
                     if (payload.serviceName != null && payload.serviceName!.isNotEmpty) ...[
                       Text(
                         payload.serviceName!,
@@ -431,24 +498,6 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
               ],
             ),
           ),
-          // Divider(height: 1, color: Colors.grey.shade200),
-          // RadioListTile<PaymentMethodType>(
-          //   value: PaymentMethodType.applePay,
-          //   groupValue: _selectedMethod,
-          //   onChanged: (val) => setState(() => _selectedMethod = val!),
-          //   activeColor: Colors.blue,
-          //   title: Row(
-          //     children: [
-          //       Container(
-          //         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          //         decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(4)),
-          //         child: const Text('Pay', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-          //       ),
-          //       const SizedBox(width: 8),
-          //       const Text('Apple Pay', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-          //     ],
-          //   ),
-          // ),
         ],
       ),
     );
