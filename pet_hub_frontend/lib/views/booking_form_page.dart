@@ -768,19 +768,6 @@ class _BookingFormPageState extends State<BookingFormPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                
-                // --- ANY SPECIAL REQUIREMENT FIELD ---
-                TextFormField(
-                  controller: _specialReqCtrl,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Any special requirement? *',
-                    alignLabelWithHint: true,
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Special requirement field is required' : null,
-                ),
-                const SizedBox(height: 16),
 
                 // --- TERMS & HEALTH CONDITIONS LIST ---
                 Container(
