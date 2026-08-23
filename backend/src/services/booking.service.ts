@@ -890,5 +890,11 @@ export const BookingService = {
     }
 
     return adminSlots;
+  },
+
+  async deleteAppointmentAddOn(appointmentAddOnId: string) {
+    return await prisma.appointmentAddOn.delete({
+      where: { id: appointmentAddOnId },
+    });
   }
 };

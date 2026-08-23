@@ -2203,24 +2203,90 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                             spacing: 6,
                             runSpacing: 6,
                             children: addOnsList.map<Widget>((item) {
-                              final name = item['name'] ?? 'AddOn';
-                              final qty = item['quantity'] ?? 1;
-                              final price = item['totalPrice'] ?? item['unitPrice'] ?? 0;
+                              final String addOnRecordId = item['id'] ?? '';
+                              final String name = item['name'] ?? 'AddOn';
+                              final int qty = item['quantity'] ?? 1;
+                              final double price = ((item['totalPrice'] ?? item['unitPrice'] ?? 0) as num).toDouble();
 
                               return Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                padding: const EdgeInsets.only(left: 8, right: 4, top: 2, bottom: 2),
                                 decoration: BoxDecoration(
                                   color: Colors.white,
                                   borderRadius: BorderRadius.circular(4),
                                   border: Border.all(color: Colors.indigo.shade200),
                                 ),
-                                child: Text(
-                                  '$name (x$qty) - \$${price.toStringAsFixed(2)}',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.indigo.shade900,
-                                  ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      '$name (x$qty) - \$${price.toStringAsFixed(2)}',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.indigo.shade900,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    InkWell(
+                                      borderRadius: BorderRadius.circular(12),
+                                      onTap: () {
+                                        // 🔴 Double-Confirmation Dialog
+                                        showDialog(
+                                          context: context,
+                                          builder: (confirmContext) => AlertDialog(
+                                            title: const Text('Remove Add-On?', style: TextStyle(fontSize: 16)),
+                                            content: Text('Are you sure you want to remove "$name" from this booking?'),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () => Navigator.pop(confirmContext),
+                                                child: const Text('Cancel'),
+                                              ),
+                                              ElevatedButton(
+                                                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                                                onPressed: () async {
+                                                  Navigator.pop(confirmContext); // Close confirm dialog
+
+                                                  try {
+                                                    final res = await http.delete(
+                                                      Uri.parse('$_baseUrl/api/v1/bookings/appointments/add-ons/$addOnRecordId'),
+                                                      headers: {
+                                                        'Authorization': 'Bearer ${widget.authToken}',
+                                                      },
+                                                    );
+
+                                                    if (res.statusCode == 200) {
+                                                      _showSnackBar('🗑️ Add-on "$name" removed successfully.');
+                                                      
+                                                      // Remove item locally and update state inside the modal
+                                                      setModalState(() {
+                                                        addOnsList.removeWhere((element) => element['id'] == addOnRecordId);
+                                                      });
+
+                                                      // Refresh outer dashboard to keep prices in sync
+                                                      _fetchDashboardAppointments();
+                                                    } else {
+                                                      _showSnackBar('❌ Failed to delete add-on.');
+                                                    }
+                                                  } catch (e) {
+                                                    _showSnackBar('❌ Network error removing add-on.');
+                                                  }
+                                                },
+                                                child: const Text('Delete', style: TextStyle(color: Colors.white)),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(2.0),
+                                        child: Icon(
+                                          Icons.close_rounded,
+                                          size: 14,
+                                          color: Colors.red.shade600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               );
                             }).toList(),

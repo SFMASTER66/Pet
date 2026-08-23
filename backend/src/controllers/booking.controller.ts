@@ -259,6 +259,41 @@ export const fetchAdminAvailableSlots = async (req: Request, res: Response): Pro
   }
 };
 
+export const removeAppointmentAddOn = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { appointmentAddOnId } = req.params;
+
+    if (!appointmentAddOnId) {
+      res.status(400).json({ 
+        success: false, 
+        message: 'Missing appointmentAddOnId identifier.' 
+      });
+      return;
+    }
+
+    await BookingService.deleteAppointmentAddOn(String(appointmentAddOnId));
+
+    res.status(200).json({ 
+      success: true, 
+      message: 'Add-on successfully removed.' 
+    });
+  } catch (error: any) {
+    // Check for Prisma Record Not Found error code (P2025)
+    if (error.code === 'P2025') {
+      res.status(404).json({ 
+        success: false, 
+        message: 'Add-on record not found.' 
+      });
+      return;
+    }
+
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Failed to remove add-on.' 
+    });
+  }
+};
+
 // export const fetchAvailableSlots = async (req: Request, res: Response): Promise<void> => {
 //   try {
 //     const { merchantId, date, duration } = req.query;

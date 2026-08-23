@@ -6,7 +6,8 @@ import {
   updateBooking,
   removeBooking,
   fetchAvailableSlots,
-  fetchAdminAvailableSlots
+  fetchAdminAvailableSlots,
+  removeAppointmentAddOn
 } from '../controllers/booking.controller';
 
 const router = Router();
@@ -21,5 +22,6 @@ router.get('/bookings/admin/available-slots', fetchAdminAvailableSlots);
 router.post('/bookings/add', portalBooking);
 router.put('/bookings/update/:id', updateBooking);
 router.delete('/bookings/delete/:id', removeBooking);
+router.delete('/bookings/appointments/add-ons/:appointmentAddOnId', removeAppointmentAddOn);
 
 export default router;
