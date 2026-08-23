@@ -43,7 +43,8 @@ export const portalBooking = async (req: Request, res: Response): Promise<void> 
       ownerEmail,
       serviceTime,
       groomerId,
-      note
+      note,
+      addOns
     } = req.body;
 
     if (!merchantId || !servicePricingMatrixId || !dogName || !ownerPhone || !serviceTime || !dogWeight || !dogDob) {
@@ -69,7 +70,8 @@ export const portalBooking = async (req: Request, res: Response): Promise<void> 
       ownerEmail: ownerEmail || `${ownerPhone.replace(/\s+/g, '')}@placeholder-salon-system.com`,
       serviceTime,
       groomerId,
-      note
+      note,
+      addOns: Array.isArray(addOns) ? addOns : []
     });
 
     res.status(201).json(payload);

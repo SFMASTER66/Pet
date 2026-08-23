@@ -46,6 +46,31 @@ interface AdminUpdateBookingInput {
   groomerId?: string;
 }
 
+interface AddOnInput {
+  addOnId: string;
+  quantity: number;
+  unitPriceCents: number;
+}
+
+interface AdminCreateBookingInput {
+  merchantId: string;
+  bookedById: string;
+  servicePricingMatrixId: number;
+  dogName: string;
+  dogBreed: string;
+  dogGender: Gender;
+  isDesexed: boolean;
+  dogWeight: number;
+  dogDob: Date;
+  ownerName: string;
+  ownerPhone: string;
+  ownerEmail: string;
+  serviceTime: string;
+  groomerId: string;
+  note?: string;
+  addOns?: AddOnInput[]; // 👈 Add addOns interface property
+}
+
 export const BookingService = {
   /**
    * 🔍 Fetches all pricing matrix profiles for drop-down configuration layers
@@ -354,6 +379,13 @@ export const BookingService = {
     // ===================================================================
     // 6. Write or Update Database Record
     // ===================================================================
+    const formattedAddOns = (input.addOns || []).map((addon) => ({
+      addOnId: addon.addOnId,
+      quantity: addon.quantity,
+      unitPriceCents: addon.unitPriceCents,
+      totalPriceCents: addon.quantity * addon.unitPriceCents,
+    }));
+
     let appointment;
 
     if (existingUserPendingBooking) {
@@ -369,12 +401,22 @@ export const BookingService = {
           status: isAdminBooking ? AppointmentStatus.PENDING : AppointmentStatus.DEPOSIT_NOT_PAID,
           priceCentsAud: matrixRow.priceCentsAud,
           durationMinutes: matrixRow.durationMinutes,
-          notes: input.note ?? null
+          notes: input.note ?? null,
+          // 🟢 Delete old add-ons and recreate fresh ones for updated appointment
+          addOns: {
+            deleteMany: {},
+            createMany: {
+              data: formattedAddOns,
+            },
+          },
         },
         include: {
           pet: true,
-          servicePricingMatrix: true
-        }
+          servicePricingMatrix: true,
+          addOns: {
+            include: { addOn: true },
+          },
+        },
       });
     } else {
       // 🆕 NEW BOOKING: Create fresh appointment row
@@ -383,7 +425,7 @@ export const BookingService = {
           pet: { connect: { id: petProfile.id } },
           merchant: { connect: { id: input.merchantId } },
           bookedBy: {
-            connect: { id: isAdminBooking ? input.bookedById! : userProfile.id }
+            connect: { id: isAdminBooking ? input.bookedById! : userProfile.id },
           },
           servicePricingMatrix: { connect: { id: matrixRow.id } },
           groomer: assignedGroomerId ? { connect: { id: assignedGroomerId } } : undefined,
@@ -392,12 +434,21 @@ export const BookingService = {
           status: isAdminBooking ? AppointmentStatus.PENDING : AppointmentStatus.DEPOSIT_NOT_PAID,
           priceCentsAud: matrixRow.priceCentsAud,
           durationMinutes: matrixRow.durationMinutes,
-          notes: input.note ?? null
+          notes: input.note ?? null,
+          // 🟢 Create nested add-ons records during creation
+          addOns: {
+            createMany: {
+              data: formattedAddOns,
+            },
+          },
         },
         include: {
           pet: true,
-          servicePricingMatrix: true
-        }
+          servicePricingMatrix: true,
+          addOns: {
+            include: { addOn: true },
+          },
+        },
       });
     }
 
