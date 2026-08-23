@@ -283,11 +283,24 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
 
   double get todayRevenue {
     final targetDate = _selectedDay ?? DateTime.now();
+    
     return mockAppointments
         .where((app) => isSameDay(app['rawStartTime'], targetDate))
-        .where((app) => app['status'] == 'CONFIRMED' || app['status'] == 'PAID' || app['status'] == 'PENDING' || app['status'] == 'COMPLETED')
-        .map((app) => app['price'] as double)
-        .fold(0, (p, e) => p + e);
+        .where((app) {
+          // 1. Status Filter
+          final status = app['status'];
+          final isValidStatus = status == 'CONFIRMED' || 
+                                status == 'PAID' || 
+                                status == 'PENDING' || 
+                                status == 'COMPLETED';
+
+          // 2. Deposit Filter (must be explicitly true)
+          final isDepositPaid = (app['isDepositPaid']) == true;
+
+          return isValidStatus && isDepositPaid;
+        })
+        .map((app) => ((app['price'] ?? 0) as num).toDouble())
+        .fold(0.0, (prev, price) => prev + price);
   }
 
   Future<void> _showCreateBookingDialog() async {
