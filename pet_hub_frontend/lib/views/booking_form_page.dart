@@ -125,7 +125,7 @@ class _BookingFormPageState extends State<BookingFormPage> {
             _availableAddOns = list.map((item) => AddOnModel.fromJson(item)).toList();
             for (var item in _availableAddOns) {
               _selectedAddOnIds[item.id] = false;
-              _addOnQuantities[item.id] = item.pricingType == 'PER_MINUTE' ? 15 : 1;
+              _addOnQuantities[item.id] = item.pricingType == 'PER_MINUTE' ? 1 : 1;
             }
           });
         }
@@ -142,7 +142,7 @@ class _BookingFormPageState extends State<BookingFormPage> {
         ];
         for (var item in _availableAddOns) {
           _selectedAddOnIds[item.id] = (item.name == 'De-shedding'); // Default selected per screenshot
-          _addOnQuantities[item.id] = item.pricingType == 'PER_MINUTE' ? 15 : 1;
+          _addOnQuantities[item.id] = item.pricingType == 'PER_MINUTE' ? 1 : 1;
         }
       });
     } finally {

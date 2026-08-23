@@ -8,6 +8,15 @@ export interface DashboardSummary {
   activeClients: number;
 }
 
+export interface FormattedAppointmentAddOn {
+  id: string;
+  addOnId: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;   // Unit price in AUD
+  totalPrice: number;  // Total calculated price in AUD
+}
+
 export interface FormattedAppointment {
   id: string;
   time: Date;
@@ -19,12 +28,15 @@ export interface FormattedAppointment {
   clientPhone: string;
   clientEmail: string;
   serviceName: string;
-  price: number;
+  basePrice: number;      // Base service price in AUD
+  addOnsPrice: number;    // Aggregate add-ons price in AUD
+  price: number;          // Total price (basePrice + addOnsPrice) in AUD
   isCheckedIn: boolean;
   depositPaid: boolean;
   isReadyToPickup: boolean;
   internalTags: string[];
   groomerId: string;
+  addOns: FormattedAppointmentAddOn[];
 }
 
 export interface ClientContact {
@@ -49,68 +61,95 @@ export class MerchantService {
   }
 
   async getDashboardData(merchantId: string): Promise<MerchantDashboardData> {
-    // 1. Fetch ALL appointments for the business across any status lifecycle step
-    const appointments = await prisma.appointment.findMany({
-      where: { merchantId }, 
-      include: {
-        servicePricingMatrix: true, 
-        pet: { 
-          include: { 
-            owner: true 
-          } 
-        }
+  // 1. Fetch ALL appointments for the business with addOns included
+  const appointments = await prisma.appointment.findMany({
+    where: { merchantId }, 
+    include: {
+      servicePricingMatrix: true, 
+      pet: { 
+        include: { 
+          owner: true 
+        } 
       },
-      orderBy: { startTime: 'desc' }
-    });
-
-    let totalRevenueCents = 0; 
-    const clientMap = new Map<string, ClientContact>();
-
-    // 2. Map results cleanly to structured response layout formats
-    const appointmentsList = appointments.map((app: any) => {
-      const priceCents = app.priceCentsAud || 0;
-      
-      // Accumulate revenue calculation metrics safely
-      totalRevenueCents += priceCents;
-
-      if (app.pet?.owner) {
-        clientMap.set(app.pet.owner.id, {
-          clientName: app.pet.owner.name,
-          clientPhone: app.pet.owner.phoneNumber || 'No Phone',
-          clientEmail: app.pet.owner.email
-        });
+      // 🟢 Include appointment add-ons along with their nested details
+      addOns: {
+        include: {
+          addOn: true
+        }
       }
+    },
+    orderBy: { startTime: 'desc' }
+  });
 
-      return {
-        id: app.id,
-        time: app.startTime,
-        endTime: app.endTime,
-        status: app.status,
-        petName: app.pet?.name || 'Unknown Pet',
-        breed: app.pet?.breed || 'Unknown Breed',
-        clientName: app.pet?.owner?.name || 'Unknown Owner',
-        clientPhone: app.pet?.owner?.phoneNumber || 'No Phone',
-        clientEmail: app.pet?.owner?.email || '',
-        serviceName: app.servicePricingMatrix?.name || 'Unknown Service',
-        price: priceCents / 100,
-        isCheckedIn: app.isCheckedIn ?? false,
-        depositPaid: app.depositPaid ?? false,
-        isReadyToPickup: app.isReadyToPickup ?? false,
-        internalTags: app.internalTags || [],
-        groomerId: app.groomerId || ''
-      };
-    });
+  let totalRevenueCents = 0; 
+  const clientMap = new Map<string, ClientContact>();
+
+  // 2. Map results cleanly to structured response layout formats
+  const appointmentsList = appointments.map((app: any) => {
+    const basePriceCents = app.priceCentsAud || 0;
+
+    // Calculate total price for add-ons (using stored snapshot or recalculating)
+    const addOnsTotalCents = (app.addOns || []).reduce((sum: number, addOnItem: any) => {
+      const addOnPrice = addOnItem.totalPriceCents ?? (addOnItem.unitPriceCents * addOnItem.quantity);
+      return sum + addOnPrice;
+    }, 0);
+
+    const appointmentTotalCents = basePriceCents + addOnsTotalCents;
+    
+    // Accumulate total revenue including add-ons
+    totalRevenueCents += appointmentTotalCents;
+
+    if (app.pet?.owner) {
+      clientMap.set(app.pet.owner.id, {
+        clientName: app.pet.owner.name,
+        clientPhone: app.pet.owner.phoneNumber || 'No Phone',
+        clientEmail: app.pet.owner.email
+      });
+    }
+
+    // Format add-ons array for the response
+    const formattedAddOns = (app.addOns || []).map((item: any) => ({
+      id: item.id,
+      addOnId: item.addOnId,
+      name: item.addOn?.name || 'Unknown AddOn',
+      quantity: item.quantity,
+      unitPrice: item.unitPriceCents / 100,
+      totalPrice: (item.totalPriceCents ?? (item.unitPriceCents * item.quantity)) / 100,
+    }));
 
     return {
-      summary: {
-        totalRevenueAud: totalRevenueCents / 100, 
-        totalOrders: appointments.length,
-        activeClients: clientMap.size,
-      },
-      recentAppointments: appointmentsList,
-      clients: Array.from(clientMap.values())
+      id: app.id,
+      time: app.startTime,
+      endTime: app.endTime,
+      status: app.status,
+      petName: app.pet?.name || 'Unknown Pet',
+      breed: app.pet?.breed || 'Unknown Breed',
+      clientName: app.pet?.owner?.name || 'Unknown Owner',
+      clientPhone: app.pet?.owner?.phoneNumber || 'No Phone',
+      clientEmail: app.pet?.owner?.email || '',
+      serviceName: app.servicePricingMatrix?.name || 'Unknown Service',
+      basePrice: basePriceCents / 100,
+      addOnsPrice: addOnsTotalCents / 100,
+      price: appointmentTotalCents / 100, // Total price (base + add-ons) in AUD
+      addOns: formattedAddOns, //  Add-ons array added to the output
+      isCheckedIn: app.isCheckedIn ?? false,
+      depositPaid: app.depositPaid ?? false,
+      isReadyToPickup: app.isReadyToPickup ?? false,
+      internalTags: app.internalTags || [],
+      groomerId: app.groomerId || ''
     };
-  }
+  });
+
+  return {
+    summary: {
+      totalRevenueAud: totalRevenueCents / 100, 
+      totalOrders: appointments.length,
+      activeClients: clientMap.size,
+    },
+    recentAppointments: appointmentsList,
+    clients: Array.from(clientMap.values())
+  };
+}
 
   // =========================================================================
   // 🔥 UPDATED METHOD SIGNATURE TO ACCEPT AN OPTIONAL 'search' VALUE
