@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/merchant_config.dart';
@@ -19,23 +20,58 @@ class CustomerHomePage extends StatefulWidget {
 
 class _CustomerHomePageState extends State<CustomerHomePage> {
   final ScrollController _scrollController = ScrollController();
+  Timer? _autoScrollTimer;
 
-  // Replace these with your actual asset paths or image URLs
+  // Generated image paths from 1.png to 35.png
   final List<String> imagePaths = List.generate(
-    12,
-    (index) => 'assets/images/dog_${index + 1}.jpg', // or network URLs like 'https://...'
+    35,
+    (index) => 'assets/images/folder/${index + 1}.png',
   );
 
-  void _scroll(double offset) {
+  @override
+  void initState() {
+    super.initState();
+    _startAutoScroll();
+  }
+
+  void _startAutoScroll() {
+    _autoScrollTimer?.cancel();
+    _autoScrollTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      if (!_scrollController.hasClients) return;
+      
+      final maxExtent = _scrollController.position.maxScrollExtent;
+      final currentExtent = _scrollController.offset;
+      const scrollAmount = 450.0;
+
+      if (currentExtent >= maxExtent - 10) {
+        _scrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.easeInOut,
+        );
+      } else {
+        _scrollController.animateTo(
+          currentExtent + scrollAmount,
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
+  }
+
+  void _manualScroll(double offset) {
+    _autoScrollTimer?.cancel();
     _scrollController.animateTo(
       _scrollController.offset + offset,
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 400),
       curve: Curves.easeInOut,
     );
+    _startAutoScroll();
   }
 
   @override
   void dispose() {
+    _autoScrollTimer?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -60,7 +96,7 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
               ),
               padding: EdgeInsets.all(isMobile ? 20 : 40),
               decoration: BoxDecoration(
-                color: const Color(0xFFFAF6EE), // Warm light background
+                color: const Color(0xFFFAF6EE),
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
@@ -102,7 +138,7 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
                             text: "We would like to inform you that, starting "),
                         WidgetSpan(
                           child: Container(
-                            color: const Color(0xFFE2E874), // Highlight yellow
+                            color: const Color(0xFFE2E874),
                             padding: const EdgeInsets.symmetric(horizontal: 4),
                             child: const Text(
                               "Sep 1st, 2026",
@@ -215,49 +251,49 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
 
             const SizedBox(height: 20),
 
-            // ================= 3. HORIZONTAL SCROLLABLE PHOTO GALLERY =================
+            // ================= 3. AUTO-SLIDING HORIZONTAL 2x2 GALLERY =================
             Container(
-              color: const Color(0xFFF7E6DC), // Soft peach background like original
-              padding: const EdgeInsets.symmetric(vertical: 32),
+              color: const Color(0xFFF7E6DC),
+              padding: const EdgeInsets.symmetric(vertical: 24),
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  // Horizontal List
                   SizedBox(
-                    height: isMobile ? 260 : 380,
+                    height: isMobile ? 380 : 520, // Increased height for larger pictures
                     child: ListView.builder(
                       controller: _scrollController,
                       scrollDirection: Axis.horizontal,
                       padding: EdgeInsets.symmetric(
                         horizontal: isMobile ? 50 : 80,
                       ),
-                      itemCount: (imagePaths.length / 6).ceil(), // Group into 2x3 blocks
+                      itemCount: (imagePaths.length / 4).ceil(),
                       itemBuilder: (context, index) {
-                        final startIndex = index * 6;
-                        final endIndex = (startIndex + 6 > imagePaths.length)
+                        final startIndex = index * 4;
+                        final endIndex = (startIndex + 4 > imagePaths.length)
                             ? imagePaths.length
-                            : startIndex + 6;
+                            : startIndex + 4;
                         final blockImages = imagePaths.sublist(startIndex, endIndex);
 
                         return Container(
-                          margin: const EdgeInsets.only(right: 24),
-                          width: isMobile ? 240 : 340,
+                          margin: EdgeInsets.only(right: isMobile ? 16 : 32),
+                          width: isMobile ? 320 : 480, // Increased width for larger pictures
                           child: GridView.builder(
                             physics: const NeverScrollableScrollPhysics(),
+                            padding: EdgeInsets.zero,
                             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 3,
-                              crossAxisSpacing: 4,
-                              mainAxisSpacing: 4,
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 16,
+                              mainAxisSpacing: 16,
+                              childAspectRatio: 1.0, // Ensures square images and equal top/bottom gaps
                             ),
                             itemCount: blockImages.length,
                             itemBuilder: (context, imgIndex) {
                               return ClipRRect(
-                                borderRadius: BorderRadius.circular(2),
+                                borderRadius: BorderRadius.circular(8),
                                 child: Image.asset(
                                   blockImages[imgIndex],
                                   fit: BoxFit.cover,
                                   errorBuilder: (context, error, stackTrace) {
-                                    // Fallback placeholder if asset doesn't exist
                                     return Container(
                                       color: Colors.grey[300],
                                       child: const Icon(Icons.pets, color: Colors.grey),
@@ -272,21 +308,27 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
                     ),
                   ),
 
-                  // Left Arrow Button
+                  // Left Arrow Click Button
                   Positioned(
-                    left: 10,
-                    child: IconButton(
-                      icon: const Icon(Icons.arrow_back, size: 32),
-                      onPressed: () => _scroll(-300),
+                    left: isMobile ? 4 : 16,
+                    child: Material(
+                      color: Colors.transparent,
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_back, size: 36, color: Colors.black87),
+                        onPressed: () => _manualScroll(-450),
+                      ),
                     ),
                   ),
 
-                  // Right Arrow Button
+                  // Right Arrow Click Button
                   Positioned(
-                    right: 10,
-                    child: IconButton(
-                      icon: const Icon(Icons.arrow_forward, size: 32),
-                      onPressed: () => _scroll(300),
+                    right: isMobile ? 4 : 16,
+                    child: Material(
+                      color: Colors.transparent,
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_forward, size: 36, color: Colors.black87),
+                        onPressed: () => _manualScroll(450),
+                      ),
                     ),
                   ),
                 ],
