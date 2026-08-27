@@ -1,5 +1,11 @@
 import { Gender, PetStatus, AppointmentStatus, UserRole } from '@prisma/client';
 import prisma from './db';
+import nodemailer from 'nodemailer';
+import { 
+  getOwnerBookingEmailOptions, 
+  getCustomerBookingEmailOptions, 
+  BookingEmailData 
+} from '../email-templates/booking-email';
 
 // Strict Type Definitions for Operational Validation Inputs
 interface CreatePetInput {
@@ -70,6 +76,19 @@ interface AdminCreateBookingInput {
   note?: string;
   addOns?: AddOnInput[]; // 👈 Add addOns interface property
 }
+
+// Reusable transporter generation utility
+const createTransporter = () => {
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: Number(process.env.SMTP_PORT) || 465,
+    secure: Number(process.env.SMTP_PORT) === 465,
+    auth: {
+      user: process.env.SMTP_USER || '',
+      pass: process.env.SMTP_PASS || '',
+    },
+  });
+};
 
 export const BookingService = {
   /**
@@ -896,5 +915,32 @@ export const BookingService = {
     return await prisma.appointmentAddOn.delete({
       where: { id: appointmentAddOnId },
     });
+  },
+  
+  async sendBookingConfirmationEmails(data: BookingEmailData) {
+    try {
+      const transporter = createTransporter();
+
+      const ownerMailOptions = getOwnerBookingEmailOptions(data);
+      const customerMailOptions = getCustomerBookingEmailOptions(data);
+
+      // Send both emails concurrently
+      await Promise.all([
+        transporter.sendMail(ownerMailOptions),
+        transporter.sendMail(customerMailOptions),
+      ]);
+
+      return {
+        success: true,
+        message: 'Booking notification emails successfully sent to owner and customer.',
+      };
+    } catch (error: any) {
+      console.error('❌ Error sending booking confirmation emails:', error);
+      
+      return {
+        success: false,
+        message: error.message || 'Failed to dispatch booking notification emails.',
+      };
+    }
   }
 };

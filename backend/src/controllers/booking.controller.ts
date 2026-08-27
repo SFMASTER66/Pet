@@ -120,6 +120,60 @@ export const updateBooking = async (req: Request, res: Response): Promise<void> 
       groomerId: groomerId !== undefined ? String(groomerId) : undefined,
     });
 
+    const fullAppointment = await prisma.appointment.findUnique({
+      where: { id: id as string },
+      include: {
+        pet: {
+          include: {
+            owner: true,
+          },
+        },
+        servicePricingMatrix: true,
+        groomer: {
+          include: {
+            user: true,
+          },
+        },
+        addOns: {
+          include: {
+            addOn: true,
+          },
+        },
+      },
+    });
+
+    if (fullAppointment && fullAppointment.pet && fullAppointment.pet.owner) {
+      const pet = fullAppointment.pet;
+      const owner = pet.owner;
+      const matrix = fullAppointment.servicePricingMatrix;
+
+      // Asynchronously trigger emails without blocking HTTP response
+      BookingService.sendBookingConfirmationEmails({
+        ownerName: owner.name,
+        ownerEmail: owner.email,
+        ownerPhone: owner.phoneNumber || 'N/A',
+        dogName: pet.name,
+        dogBreed: pet.breed,
+        dogWeight: pet.weight ? Number(pet.weight) : 0,
+        dogDob: pet.dob,
+        isDesexed: pet.isDesexed,
+        notes: fullAppointment.notes,
+        addOns: fullAppointment.addOns.map((a) => ({
+          name: a.addOn?.name,
+          priceCents: a.totalPriceCents,
+          quantity: a.quantity,
+        })),
+        serviceName: matrix?.name || 'Grooming Service',
+        serviceTime: fullAppointment.startTime,
+        durationMinutes: fullAppointment.durationMinutes,
+        priceCentsAud: fullAppointment.priceCentsAud,
+        depositPaid: fullAppointment.depositPaid,
+        groomerName: fullAppointment.groomer?.user?.name || 'Staff',
+      }).catch((err) => {
+        console.error('Failed to dispatch booking emails:', err);
+      });
+    }
+
     res.status(200).json(payload);
   } catch (error: any) {
     res.status(422).json({
