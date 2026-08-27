@@ -49,7 +49,7 @@ class BookingFormPage extends StatefulWidget {
   final Color themeColor;
   final MerchantConfig config;
   final String baseUrl;
-  final String merchantId; // Required for API calls
+  final String merchantId;
 
   const BookingFormPage({
     super.key,
@@ -87,13 +87,11 @@ class _BookingFormPageState extends State<BookingFormPage> {
   String? _selectedWeightTier;
   String? _selectedCoatType;
 
-  // Add-on state management
   List<AddOnModel> _availableAddOns = [];
   final Map<String, bool> _selectedAddOnIds = {};
-  final Map<String, int> _addOnQuantities = {}; // Stores minutes for PER_MINUTE items
+  final Map<String, int> _addOnQuantities = {};
   bool _isLoadingAddOns = false;
 
-  // Checkbox state variables
   bool _acceptedTerms = false;
   bool _acceptedGroomingPolicy = false;
   bool _acceptedCancellationPolicy = false;
@@ -125,13 +123,12 @@ class _BookingFormPageState extends State<BookingFormPage> {
             _availableAddOns = list.map((item) => AddOnModel.fromJson(item)).toList();
             for (var item in _availableAddOns) {
               _selectedAddOnIds[item.id] = false;
-              _addOnQuantities[item.id] = item.pricingType == 'PER_MINUTE' ? 1 : 1;
+              _addOnQuantities[item.id] = 1;
             }
           });
         }
       }
     } catch (_) {
-      // Fallback defaults matching UI design if backend server is unreachable
       setState(() {
         _availableAddOns = [
           AddOnModel(id: '1', name: 'Teeth brush', priceCentsAud: 1500, pricingType: 'FIXED'),
@@ -141,8 +138,8 @@ class _BookingFormPageState extends State<BookingFormPage> {
           AddOnModel(id: '5', name: 'Ear hair plucking', priceCentsAud: 2000, pricingType: 'FIXED'),
         ];
         for (var item in _availableAddOns) {
-          _selectedAddOnIds[item.id] = (item.name == 'De-shedding'); // Default selected per screenshot
-          _addOnQuantities[item.id] = item.pricingType == 'PER_MINUTE' ? 1 : 1;
+          _selectedAddOnIds[item.id] = (item.name == 'De-shedding');
+          _addOnQuantities[item.id] = 1;
         }
       });
     } finally {
@@ -213,8 +210,7 @@ class _BookingFormPageState extends State<BookingFormPage> {
                 final int displayHour =
                     hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
                 final String amPm = hour >= 12 ? 'PM' : 'AM';
-                final String paddedHour =
-                    displayHour.toString().padLeft(2, '0');
+                final String paddedHour = displayHour.toString().padLeft(2, '0');
 
                 return '$paddedHour:$minute $amPm';
               }).toList();
@@ -272,8 +268,7 @@ class _BookingFormPageState extends State<BookingFormPage> {
 
     try {
       return widget.variantsMatrix.firstWhere((variant) {
-        final vWeight =
-            (variant['weightTier'] ?? '').toString().toUpperCase();
+        final vWeight = (variant['weightTier'] ?? '').toString().toUpperCase();
         final vCoat = (variant['coatType'] ?? '').toString().toUpperCase();
         return vWeight == _selectedWeightTier!.toUpperCase() &&
             vCoat == _selectedCoatType!.toUpperCase();
@@ -324,7 +319,6 @@ class _BookingFormPageState extends State<BookingFormPage> {
   void _openPolicyInNewTab() {
     final Uri baseUri = Uri.base;
     final bool hasHashRouting = kIsWeb && baseUri.fragment.isNotEmpty;
-    
     final Uri policyUri = hasHashRouting
         ? Uri.parse('${baseUri.scheme}://${baseUri.host}:${baseUri.port}/#/policy')
         : Uri.parse('${baseUri.scheme}://${baseUri.host}:${baseUri.port}/policy');
@@ -335,7 +329,6 @@ class _BookingFormPageState extends State<BookingFormPage> {
   void _openCancellationPolicyInNewTab() {
     final Uri baseUri = Uri.base;
     final bool hasHashRouting = kIsWeb && baseUri.fragment.isNotEmpty;
-    
     final Uri cancelPolicyUri = hasHashRouting
         ? Uri.parse('${baseUri.scheme}://${baseUri.host}:${baseUri.port}/#/about-cancellation-policy')
         : Uri.parse('${baseUri.scheme}://${baseUri.host}:${baseUri.port}/about-cancellation-policy');
@@ -391,15 +384,26 @@ class _BookingFormPageState extends State<BookingFormPage> {
         minute,
       );
 
-      // Collect selected add-ons payload
       final List<Map<String, dynamic>> selectedAddOnsPayload = [];
+      final List<AddOnItemSummary> selectedAddOnSummaries = [];
+
       for (var addOn in _availableAddOns) {
         if (_selectedAddOnIds[addOn.id] == true) {
+          final qty = _addOnQuantities[addOn.id] ?? 1;
+          final itemTotalCents = addOn.priceCentsAud * qty;
+
           selectedAddOnsPayload.add({
             'addOnId': addOn.id,
-            'quantity': _addOnQuantities[addOn.id] ?? 1,
+            'quantity': qty,
             'unitPriceCents': addOn.priceCentsAud,
           });
+
+          selectedAddOnSummaries.add(
+            AddOnItemSummary(
+              name: addOn.name,
+              price: itemTotalCents / 100.0,
+            ),
+          );
         }
       }
 
@@ -440,6 +444,8 @@ class _BookingFormPageState extends State<BookingFormPage> {
 
       final int basePriceCents = matchedRecord['priceCentsAud'] ?? matchedRecord['priceCents'] ?? 0;
       final int addOnsPriceCents = _calculateAddOnsTotalCents();
+      
+      final double baseServiceAmount = (basePriceCents / 100).toDouble();
       final double totalAmount = ((basePriceCents + addOnsPriceCents) / 100).toDouble();
 
       final int depositCents = matchedRecord['depositCentsAud'] ?? matchedRecord['depositCents'] ?? 3000;
@@ -449,6 +455,7 @@ class _BookingFormPageState extends State<BookingFormPage> {
         appointmentId: appointmentId,
         serviceName: widget.serviceName,
         variantTitle: "$_selectedWeightTier, $_selectedCoatType dogs",
+        baseServiceAmount: baseServiceAmount, // Added original service price
         totalAmount: totalAmount,
         depositAmount: depositAmount,
         serviceTime: targetDateTime,
@@ -460,6 +467,7 @@ class _BookingFormPageState extends State<BookingFormPage> {
         dogBreed: _dogBreedCtrl.text.trim(),
         baseUrl: widget.baseUrl,
         businessName: widget.config.businessName,
+        selectedAddOns: selectedAddOnSummaries,
       );
 
       if (!mounted) return;
@@ -768,8 +776,6 @@ class _BookingFormPageState extends State<BookingFormPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-
-                // --- TERMS & HEALTH CONDITIONS LIST ---
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -792,12 +798,8 @@ class _BookingFormPageState extends State<BookingFormPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-
-                // --- ADD ON SERVICE (EXTRA CHARGE) SECTION ---
                 _buildAddOnServicesSection(),
                 const SizedBox(height: 16),
-
-                // --- CHECKBOX POLICIES ---
                 FormField<bool>(
                   initialValue: _acceptedTerms,
                   validator: (value) => !_acceptedTerms ? 'You must accept the terms & conditions' : null,
@@ -845,8 +847,7 @@ class _BookingFormPageState extends State<BookingFormPage> {
                                 TextSpan(
                                   text: 'Grooming policy',
                                   style: TextStyle(color: widget.themeColor, fontWeight: FontWeight.bold, decoration: TextDecoration.underline),
-                                  recognizer: TapGestureRecognizer()
-                                    ..onTap = _openPolicyInNewTab,
+                                  recognizer: TapGestureRecognizer()..onTap = _openPolicyInNewTab,
                                 ),
                                 const TextSpan(text: ' *'),
                               ],
@@ -886,8 +887,7 @@ class _BookingFormPageState extends State<BookingFormPage> {
                                 TextSpan(
                                   text: 'Cancellation Policy',
                                   style: TextStyle(color: widget.themeColor, fontWeight: FontWeight.bold, decoration: TextDecoration.underline),
-                                  recognizer: TapGestureRecognizer()
-                                    ..onTap = _openCancellationPolicyInNewTab,
+                                  recognizer: TapGestureRecognizer()..onTap = _openCancellationPolicyInNewTab,
                                 ),
                                 const TextSpan(text: ' *'),
                               ],
@@ -965,7 +965,6 @@ class _BookingFormPageState extends State<BookingFormPage> {
               final items = _availableAddOns;
 
               if (isWide) {
-                // Render side-by-side two column grid matching screenshot layout
                 final int half = (items.length / 2).ceil();
                 final leftCol = items.sublist(0, half);
                 final rightCol = items.sublist(half);
@@ -1025,10 +1024,21 @@ class _BookingFormPageState extends State<BookingFormPage> {
   }
 }
 
+class AddOnItemSummary {
+  final String name;
+  final double price;
+
+  AddOnItemSummary({
+    required this.name,
+    required this.price,
+  });
+}
+
 class CardCheckoutPayload {
   final String appointmentId;
   final String serviceName;
   final String variantTitle;
+  final double baseServiceAmount; // Original price of base service
   final double totalAmount;
   final double depositAmount;
   final DateTime serviceTime;
@@ -1042,11 +1052,13 @@ class CardCheckoutPayload {
 
   final String baseUrl;
   final String businessName;
+  final List<AddOnItemSummary> selectedAddOns;
 
   CardCheckoutPayload({
     required this.appointmentId,
     required this.serviceName,
     required this.variantTitle,
+    required this.baseServiceAmount,
     required this.totalAmount,
     required this.depositAmount,
     required this.serviceTime,
@@ -1058,5 +1070,6 @@ class CardCheckoutPayload {
     required this.dogBreed,
     required this.baseUrl,
     required this.businessName,
+    this.selectedAddOns = const [],
   });
 }

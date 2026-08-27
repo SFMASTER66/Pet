@@ -379,8 +379,19 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text('Deposit: \$${payload.depositAmount.toStringAsFixed(2)}', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                    
+                    // UPDATED: Displays the original service base price without add-ons
+                    Text(
+                      'Original Price: \$${payload.baseServiceAmount.toStringAsFixed(2)}', 
+                      style: TextStyle(color: Colors.grey.shade700, fontSize: 13, fontWeight: FontWeight.w500)
+                    ),
+                    Text(
+                      'Deposit Required: \$${payload.depositAmount.toStringAsFixed(2)}', 
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 12)
+                    ),
+                    const SizedBox(height: 2),
                     Text(_formatFormattedDate(payload.serviceTime), style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                    
                     if (_showOrderDetails) ...[
                       const SizedBox(height: 4),
                       Text('Dog: ${payload.dogName} (${payload.dogBreed})', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
@@ -401,9 +412,38 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
                   ],
                 ),
               ),
-              Text('\$${payload.totalAmount.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              Text('\$${payload.baseServiceAmount.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
             ],
           ),
+
+          // CONDITIONAL ADD-ONS DISPLAY SECTION
+          if (payload.selectedAddOns.isNotEmpty) ...[
+            const Divider(height: 20),
+            const Text(
+              'Add-on Services:',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black87),
+            ),
+            const SizedBox(height: 6),
+            ...payload.selectedAddOns.map(
+              (addOn) => Padding(
+                padding: const EdgeInsets.only(bottom: 4.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '• ${addOn.name}',
+                      style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+                    ),
+                    Text(
+                      '+\$${addOn.price.toStringAsFixed(2)}',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.grey.shade800),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+
           const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
