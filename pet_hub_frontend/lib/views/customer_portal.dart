@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/merchant_config.dart';
 import 'booking_form_page.dart'; // Import your new booking form page
+import 'dart:convert';
 
 class CustomerPortalPage extends StatefulWidget {
   final MerchantConfig config;
@@ -40,7 +41,22 @@ class _CustomerPortalPageState extends State<CustomerPortalPage> {
         iconTheme: IconThemeData(color: themeColor),
         title: Row(
           children: [
-            Text(widget.config.logoIcon, style: const TextStyle(fontSize: 24)),
+            Image.memory(
+                base64Decode(
+                  // Strips out the 'data:application/octet-stream;base64,' prefix if present
+                  widget.config.logoIcon.contains(',')
+                      ? widget.config.logoIcon.split(',').last
+                      : widget.config.logoIcon,
+                ),
+                width: 24,
+                height: 24,
+                fit: BoxFit.cover,
+                // Optional error fallback if the string is invalid
+                errorBuilder: (context, error, stackTrace) => const Icon(
+                  Icons.broken_image,
+                  size: 18,
+                ),
+              ),
             const SizedBox(width: 10),
             Text(
               widget.config.businessName,
@@ -90,9 +106,35 @@ class _CustomerPortalPageState extends State<CustomerPortalPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Welcome to ${widget.config.businessName} ${widget.config.logoIcon}',
-                          style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                        RichText(
+                          text: TextSpan(
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            children: [
+                              TextSpan(text: 'Welcome to ${widget.config.businessName} '),
+                              WidgetSpan(
+                                alignment: PlaceholderAlignment.middle, // Aligns image vertically with text center
+                                child: Image.memory(
+                                  base64Decode(
+                                    widget.config.logoIcon.contains(',')
+                                        ? widget.config.logoIcon.split(',').last
+                                        : widget.config.logoIcon,
+                                  ),
+                                  width: 24,
+                                  height: 24,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => const Icon(
+                                    Icons.broken_image,
+                                    size: 24,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                         const SizedBox(height: 8),
                         const Text(

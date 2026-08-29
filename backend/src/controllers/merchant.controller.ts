@@ -241,6 +241,34 @@ export const getScheduledShifts = async (req: AuthenticatedRequest, res: Respons
   }
 };
 
+export const uploadMerchantLogo = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { merchantId } = req.params;
+
+    if (!req.user || req.user.merchantId !== merchantId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized domain context.' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No image file uploaded.' });
+    }
+
+    const updatedConfig = await merchantService.updateMerchantLogo(
+      merchantId,
+      req.file.buffer,
+      req.file.mimetype
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Logo updated successfully.',
+      data: updatedConfig,
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // =========================================================================
 // 🔥 TRIGGER INITIAL SHIFT GENERATION MANUALLY OR VIA SYSTEM ONBOARDING
 // =========================================================================

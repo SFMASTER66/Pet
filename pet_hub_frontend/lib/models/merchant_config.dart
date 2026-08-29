@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
 
 class MerchantConfig {
   final String merchantId;
@@ -31,7 +32,7 @@ class MerchantConfig {
       // ========================================================
       userId: json['userId'] ?? '', 
       businessName: json['businessName'] ?? 'Pet Workspace Tenant',
-      logoIcon: json['logoIcon'] ?? '🐾',
+      logoIcon:  json['logoIcon'] ?? '🐾',
       primaryColorValue: json['primaryColor'] ?? '0xFF0F766E',
       tags: json['tags'] != null ? List<String>.from(json['tags']) : [],
       uiDictionary: json['uiDictionary'] ?? {},
@@ -49,6 +50,27 @@ class MerchantConfig {
       'tags': tags,
       'uiDictionary': uiDictionary,
     };
+  }
+
+  /// Creates a copy of this MerchantConfig with updated values
+  MerchantConfig copyWith({
+    String? merchantId,
+    String? userId,
+    String? businessName,
+    String? logoIcon,
+    String? primaryColorValue,
+    List<String>? tags,
+    Map<String, dynamic>? uiDictionary,
+  }) {
+    return MerchantConfig(
+      merchantId: merchantId ?? this.merchantId,
+      userId: userId ?? this.userId,
+      businessName: businessName ?? this.businessName,
+      logoIcon: logoIcon ?? this.logoIcon,
+      primaryColorValue: primaryColorValue ?? this.primaryColorValue,
+      tags: tags ?? this.tags,
+      uiDictionary: uiDictionary ?? this.uiDictionary,
+    );
   }
 
   /// Parses the database color hex string value into a Flutter safe visual UI Color asset

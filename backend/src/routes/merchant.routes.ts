@@ -17,12 +17,17 @@ import {
   // getActiveStaffDirectory,
   batchSyncShifts,
   // initializeDefaultShifts,
-  getScheduledShifts
+  getScheduledShifts,
+  uploadMerchantLogo
 } from '../controllers/merchant.controller';
 import { requestLogger, LoggedRequest } from '../middlewares/activity-log.middleware';
 import { UserRole } from '@prisma/client';
+import multer from 'multer';
 
 const router = Router();
+const upload = multer({ 
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+});
 
 router.post('/register', registerMerchantWorkspace);
 router.post('/login', loginMerchantWorkspace);
@@ -51,7 +56,7 @@ router.post(
   requestLogger as any, // Cast to any to cleanly bypass the Express route-handler chain checks
   createStaffProfile as any
 );
-router.delete('/merchant/staff/:staffId', requireAdmin, deleteStaffProfile);
+router.delete('/merchant/staff/:staffId', requireAdmin as any, deleteStaffProfile);
 
 router.get('/merchant/:merchantId/hours', fetchMerchantHours as any);
 router.put('/merchant/:merchantId/hours', requireAdmin as any, updateMerchantHoursDay as any);
@@ -64,5 +69,12 @@ router.post('/merchant/:merchantId/shifts/batch', requireAdmin as any, batchSync
 // router.post('/merchant/:merchantId/shifts/initialize', requireAdmin as any, initializeDefaultShifts as any);
 // 🟢 NEW: Route to retrieve existing schedule assignments
 router.get('/merchant/:merchantId/shifts', requireAdmin as any, getScheduledShifts as any);
+
+router.post(
+  '/merchant/:merchantId/logo',
+  requireAdmin as any,
+  upload.single('logo'),
+  uploadMerchantLogo
+);
 
 export default router;

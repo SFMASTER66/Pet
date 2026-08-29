@@ -11,6 +11,7 @@ import 'manage_team_panel.dart';
 import 'manage_hours_panel.dart'; 
 import 'customer_info_panel.dart';
 import 'staff_scheduling_page.dart';
+import 'manage_branding_panel.dart';
 
 class UnifiedMerchantDashboard extends StatefulWidget {
   final MerchantConfig config;
@@ -73,10 +74,10 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     _fetchBusinessHours(); 
   }
   void _initDrawerController() {
-    _drawerTabController = TabController(length: 4, vsync: this);
+    _drawerTabController = TabController(length: 5, vsync: this);
     _drawerTabController!.addListener(() {
       // Index 3 is the Roster Tab
-      if (_drawerTabController!.index == 3 && !_drawerTabController!.indexIsChanging) {
+      if (_drawerTabController!.index == 4 && !_drawerTabController!.indexIsChanging) {
         // 1. Revert index back to the first tab so the drawer doesn't look broken if reopened
         _drawerTabController!.index = 0;
         
@@ -997,12 +998,25 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: themeColor.withAlpha(25),
+                color: themeColor.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Text(
-                widget.config.logoIcon,
-                style: const TextStyle(fontSize: 18),
+              // FIX: Decode the Base64 string and display it as an Image
+              child: Image.memory(
+                base64Decode(
+                  // Strips out the 'data:application/octet-stream;base64,' prefix if present
+                  widget.config.logoIcon.contains(',')
+                      ? widget.config.logoIcon.split(',').last
+                      : widget.config.logoIcon,
+                ),
+                width: 18,
+                height: 18,
+                fit: BoxFit.cover,
+                // Optional error fallback if the string is invalid
+                errorBuilder: (context, error, stackTrace) => const Icon(
+                  Icons.broken_image,
+                  size: 18,
+                ),
               ),
             ),
             const SizedBox(width: 8),
@@ -2935,6 +2949,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                 Tab(icon: Icon(Icons.schedule), text: 'Hours'),
                 Tab(icon: Icon(Icons.group), text: 'Team'),
                 Tab(icon: Icon(Icons.people), text: 'Clients'),
+                Tab(icon: Icon(Icons.brush), text: 'Branding'),
                 Tab(icon: Icon(Icons.calendar_month), text: 'Roster'), 
               ],
             ),
@@ -2946,6 +2961,12 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                   ManageTeamPanel(config: widget.config, authToken: widget.authToken),
                   CustomerInfoPanel(config: widget.config, authToken: widget.authToken, baseUrl: _baseUrl, themeColor: themeColor),
                   // Replaced with a placeholder container since navigation is now handled explicitly by the listener
+                  ManageBrandingPanel(
+                    config: widget.config,
+                    authToken: widget.authToken,
+                    baseUrl: _baseUrl,
+                    onConfigChanged: widget.onConfigChanged,
+                  ),
                   const Center(child: CircularProgressIndicator()), 
                 ],
               ),

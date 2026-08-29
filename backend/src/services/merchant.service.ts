@@ -1,6 +1,7 @@
 import prisma from './db';
 import { UserRole, AppointmentStatus } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { Prisma } from '@prisma/client';
 
 export interface DashboardSummary {
   totalRevenueAud: number;
@@ -561,5 +562,29 @@ export class MerchantService {
       },
       orderBy: { date: 'asc' },
     });
+  }
+
+  async updateMerchantLogo(merchantId: string, fileBuffer: Buffer, mimeType: string) {
+    try {
+      // Convert binary to base64 data URI string for simple frontend rendering
+      const base64Image = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
+
+      const updatedMerchant = await prisma.merchant.update({
+        where: { id: merchantId },
+        data: { logoIcon: base64Image },
+      });
+
+      return updatedMerchant;
+    } catch (error) {
+      // Handle Prisma specific known errors (e.g., Record not found)
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2025') {
+          throw new Error(`Merchant with ID ${merchantId} not found.`);
+        }
+      }
+      // Handle or rethrow general errors
+      console.error('Failed to update merchant logo:', error);
+      throw new Error('Could not update merchant logo. Please try again later.');
+    }
   }
 }
