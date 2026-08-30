@@ -12,6 +12,7 @@ export PATH="$PATH:`pwd`/flutter/bin"
 
 # 3. Enable Web & fetch dependencies
 flutter config --enable-web
+flutter clean
 flutter pub get
 
 # 4. Build Flutter Web release with Environment Variables
