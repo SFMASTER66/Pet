@@ -25,7 +25,7 @@ bool isAdmin = false;
 late MerchantConfig globalMerchantConfig;
 late SharedPreferences prefs;
 
-const String kBaseUrl = 'http://localhost:3000';
+final String kBaseUrl = AppConfig.baseUrl;
 
 final GoRouter _router = GoRouter(
   initialLocation: '/', 

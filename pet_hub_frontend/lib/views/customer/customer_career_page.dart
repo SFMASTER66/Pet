@@ -5,6 +5,7 @@ import 'dart:io' show Platform; // Added for platform-aware URL handling style
 import 'package:http/http.dart' as http;
 import '../../models/merchant_config.dart';
 import 'customer_layout.dart';
+import '/config/app_config.dart';
 
 class CustomerCareerPage extends StatefulWidget {
   final MerchantConfig config;
@@ -31,11 +32,8 @@ class _CustomerCareerPageState extends State<CustomerCareerPage> {
     r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+",
   );
 
-  /// 🌐 Dynamic base URL provider parsing layout rules by runtime target (Matches Contact Page style)
-  String get _baseUrl {
-    if (kIsWeb) return 'http://localhost:3000';
-    return Platform.isAndroid ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
-  }
+  // 🌐 Dynamic base URL provider parsing layout rules by runtime target (Matches Contact Page style)
+  String get _baseUrl => AppConfig.baseUrl;
 
   @override
   void dispose() {

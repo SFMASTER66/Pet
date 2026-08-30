@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../models/merchant_config.dart';
+import '/config/app_config.dart';
 
 class ManageHoursPanel extends StatefulWidget {
   final MerchantConfig config;
@@ -41,10 +42,7 @@ class _ManageHoursPanelState extends State<ManageHoursPanel> {
     '18:00', '18:30', '19:00', '19:30', '20:00', '20:30', '21:00', '22:00'
   ];
 
-  String get _baseUrl {
-    if (kIsWeb) return 'http://localhost:3000';
-    return Platform.isAndroid ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
-  }
+  String get _baseUrl => AppConfig.baseUrl;
 
   @override
   void initState() {

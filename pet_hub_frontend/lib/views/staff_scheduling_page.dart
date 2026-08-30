@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io' show Platform;
 import '../models/merchant_config.dart';
+import '/config/app_config.dart';
 
 class EmployeeSummary {
   final String id;
@@ -42,10 +43,7 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
   bool _isLoadingStaff = true;
   int _rosterDaysLimit = 90;
 
-  String get _baseUrl {
-    if (kIsWeb) return 'http://localhost:3000';
-    return Platform.isAndroid ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
-  }
+  String get _baseUrl => AppConfig.baseUrl;
 
   @override
   void initState() {

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io' show Platform;
 import '../models/merchant_config.dart';
+import '/config/app_config.dart';
 
 class ManageTeamPanel extends StatefulWidget {
   final MerchantConfig config;
@@ -26,10 +27,7 @@ class _ManageTeamPanelState extends State<ManageTeamPanel> {
   bool _isLoading = false;
   List<dynamic> _invitedStaff = [];
 
-  String get _baseUrl {
-    if (kIsWeb) return 'http://localhost:3000';
-    return Platform.isAndroid ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
-  }
+ String get _baseUrl => AppConfig.baseUrl;
 
   @override
   void initState() {

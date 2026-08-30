@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 
@@ -12,4 +13,22 @@ class AppConfig {
 
   static const String merchantIdentifier = 'merchant.com.yourdomain.app';
   static const String urlScheme = 'flutterstripe';
+
+  // --- Backend API Configuration ---
+  static const String _productionUrl = 'https://pet-backend-d2a7.onrender.com';
+
+  /// Set to [true] to target live Render backend, or [false] for local testing
+  static const bool isProduction = false;
+
+  static String get baseUrl {
+    if (isProduction) {
+      return _productionUrl;
+    }
+
+    // Local Development Fallbacks
+    if (kIsWeb) {
+      return 'http://localhost:3000';
+    }
+    return Platform.isAndroid ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
+  }
 }

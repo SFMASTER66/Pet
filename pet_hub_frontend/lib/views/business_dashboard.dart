@@ -12,6 +12,7 @@ import 'manage_hours_panel.dart';
 import 'customer_info_panel.dart';
 import 'staff_scheduling_page.dart';
 import 'manage_branding_panel.dart';
+import '/config/app_config.dart';
 
 class UnifiedMerchantDashboard extends StatefulWidget {
   final MerchantConfig config;
@@ -54,10 +55,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
   bool _isServiceLoading = false; 
   bool _isAppointmentsLoading = false;
 
-  String get _baseUrl {
-    if (kIsWeb) return 'http://localhost:3000';
-    return Platform.isAndroid ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
-  }
+  String get _baseUrl => AppConfig.baseUrl;
 
   TabController? _drawerTabController;
   List<Map<String, dynamic>> mockAppointments = []; 
