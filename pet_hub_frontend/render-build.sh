@@ -14,5 +14,7 @@ export PATH="$PATH:`pwd`/flutter/bin"
 flutter config --enable-web
 flutter pub get
 
-# 4. Build Flutter Web release
-flutter build web --release
+# 4. Build Flutter Web release with Environment Variables
+flutter build web --release \
+  --dart-define=API_URL=$API_URL \
+  --dart-define=STRIPE_PUBLISHABLE_KEY=$STRIPE_PUBLISHABLE_KEY

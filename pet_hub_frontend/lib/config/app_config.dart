@@ -14,18 +14,16 @@ class AppConfig {
   static const String merchantIdentifier = 'merchant.com.yourdomain.app';
   static const String urlScheme = 'flutterstripe';
 
-  // --- Backend API Configuration ---
-  static const String _productionUrl = 'https://pet-backend-d2a7.onrender.com';
-
   /// Set to [true] to target live Render backend, or [false] for local testing
-  static const bool isProduction = false;
+  static const String _envBaseUrl = String.fromEnvironment('API_URL');
 
   static String get baseUrl {
-    if (isProduction) {
-      return _productionUrl;
+    // If API_URL was supplied in the build command, use it!
+    if (_envBaseUrl.isNotEmpty) {
+      return _envBaseUrl;
     }
 
-    // Local Development Fallbacks
+    // Local Development Fallbacks (when running locally without flags)
     if (kIsWeb) {
       return 'http://localhost:3000';
     }
