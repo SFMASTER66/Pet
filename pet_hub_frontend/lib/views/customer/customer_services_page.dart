@@ -326,7 +326,7 @@ class _CustomerServicesPageState extends State<CustomerServicesPage> {
               minScale: 0.8,
               maxScale: 3.5,
               child: Image.asset(
-                'assets/images/dog_grooming_price_table.jpg', // Replace with your actual asset path
+                'assets/images/dog_grooming_price_table.png', // Replace with your actual asset path
                 fit: BoxFit.contain,
                 errorBuilder: (context, error, stackTrace) => Container(
                   padding: const EdgeInsets.all(40),
