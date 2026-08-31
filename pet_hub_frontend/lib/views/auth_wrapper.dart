@@ -68,7 +68,7 @@ class _MerchantRegisterLoginPageState extends State<MerchantRegisterLoginPage> {
   String _selectedLogo = '💼'; 
   Color _selectedColor = const Color(0xFF1E293B); 
 
-  final List<String> _availableLogos = ['💼', '🛒', '🏪', '💇', '🏋️', '☕', '🍽️', '🎨'];
+  final List<String> _availableLogos = [ '🐶', '🐾', '🦮', '🐱', '🦜', '🐠', '🦔', '🦴',];
   final List<Color> _availableColors = [
     const Color(0xFF1E293B), const Color(0xFF0F766E), const Color(0xFF1E3A8A), 
     const Color(0xFF7C3AED), const Color(0xFFDC2626), const Color(0xFF059669),
