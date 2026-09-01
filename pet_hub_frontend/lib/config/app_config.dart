@@ -15,7 +15,11 @@ class AppConfig {
   static const String urlScheme = 'flutterstripe';
 
   /// Set to [true] to target live Render backend, or [false] for local testing
-  static const String _envBaseUrl = String.fromEnvironment('API_URL');
+  // static const String _envBaseUrl = String.fromEnvironment('API_URL');
+  static const String _envBaseUrl = String.fromEnvironment(
+    'API_URL',
+    defaultValue: 'https://pet-backend-d2a7.onrender.com',
+  );
 
   static String get baseUrl {
     // If API_URL was supplied in the build command, use it!
