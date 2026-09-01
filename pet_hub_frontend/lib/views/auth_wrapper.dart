@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io' show Platform;
 import 'package:go_router/go_router.dart';
+import '/config/app_config.dart';
 
 enum AuthMode { login, register, forgotPassword, resetPassword }
 
@@ -101,6 +102,7 @@ class _MerchantRegisterLoginPageState extends State<MerchantRegisterLoginPage> {
     }
     return baseUrl;
   }
+  String get baseUrl => AppConfig.baseUrl;
 
   Future<void> _submitAuth() async {
     // 1. Core Frontline Validation Rules
@@ -123,7 +125,7 @@ class _MerchantRegisterLoginPageState extends State<MerchantRegisterLoginPage> {
     }
 
     setState(() => _isLoading = true);
-    final baseUrl = _getBaseUrl();
+    // final baseUrl = _getBaseUrl();
 
     String endpoint = '$baseUrl/api/v1/login';
     Map<String, dynamic> payload = {};
