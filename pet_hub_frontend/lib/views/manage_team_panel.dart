@@ -58,7 +58,7 @@ class _ManageTeamPanelState extends State<ManageTeamPanel> {
       );
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        final Map<String, dynamic> responseData = jsonDecode(utf8.decode(response.bodyBytes));
         if (responseData['success'] == true && responseData['data'] != null) {
           final List<dynamic> rawList = responseData['data'];
           
@@ -115,7 +115,7 @@ class _ManageTeamPanelState extends State<ManageTeamPanel> {
         }),
       );
 
-      final Map<String, dynamic> responseData = jsonDecode(response.body);
+      final Map<String, dynamic> responseData = jsonDecode(utf8.decode(response.bodyBytes));
 
       if (response.statusCode == 201 && responseData['success'] == true) {
         _staffNameController.clear();
@@ -156,7 +156,7 @@ class _ManageTeamPanelState extends State<ManageTeamPanel> {
         }),
       );
 
-      final Map<String, dynamic> responseData = jsonDecode(response.body);
+      final Map<String, dynamic> responseData = jsonDecode(utf8.decode(response.bodyBytes));
       if (response.statusCode == 200 && responseData['success'] == true) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

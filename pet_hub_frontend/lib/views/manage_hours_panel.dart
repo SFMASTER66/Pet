@@ -62,7 +62,7 @@ class _ManageHoursPanelState extends State<ManageHoursPanel> {
       );
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        final Map<String, dynamic> responseData = jsonDecode(utf8.decode(response.bodyBytes));
         if (responseData['success'] == true && responseData['data'] != null) {
           setState(() {
             _businessHours = List<Map<String, dynamic>>.from(responseData['data']);
@@ -110,7 +110,7 @@ class _ManageHoursPanelState extends State<ManageHoursPanel> {
         }),
       );
 
-      final Map<String, dynamic> responseData = jsonDecode(response.body);
+      final Map<String, dynamic> responseData = jsonDecode(utf8.decode(response.bodyBytes));
       if (response.statusCode == 200 && responseData['success'] == true) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('💾 Schedule updated successfully.'), behavior: SnackBarBehavior.floating),

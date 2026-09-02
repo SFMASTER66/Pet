@@ -176,7 +176,7 @@ class _MerchantRegisterLoginPageState extends State<MerchantRegisterLoginPage> {
         body: jsonEncode(payload),
       );
 
-      final Map<String, dynamic> responseData = jsonDecode(response.body);
+      final Map<String, dynamic> responseData = jsonDecode(utf8.decode(response.bodyBytes));
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         if (_currentMode == AuthMode.login || _currentMode == AuthMode.register) {

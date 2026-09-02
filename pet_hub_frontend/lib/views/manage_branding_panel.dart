@@ -61,7 +61,7 @@ class _ManageBrandingPanelState extends State<ManageBrandingPanel> {
       final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
         if (data['success'] == true && data['data'] != null) {
           final updatedLogo = data['data']['logoIcon'] ?? widget.config.logoIcon;
           

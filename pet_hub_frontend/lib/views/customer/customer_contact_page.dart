@@ -80,7 +80,7 @@ class _CustomerContactPageState extends State<CustomerContactPage> {
         }),
       );
 
-      final Map<String, dynamic> responseData = jsonDecode(response.body);
+      final Map<String, dynamic> responseData = jsonDecode(utf8.decode(response.bodyBytes));
 
       if (!mounted) return;
 

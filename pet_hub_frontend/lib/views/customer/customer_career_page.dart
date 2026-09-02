@@ -85,7 +85,7 @@ class _CustomerCareerPageState extends State<CustomerCareerPage> {
         _messageController.clear();
         _formKey.currentState?.reset();
       } else {
-        final errorData = jsonDecode(response.body);
+        final errorData = jsonDecode(utf8.decode(response.bodyBytes));
         throw Exception(errorData['message'] ?? 'Failed submission error code discovered.');
       }
     } catch (error) {

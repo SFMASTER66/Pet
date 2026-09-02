@@ -54,7 +54,7 @@ class _CustomerBookPageState extends State<CustomerBookPage> {
       );
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        final Map<String, dynamic> responseData = jsonDecode(utf8.decode(response.bodyBytes));
         if (responseData['success'] == true && responseData['data'] != null) {
           setState(() {
             liveServiceMatrices = List<Map<String, dynamic>>.from(responseData['data']);
@@ -62,7 +62,7 @@ class _CustomerBookPageState extends State<CustomerBookPage> {
         }
       } else {
         // Fallback context handling for 400 bad requests from backend query blocks
-        final Map<String, dynamic> errorData = jsonDecode(response.body);
+        final Map<String, dynamic> errorData = jsonDecode(utf8.decode(response.bodyBytes));
         final errorMessage = errorData['message'] ?? 'Failed to fetch options matrix.';
         _showSnackBar('❌ $errorMessage');
       }

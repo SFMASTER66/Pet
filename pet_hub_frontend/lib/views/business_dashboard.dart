@@ -128,7 +128,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
       );
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        final Map<String, dynamic> responseData = jsonDecode(utf8.decode(response.bodyBytes));
         if (responseData['success'] == true && responseData['data'] != null) {
           setState(() {
             liveServiceMatrices = List<Map<String, dynamic>>.from(responseData['data']);
@@ -151,7 +151,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
         headers: {'Content-Type': 'application/json'},
       );
       if (response.statusCode == 200) {
-        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        final Map<String, dynamic> responseData = jsonDecode(utf8.decode(response.bodyBytes));
         if (responseData['success'] == true && responseData['data'] != null) {
           setState(() {
             _businessHoursConfig = responseData['data'];
@@ -174,7 +174,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
       );
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        final Map<String, dynamic> responseData = jsonDecode(utf8.decode(response.bodyBytes));
         if (responseData['success'] == true && responseData['data'] != null) {
           final List recentApps = responseData['data']['recentAppointments'] ?? [];
           
@@ -265,7 +265,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
         body: jsonEncode(payload),
       );
 
-      final Map<String, dynamic> responseData = jsonDecode(response.body);
+      final Map<String, dynamic> responseData = jsonDecode(utf8.decode(response.bodyBytes));
 
       if ((response.statusCode == 200 || response.statusCode == 201) && responseData['success'] == true) {
         await _fetchServiceMatrices();
@@ -913,7 +913,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                                     body: jsonEncode(payload),
                                   );
 
-                                  final responseData = jsonDecode(response.body);
+                                  final responseData = jsonDecode(utf8.decode(response.bodyBytes));
                                   if (response.statusCode == 200 || response.statusCode == 201) {
                                     Navigator.pop(context);
                                     _showSnackBar('🚀 Administrative appointment successfully recorded.');
@@ -1366,7 +1366,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
       );
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        final Map<String, dynamic> responseData = jsonDecode(utf8.decode(response.bodyBytes));
         if (responseData['success'] == true && responseData['data'] != null) {
           final List<dynamic> rawList = responseData['data'];
           
