@@ -14,14 +14,13 @@ import customerRouter from './routes/customer.routes';
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
-// Allowed Origins List
 const allowedOrigins = [
   'http://localhost:3000',
   'https://pet-frontend-jfp4.onrender.com',
   ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',').map((url) => url.trim()) : [])
 ];
 
-// 1. CORS Middleware (Handles preflight automatically without using '*')
+// CORS Middleware with Custom Header Support
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -33,11 +32,19 @@ app.use(
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Requested-With',
+      'Accept',
+      'merchantid',
+      'merchantId',
+      'x-merchant-id'
+    ],
   })
 );
 
-// 2. Body Parser Middleware
+// Body Parser Middleware
 app.use((req: Request, res: Response, next: NextFunction) => {
   if (req.originalUrl === '/api/v1/stripe/webhook') {
     next();
@@ -46,24 +53,24 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   }
 });
 
-// 3. Application Routes
+// Routes
 app.use('/api/v1', bookingRoutes);
 app.use('/api/v1', merchantRoutes);
 app.use('/api/v1', stripeRoutes);
 app.use('/api/v1', serviceRouter);
 app.use('/api/v1', customerRouter);
 
-// 4. Health Check Endpoint
+// Health Check
 app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'UP', message: 'Pet SaaS Backend is running!' });
 });
 
-// 5. 404 Catch-all Handler (Using Express middleware without wildcard string)
+// 404 Catch-all
 app.use((_req: Request, res: Response) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-// 6. Global Error Handler (Ensures CORS headers are attached on crashes)
+// Global Error Handler
 app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
   console.error('SERVER ERROR:', err);
 
