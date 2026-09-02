@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/merchant_config.dart';
 import 'customer_footer.dart';
+import 'dart:convert';
 
 enum CustomerTab { home, service, policy, book, contact, career, none }
 
@@ -22,6 +23,10 @@ class CustomerLayoutWrapper extends StatelessWidget {
     final cleanPath = logoIcon.trim();
     final lower = cleanPath.toLowerCase();
 
+    if (cleanPath.isEmpty) {
+      return Icon(Icons.pets, size: size, color: config.primaryColor);
+    }
+
     // 1. Handle Network Images
     if (lower.startsWith('http://') || lower.startsWith('https://')) {
       return Image.network(
@@ -36,7 +41,7 @@ class CustomerLayoutWrapper extends StatelessWidget {
       );
     }
 
-    // 2. Handle Local Assets (checks path prefix or image extensions)
+    // 2. Handle Local Assets
     final isImageAsset = lower.startsWith('assets/') ||
         lower.endsWith('.png') ||
         lower.endsWith('.jpg') ||
@@ -45,7 +50,6 @@ class CustomerLayoutWrapper extends StatelessWidget {
         lower.endsWith('.svg');
 
     if (isImageAsset) {
-      // Ensure path starts with 'assets/'
       final assetPath = lower.startsWith('assets/') ? cleanPath : 'assets/$cleanPath';
 
       return Image.asset(
@@ -60,7 +64,29 @@ class CustomerLayoutWrapper extends StatelessWidget {
       );
     }
 
-    // 3. Fallback for Emojis or String Icons
+    // 3. Handle Base64 Image Strings (Prevents text explosion and FormatExceptions)
+    final isBase64 = lower.startsWith('data:image') || cleanPath.contains(',') || cleanPath.length > 50;
+
+    if (isBase64) {
+      try {
+        final base64String = cleanPath.contains(',') ? cleanPath.split(',').last : cleanPath;
+        return Image.memory(
+          base64Decode(base64String),
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) {
+            debugPrint('❌ Base64 image rendering failed: $error');
+            return Icon(Icons.pets, size: size, color: config.primaryColor);
+          },
+        );
+      } catch (e) {
+        debugPrint('❌ Base64 decoding failed: $e');
+        return Icon(Icons.pets, size: size, color: config.primaryColor);
+      }
+    }
+
+    // 4. Fallback for Emojis or Plain Text Icons
     return Text(
       cleanPath,
       style: TextStyle(fontSize: size),
