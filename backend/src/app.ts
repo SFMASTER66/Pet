@@ -7,7 +7,6 @@ import stripeRoutes from './routes/stripe.routes';
 import serviceRouter from './routes/service.routes';
 import customerRouter from './routes/customer.routes';
 
-// Fix BigInt serialization for Prisma
 (BigInt.prototype as any).toJSON = function () {
   return this.toString();
 };
@@ -15,11 +14,11 @@ import customerRouter from './routes/customer.routes';
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
-// CORS Configuration
 const allowedOrigins = process.env.FRONTEND_URL
   ? process.env.FRONTEND_URL.split(',').map((url) => url.trim())
-  : ['http://localhost:3000'];
+  : ['http://localhost:3000', 'https://pet-frontend-jfp4.onrender.com'];
 
+// Apply CORS globally before all other middleware and routes
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -35,10 +34,7 @@ app.use(
   })
 );
 
-// Preflight OPTIONS handler using Regex instead of wildcard '*'
-app.options(/(.*)/, cors());
-
-// Body Parser: Skip JSON parsing on Stripe webhook so raw body remains intact
+// Body Parser
 app.use((req: Request, res: Response, next: NextFunction) => {
   if (req.originalUrl === '/api/v1/stripe/webhook') {
     next();
@@ -59,16 +55,25 @@ app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'UP', message: 'Pet SaaS Backend is running!' });
 });
 
-// 404 Catch-all Handler (using Regex instead of '*')
+// 404 Catch-all Handler
 app.use((_req: Request, res: Response) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-// Global Error Handler
-app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-  console.error('Unhandled Error:', err.message || err);
-  res.status(err.status || 500).json({
-    error: process.env.NODE_ENV === 'production' ? 'Internal Server Error' : err.message,
+// Global Error Handler - Ensures CORS headers are sent on 500 crashes
+app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
+  console.error('SERVER ERROR AT:', req.method, req.originalUrl);
+  console.error('ERROR STACK:', err);
+
+  const origin = req.headers.origin;
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+
+  res.status(500).json({
+    success: false,
+    message: err.message || 'Internal Server Error',
   });
 });
 
