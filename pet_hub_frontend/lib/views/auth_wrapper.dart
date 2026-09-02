@@ -152,7 +152,7 @@ class _MerchantRegisterLoginPageState extends State<MerchantRegisterLoginPage> {
           'adminName': _adminNameController.text.trim(),
           'businessName': _nameController.text.trim(),
           'logoIcon': _selectedLogo,
-          'primaryColor': _selectedColor.toARGB32(),
+          'primaryColor': _selectedColor.toARGB32().toString(),
           'tags': parsedTags.isEmpty ? ['General'] : parsedTags,
         };
         break;

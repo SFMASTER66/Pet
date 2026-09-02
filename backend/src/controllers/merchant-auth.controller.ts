@@ -4,18 +4,21 @@ import { UserRole } from '@prisma/client';
 
 export const registerMerchantWorkspace = async (req: Request, res: Response) => {
   try {
-    const { email, password, businessName, adminName, logoIcon, primaryColor, tags } = req.body;
+    const { email, password, passwordRaw, businessName, adminName, logoIcon, primaryColor, tags } = req.body;
 
-    if (!email || !password || !businessName || !adminName) {
+    // Support both 'password' and 'passwordRaw' from payload
+    const rawPassword = passwordRaw || password;
+
+    if (!email || !rawPassword || !businessName || !adminName) {
       return res.status(400).json({
         success: false,
-        message: 'Missing mandatory fields: email, password, businessName, and adminName are required.'
+        message: 'Missing mandatory fields: email, password (or passwordRaw), businessName, and adminName are required.'
       });
     }
 
     const registrationPayload = await MerchantAuthService.registerMerchant({
       email,
-      passwordRaw: password,
+      passwordRaw: rawPassword,
       businessName,
       adminName,
       logoIcon,
@@ -26,7 +29,12 @@ export const registerMerchantWorkspace = async (req: Request, res: Response) => 
 
     return res.status(201).json(registrationPayload);
   } catch (error: any) {
-    return res.status(400).json({ success: false, message: error.message });
+    console.error('Registration Error Details:', error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Internal Server Error during registration'
+    });
   }
 };
 
