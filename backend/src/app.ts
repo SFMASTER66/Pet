@@ -23,11 +23,9 @@ const allowedOrigins = process.env.FRONTEND_URL
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, Postman) or matching domains
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        // Return false instead of throwing new Error() to prevent a 500 server crash on OPTIONS preflight
         callback(null, false);
       }
     },
@@ -37,8 +35,8 @@ app.use(
   })
 );
 
-// Explicitly handle CORS preflight OPTIONS requests for all routes
-app.options('*', cors());
+// Preflight OPTIONS handler using Regex instead of wildcard '*'
+app.options(/(.*)/, cors());
 
 // Body Parser: Skip JSON parsing on Stripe webhook so raw body remains intact
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -61,7 +59,7 @@ app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'UP', message: 'Pet SaaS Backend is running!' });
 });
 
-// 404 Catch-all Handler
+// 404 Catch-all Handler (using Regex instead of '*')
 app.use((_req: Request, res: Response) => {
   res.status(404).json({ error: 'Route not found' });
 });
