@@ -23,15 +23,22 @@ const allowedOrigins = process.env.FRONTEND_URL
 app.use(
   cors({
     origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, Postman) or matching domains
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        callback(new Error('Not allowed by CORS'));
+        // Return false instead of throwing new Error() to prevent a 500 server crash on OPTIONS preflight
+        callback(null, false);
       }
     },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
+
+// Explicitly handle CORS preflight OPTIONS requests for all routes
+app.options('*', cors());
 
 // Body Parser: Skip JSON parsing on Stripe webhook so raw body remains intact
 app.use((req: Request, res: Response, next: NextFunction) => {
