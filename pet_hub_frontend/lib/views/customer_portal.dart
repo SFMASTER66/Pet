@@ -20,6 +20,40 @@ class CustomerPortalPage extends StatefulWidget {
 }
 
 class _CustomerPortalPageState extends State<CustomerPortalPage> {
+
+
+  Widget _buildLogoWidget(String logoIcon) {
+    // If logoIcon is empty, show default icon
+    if (logoIcon.isEmpty) {
+      return const Icon(Icons.pets, size: 18);
+    }
+
+    // 1. If it's a base64 string (starts with data:image or contains commas/length of base64)
+    if (logoIcon.startsWith('data:') || logoIcon.length > 50) {
+      try {
+        final base64String = logoIcon.contains(',') ? logoIcon.split(',').last : logoIcon;
+        return Image.memory(
+          base64Decode(base64String),
+          width: 24,
+          height: 24,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => const Icon(
+            Icons.broken_image,
+            size: 18,
+          ),
+        );
+      } catch (_) {
+        return const Icon(Icons.broken_image, size: 18);
+      }
+    }
+
+    // 2. Otherwise, treat it as a normal text emoji (e.g. "🐶")
+    return Text(
+      logoIcon,
+      style: const TextStyle(fontSize: 24),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeColor = widget.config.primaryColor;
@@ -41,22 +75,7 @@ class _CustomerPortalPageState extends State<CustomerPortalPage> {
         iconTheme: IconThemeData(color: themeColor),
         title: Row(
           children: [
-            Image.memory(
-                base64Decode(
-                  // Strips out the 'data:application/octet-stream;base64,' prefix if present
-                  widget.config.logoIcon.contains(',')
-                      ? widget.config.logoIcon.split(',').last
-                      : widget.config.logoIcon,
-                ),
-                width: 24,
-                height: 24,
-                fit: BoxFit.cover,
-                // Optional error fallback if the string is invalid
-                errorBuilder: (context, error, stackTrace) => const Icon(
-                  Icons.broken_image,
-                  size: 18,
-                ),
-              ),
+            _buildLogoWidget(widget.config.logoIcon),
             const SizedBox(width: 10),
             Text(
               widget.config.businessName,
@@ -117,21 +136,7 @@ class _CustomerPortalPageState extends State<CustomerPortalPage> {
                               TextSpan(text: 'Welcome to ${widget.config.businessName} '),
                               WidgetSpan(
                                 alignment: PlaceholderAlignment.middle, // Aligns image vertically with text center
-                                child: Image.memory(
-                                  base64Decode(
-                                    widget.config.logoIcon.contains(',')
-                                        ? widget.config.logoIcon.split(',').last
-                                        : widget.config.logoIcon,
-                                  ),
-                                  width: 24,
-                                  height: 24,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) => const Icon(
-                                    Icons.broken_image,
-                                    size: 24,
-                                    color: Colors.white,
-                                  ),
-                                ),
+                                child: _buildLogoWidget(widget.config.logoIcon),
                               ),
                             ],
                           ),

@@ -976,6 +976,38 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     }
   }
 
+  Widget _buildLogoWidget(String logoIcon) {
+    // If logoIcon is empty, show default icon
+    if (logoIcon.isEmpty) {
+      return const Icon(Icons.pets, size: 18);
+    }
+
+    // 1. If it's a base64 string (starts with data:image or contains commas/length of base64)
+    if (logoIcon.startsWith('data:') || logoIcon.length > 50) {
+      try {
+        final base64String = logoIcon.contains(',') ? logoIcon.split(',').last : logoIcon;
+        return Image.memory(
+          base64Decode(base64String),
+          width: 18,
+          height: 18,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => const Icon(
+            Icons.broken_image,
+            size: 18,
+          ),
+        );
+      } catch (_) {
+        return const Icon(Icons.broken_image, size: 18);
+      }
+    }
+
+    // 2. Otherwise, treat it as a normal text emoji (e.g. "🐶")
+    return Text(
+      logoIcon,
+      style: const TextStyle(fontSize: 18),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeColor = widget.config.primaryColor;
@@ -1000,22 +1032,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                 borderRadius: BorderRadius.circular(8),
               ),
               // FIX: Decode the Base64 string and display it as an Image
-              child: Image.memory(
-                base64Decode(
-                  // Strips out the 'data:application/octet-stream;base64,' prefix if present
-                  widget.config.logoIcon.contains(',')
-                      ? widget.config.logoIcon.split(',').last
-                      : widget.config.logoIcon,
-                ),
-                width: 18,
-                height: 18,
-                fit: BoxFit.cover,
-                // Optional error fallback if the string is invalid
-                errorBuilder: (context, error, stackTrace) => const Icon(
-                  Icons.broken_image,
-                  size: 18,
-                ),
-              ),
+              child: _buildLogoWidget(widget.config.logoIcon),
             ),
             const SizedBox(width: 8),
             Flexible(

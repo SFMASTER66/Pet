@@ -131,24 +131,40 @@ class _ManageBrandingPanelState extends State<ManageBrandingPanel> {
                     children: [
                       if (_selectedFileBytes != null)
                         Image.memory(
-                          _selectedFileBytes!, 
-                          height: 90, 
-                          fit: BoxFit.contain,
-                        )
-                      else
-                        Image.memory(
-                          base64Decode(
-                            widget.config.logoIcon.contains(',')
-                                ? widget.config.logoIcon.split(',').last
-                                : widget.config.logoIcon,
-                          ),
+                          _selectedFileBytes!,
                           height: 90,
                           fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) => const Icon(
-                            Icons.broken_image,
-                            size: 48,
-                            color: Colors.grey,
-                          ),
+                        )
+                      else if (widget.config.logoIcon.contains(',') || widget.config.logoIcon.length > 50)
+                        Builder(
+                          builder: (context) {
+                            try {
+                              final base64String = widget.config.logoIcon.contains(',')
+                                  ? widget.config.logoIcon.split(',').last
+                                  : widget.config.logoIcon;
+                              return Image.memory(
+                                base64Decode(base64String),
+                                height: 90,
+                                fit: BoxFit.contain,
+                                errorBuilder: (context, error, stackTrace) => const Icon(
+                                  Icons.broken_image,
+                                  size: 48,
+                                  color: Colors.grey,
+                                ),
+                              );
+                            } catch (_) {
+                              return const Icon(
+                                Icons.broken_image,
+                                size: 48,
+                                color: Colors.grey,
+                              );
+                            }
+                          },
+                        )
+                      else
+                        Text(
+                          widget.config.logoIcon.isNotEmpty ? widget.config.logoIcon : '🐶',
+                          style: const TextStyle(fontSize: 48),
                         ),
                       const SizedBox(height: 8),
                       Text(
