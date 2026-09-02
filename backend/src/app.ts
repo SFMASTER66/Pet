@@ -14,25 +14,43 @@ import customerRouter from './routes/customer.routes';
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
-const allowedOrigins = process.env.FRONTEND_URL
-  ? process.env.FRONTEND_URL.split(',').map((url) => url.trim())
-  : ['http://localhost:3000', 'https://pet-frontend-jfp4.onrender.com'];
+// Explicitly define origin list including exact render frontend URL
+const allowedOrigins = [
+  'http://localhost:3000',
+  'https://pet-frontend-jfp4.onrender.com',
+  ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',').map((url) => url.trim()) : [])
+];
 
-// Apply CORS globally before all other middleware and routes
+// Robust CORS Middleware
 app.use(
   cors({
     origin: (origin, callback) => {
+      // Allow non-browser requests (Postman, mobile) OR matching origins
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
+        console.warn(`CORS blocked for origin: ${origin}`);
         callback(null, false);
       }
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+    optionsSuccessStatus: 200 // Legacy browser support for 204/200 preflight responses
   })
 );
+
+// Explicit Preflight Handler (Fixes Chrome Preflight CORS block)
+app.options('*', (req: Request, res: Response) => {
+  const origin = req.headers.origin;
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+  }
+  res.sendStatus(200);
+});
 
 // Body Parser
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -60,10 +78,9 @@ app.use((_req: Request, res: Response) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-// Global Error Handler - Ensures CORS headers are sent on 500 crashes
+// Global Error Handler - Ensures CORS headers are preserved during server crashes
 app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
-  console.error('SERVER ERROR AT:', req.method, req.originalUrl);
-  console.error('ERROR STACK:', err);
+  console.error('SERVER ERROR:', err);
 
   const origin = req.headers.origin;
   if (origin && allowedOrigins.includes(origin)) {
