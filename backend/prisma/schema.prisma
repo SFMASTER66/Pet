@@ -42,7 +42,7 @@ model Pet {
 model Appointment {
   id                     String               @id @default(uuid())
   petId                  String
-  groomerId               String?
+  groomerId              String?
   merchantId             String
   startTime              DateTime
   endTime                DateTime
@@ -71,7 +71,7 @@ model Appointment {
 }
 
 model ServicePricingMatrix {
-  id              Int          @id @default(autoincrement())
+  id              Int           @id @default(autoincrement())
   merchantId      String
   speciesId       Int?
   weightTier      WeightTier?
@@ -79,29 +79,28 @@ model ServicePricingMatrix {
   durationMinutes Int
   priceCentsAud   Int
   name            String
-  isActive        Boolean      @default(true)
-  depositCentsAud Int          @default(3000)
+  isActive        Boolean       @default(true)
+  depositCentsAud Int           @default(3000)
   description     String?
   appointments    Appointment[]
-  merchant        Merchant     @relation(fields: [merchantId], references: [id])
-  species         Species?     @relation(fields: [speciesId], references: [id])
+  merchant        Merchant      @relation(fields: [merchantId], references: [id])
+  species         Species?      @relation(fields: [speciesId], references: [id])
 
   @@unique([merchantId, name, speciesId, weightTier, coatType])
   @@index([name, speciesId])
 }
 
 model AddOn {
-  id              String           @id @default(uuid())
+  id              String             @id @default(uuid())
   merchantId      String
-  name            String           // e.g., "Teeth brush", "De-shedding"
+  name            String
   description     String?
-  priceCentsAud   Int              // Flat cents or price per unit (e.g. 150 = $1.50)
-  pricingType     AddOnPricingType @default(FIXED)
-  durationMinutes Int?             @default(0)
-  isActive        Boolean          @default(true)
-  createdAt       DateTime         @default(now())
-
-  merchant        Merchant         @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  priceCentsAud   Int
+  pricingType     AddOnPricingType   @default(FIXED)
+  durationMinutes Int?               @default(0)
+  isActive        Boolean            @default(true)
+  createdAt       DateTime           @default(now())
+  merchant        Merchant           @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   appointments    AppointmentAddOn[]
 
   @@index([merchantId, isActive])
@@ -111,12 +110,11 @@ model AppointmentAddOn {
   id              String      @id @default(uuid())
   appointmentId   String
   addOnId         String
-  quantity        Int         @default(1) // Number of units or minutes selected
-  unitPriceCents  Int         // Snapshot unit price
-  totalPriceCents Int         // Snapshot calculated total price
-
-  appointment     Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  quantity        Int         @default(1)
+  unitPriceCents  Int
+  totalPriceCents Int
   addOn           AddOn       @relation(fields: [addOnId], references: [id])
+  appointment     Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
 
   @@unique([appointmentId, addOnId])
 }
@@ -158,13 +156,13 @@ model Merchant {
   businessTags     Json?
   uiDictionary     Json?
   activityLogs     ActivityLog[]
+  addOns           AddOn[]
   appointments     Appointment[]
   businessHours    BusinessHours[]
   employees        Employee[]
   pets             Pet[]
   rosterExceptions RosterException[]
   pricingMatrices  ServicePricingMatrix[]
-  addOns           AddOn[]
   shifts           Shift[]
   users            User[]
   waiverSignatures WaiverSignature[]
@@ -301,10 +299,10 @@ enum WeightTier {
 }
 
 enum CoatType {
-  SHORT
-  LONG_CURLY
-  DOUBLE_A
-  DOUBLE_B
+  Short_Hair_Dog        @map("Short Hair Dog")
+  Long_Curly_Hair_Dog   @map("Long/Curly Hair Dog")
+  Double_Coated_Group_A @map("Double-Coated Group A")
+  Double_Coated_Group_B @map("Double-Coated Group B")
   NONE
 }
 
