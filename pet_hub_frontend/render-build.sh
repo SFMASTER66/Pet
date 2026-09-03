@@ -18,4 +18,5 @@ flutter pub get
 # 4. Build Flutter Web release with Environment Variables
 flutter build web --release \
   --dart-define=API_URL=$API_URL \
-  --dart-define=STRIPE_PUBLISHABLE_KEY=$STRIPE_PUBLISHABLE_KEY
+  --dart-define=STRIPE_PUBLISHABLE_KEY=$STRIPE_PUBLISHABLE_KEY \
+  --dart-define=MERCHANT_ID=$MERCHANT_ID
