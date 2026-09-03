@@ -106,14 +106,14 @@ class _CustomerServicesPageState extends State<CustomerServicesPage> {
                   _buildSubTabBar(widget.config.primaryColor),
                   const SizedBox(height: 32),
 
-                  // Section 1: Dog Coat Condition
+                  // Section 1: Dog Grooming Prices
                   Container(key: _sectionKeys[0]),
-                  _buildCoatConditionSection(isDesktop, isTablet),
+                  _buildPricingSection(isDesktop, isTablet),
                   const SizedBox(height: 48),
 
-                  // Section 2: Pricing
+                  // Section 2: Dog Coat Condition
                   Container(key: _sectionKeys[1]),
-                  _buildPricingSection(isDesktop),
+                  _buildCoatConditionSection(isDesktop, isTablet),
                   const SizedBox(height: 48),
 
                   // Section 3: Dog Grooming FAQ
@@ -140,8 +140,8 @@ class _CustomerServicesPageState extends State<CustomerServicesPage> {
         spacing: 8,
         runSpacing: 8,
         children: [
-          _buildSubTabButton(0, "Dog Coat Condition", primaryColor),
-          _buildSubTabButton(1, "Pricing", primaryColor),
+          _buildSubTabButton(0, "Dog Grooming Prices", primaryColor),
+          _buildSubTabButton(1, "Dog Coat Condition", primaryColor),
           _buildSubTabButton(2, "Dog Grooming FAQ", primaryColor),
         ],
       ),
@@ -171,12 +171,360 @@ class _CustomerServicesPageState extends State<CustomerServicesPage> {
     );
   }
 
-  // --- 1. COAT CONDITION SECTION ---
+  // --- 1. NEW PRICING SECTION ---
+  Widget _buildPricingSection(bool isDesktop, bool isTablet) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Center(
+          child: Text(
+            "Dog Grooming Prices",
+            style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF2D3748)),
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // Size Guide & Warning Header
+        if (isDesktop)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              SizedBox(width: 320, child: _buildDogSizeCard()),
+              const SizedBox(width: 24),
+              Expanded(child: _buildYellowPricingNote()),
+            ],
+          )
+        else
+          Column(
+            children: [
+              _buildDogSizeCard(),
+              const SizedBox(height: 16),
+              _buildYellowPricingNote(),
+            ],
+          ),
+        const SizedBox(height: 32),
+
+        // Service 1: Wash and Dry
+        _buildServiceCard(
+          isDesktop: isDesktop,
+          title: "Wash and Dry",
+          description: "A basic wash service with shampoo and conditioner, including blow dry, brush, and dog cologne.",
+          prices: const [
+            _CoatPriceGroup(
+              tag: "Short Hair",
+              pricesText: "XS \$50, S \$55, M \$70\nL \$85, XL \$110, XXL \$135",
+            ),
+            _CoatPriceGroup(
+              tag: "Long / Curly Hair",
+              pricesText: "XS \$70, S \$75, M \$90\nL \$105, XL \$135, XXL \$165",
+            ),
+            _CoatPriceGroup(
+              tag: "Double Coat Group A",
+              pricesText: "XS \$80, S \$85, M \$95\nL \$115, XL \$150, XXL \$185",
+            ),
+            _CoatPriceGroup(
+              tag: "Double Coat Group B",
+              pricesText: "XS \$85, S \$90, M \$100\nL \$125, XL \$165, XXL \$200",
+            ),
+          ],
+          imagePlaceholderIcon: Icons.bathtub,
+        ),
+        const SizedBox(height: 24),
+
+        // Service 2: Wash and Tidy up
+        _buildServiceCard(
+          isDesktop: isDesktop,
+          title: "Wash and Tidy up",
+          description: "includes wash&dry, nail clip, eyes/ paw trim, tidy up head and tail, hygiene clip, ear clean and cologne",
+          prices: const [
+            _CoatPriceGroup(
+              tag: "Short Hair",
+              pricesText: "XS \$70, S \$75, M \$85\nL \$100, XL \$125, XXL \$150",
+            ),
+            _CoatPriceGroup(
+              tag: "Long / Curly Hair",
+              pricesText: "XS \$85, S \$95, M \$115\nL \$135, XL \$170, XXL \$200",
+            ),
+            _CoatPriceGroup(
+              tag: "Double Coat Group A",
+              pricesText: "XS \$90, S \$100, M \$125\nL \$150, XL \$195, XXL \$235",
+            ),
+            _CoatPriceGroup(
+              tag: "Double Coat Group B",
+              pricesText: "XS \$100, S \$110, M \$135\nL \$165, XL \$215, XXL \$255",
+            ),
+          ],
+          imagePlaceholderIcon: Icons.content_cut,
+        ),
+        const SizedBox(height: 24),
+
+        // Service 3: Wash Tidy & Pro-Deshedding
+        _buildServiceCard(
+          isDesktop: isDesktop,
+          title: "Wash Tidy & Pro-Deshedding",
+          description: "includes wash&dry, nail clip, eyes/ paw trim, hygiene clip, ear clean, full brush, removal of dead coat and cologne",
+          prices: const [
+            _CoatPriceGroup(
+              tag: "Short Hair",
+              pricesText: "XS \$105, S \$110, M \$120\nL \$135, XL \$160, XXL \$185",
+            ),
+            _CoatPriceGroup(
+              tag: "Double Coat Group A",
+              pricesText: "XS \$120, S \$130, M \$155\nL \$180, XL \$225, XXL \$265",
+            ),
+            _CoatPriceGroup(
+              tag: "Double Coat Group B",
+              pricesText: "XS \$130, S \$140, M \$165\nL \$200, XL \$245, XXL \$285",
+            ),
+          ],
+          extraNote: "For double-coated dogs, this service is essential—not optional. Their dense undercoat traps dead hair and dander, leading to matting, skin irritation, and overheating if neglected. Regular sessions reduce shedding by up to 90% and protect your dog's natural insulation—cool in summer, warm in winter.",
+          imagePlaceholderIcon: Icons.pets,
+        ),
+        const SizedBox(height: 24),
+
+        // Service 4: Full Groom
+        _buildServiceCard(
+          isDesktop: isDesktop,
+          title: "Full Groom",
+          description: "A popular service includes wash & tidy up, hand scissoring for head, paw and tail, clipper cut the whole body, hair length < 1.3cm, provides a minimal style for your dog",
+          prices: const [
+            _CoatPriceGroup(
+              tag: "Long / Curly Hair",
+              pricesText: "XS \$115, S \$125, M \$150\nL \$180, XL \$215, XXL \$255",
+            ),
+            _CoatPriceGroup(
+              tag: "Double Coat Group A",
+              pricesText: "XS \$115, S \$125, M \$155\nL \$190, XL \$230, XXL \$280",
+            ),
+            _CoatPriceGroup(
+              tag: "Double Coat Group B",
+              pricesText: "XS \$125, S \$135, M \$170\nL \$210, XL \$245, XXL \$300",
+            ),
+          ],
+          imagePlaceholderIcon: Icons.content_cut_outlined,
+        ),
+        const SizedBox(height: 24),
+
+        // Service 5: Premium Style Groom
+        _buildServiceCard(
+          isDesktop: isDesktop,
+          title: "Premium Style Groom",
+          description: "Includes everything in our Wash & Tidy service. This groom is designed for dogs with a coat length of 1.5 cm or longer (additional charges may apply for de-matting). Rather than simply clipping the coat short all over, our groomers carefully style each dog to suit their unique features, aiming for a soft, fluffy, rounded \"teddy bear\" finish wherever the coat type allows.",
+          prices: const [
+            _CoatPriceGroup(
+              tag: "Long / Curly Hair",
+              pricesText: "XS from \$155, S from \$165, M from \$185\nL from \$235, XL from \$255, XXL ASQ",
+            ),
+            _CoatPriceGroup(
+              tag: "Double Coat Group A",
+              pricesText: "XS from \$125, S from \$140, M from \$165\nL from \$200, XL from \$245, XXL ASQ",
+            ),
+            _CoatPriceGroup(
+              tag: "Double Coat Group B",
+              pricesText: "XS from \$165, S from \$175, M from \$195\nL from \$245, XL from \$300, XXL ASQ",
+            ),
+          ],
+          imagePlaceholderIcon: Icons.style,
+        ),
+        const SizedBox(height: 36),
+
+        // Full Price Table Image placed at the end of the pricing section
+        const Text(
+          "Complete Pricing Guide",
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF2D3748)),
+        ),
+        const SizedBox(height: 12),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            color: Colors.white,
+            padding: const EdgeInsets.all(8.0),
+            child: InteractiveViewer(
+              panEnabled: true,
+              minScale: 0.8,
+              maxScale: 3.5,
+              child: Image.asset(
+                'assets/images/dog_grooming_price_table.png',
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  padding: const EdgeInsets.all(40),
+                  color: const Color(0xFFF1F5F9),
+                  child: Column(
+                    children: const [
+                      Icon(Icons.table_chart_outlined, size: 48, color: Colors.grey),
+                      SizedBox(height: 12),
+                      Text("Price Chart Image ('dog_grooming_price_table.png')", style: TextStyle(fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDogSizeCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF9EBA97),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          Text(
+            "Dog Size:",
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+          ),
+          SizedBox(height: 12),
+          Text("Extra Small Dog (under 3.5kg)", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF2D3748))),
+          Text("Small Dog (3.6kg to 7kg)", style: TextStyle(fontSize: 13, color: Color(0xFF2D3748))),
+          Text("Medium Dog (7.1kg to 15kg)", style: TextStyle(fontSize: 13, color: Color(0xFF2D3748))),
+          Text("Large Dog (15.1kg -23kg)", style: TextStyle(fontSize: 13, color: Color(0xFF2D3748))),
+          Text("Extra Large Dog (23.1kg to 30kg)", style: TextStyle(fontSize: 13, color: Color(0xFF2D3748))),
+          Text("XXL Dog (30kg to 40kg)", style: TextStyle(fontSize: 13, color: Color(0xFF2D3748))),
+          SizedBox(height: 16),
+          Text("All 40kg dog is over XXL size", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildYellowPricingNote() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF3C7),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFFDE68A)),
+      ),
+      child: const Text(
+        "We kindly recommend that you review our service details and confirm your dog's coat condition before making a booking. Please note that if an incorrect size or coat condition is selected at the time of booking due to your dog's weight or coat condition, we will proceed with the billing based on the actual size and coat condition of your pet.",
+        style: TextStyle(fontSize: 14, height: 1.5, color: Color(0xFF78350F), fontWeight: FontWeight.w500),
+      ),
+    );
+  }
+
+  Widget _buildServiceCard({
+    required bool isDesktop,
+    required String title,
+    required String description,
+    required List<_CoatPriceGroup> prices,
+    String? extraNote,
+    required IconData imagePlaceholderIcon,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFBF8F3),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF2D3748))),
+          const SizedBox(height: 8),
+          Text(description, style: const TextStyle(fontSize: 14, color: Color(0xFF4A5568), height: 1.4)),
+          const SizedBox(height: 20),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final content = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 20,
+                    runSpacing: 16,
+                    children: prices.map((p) => _buildCoatPriceItem(p)).toList(),
+                  ),
+                  if (extraNote != null) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF3C7),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        extraNote,
+                        style: const TextStyle(fontSize: 13, color: Color(0xFF78350F), height: 1.4),
+                      ),
+                    ),
+                  ],
+                ],
+              );
+
+              final imageBox = Container(
+                width: isDesktop ? 280 : double.infinity,
+                height: 180,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE2E8F0),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Center(
+                  child: Icon(imagePlaceholderIcon, size: 48, color: const Color(0xFF94A3B8)),
+                ),
+              );
+
+              if (isDesktop) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: content),
+                    const SizedBox(width: 24),
+                    imageBox,
+                  ],
+                );
+              } else {
+                return Column(
+                  children: [
+                    imageBox,
+                    const SizedBox(height: 16),
+                    content,
+                  ],
+                );
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCoatPriceItem(_CoatPriceGroup group) {
+    return SizedBox(
+      width: 220,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFF2F6343),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              group.tag,
+              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            group.pricesText,
+            style: const TextStyle(fontSize: 13, color: Color(0xFF334155), height: 1.5, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- 2. COAT CONDITION SECTION ---
   Widget _buildCoatConditionSection(bool isDesktop, bool isTablet) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Intro Banner
         if (isDesktop)
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -195,8 +543,6 @@ class _CustomerServicesPageState extends State<CustomerServicesPage> {
             ],
           ),
         const SizedBox(height: 40),
-
-        // Coat Condition Header
         const Center(
           child: Text(
             "Dog Coat Condition",
@@ -204,8 +550,6 @@ class _CustomerServicesPageState extends State<CustomerServicesPage> {
           ),
         ),
         const SizedBox(height: 24),
-
-        // 3 Coat Types Grid
         LayoutBuilder(
           builder: (context, constraints) {
             int crossAxisCount = isDesktop ? 3 : (isTablet ? 2 : 1);
@@ -286,67 +630,6 @@ class _CustomerServicesPageState extends State<CustomerServicesPage> {
     );
   }
 
-  // --- 2. PRICING SECTION ---
-  Widget _buildPricingSection(bool isDesktop) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: const Color(0xFFC2D3BD).withOpacity(0.5),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            children: const [
-              Text(
-                "Grooming Service Price",
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF2D3748)),
-                textAlign: TextAlign.center,
-              ),
-              SizedBox(height: 12),
-              Text(
-                "We kindly recommend that you review our service details and confirm your dog's coat condition before making a booking. Please note that if an incorrect size or coat condition is selected at the time of booking due to your dog's weight or coat condition, we will proceed with the billing based on the actual size and coat condition of your pet.",
-                style: TextStyle(fontSize: 15, height: 1.5, color: Color(0xFF4A5568)),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
-
-        // Price Chart Image Container with Zoom capability
-        ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            color: Colors.white,
-            padding: const EdgeInsets.all(8.0),
-            child: InteractiveViewer(
-              panEnabled: true,
-              minScale: 0.8,
-              maxScale: 3.5,
-              child: Image.asset(
-                'assets/images/dog_grooming_price_table.png', // Replace with your actual asset path
-                fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) => Container(
-                  padding: const EdgeInsets.all(40),
-                  color: const Color(0xFFF1F5F9),
-                  child: Column(
-                    children: const [
-                      Icon(Icons.table_chart_outlined, size: 48, color: Colors.grey),
-                      SizedBox(height: 12),
-                      Text("Price Chart Image ('dog_grooming_price_table.jpg')", style: TextStyle(fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   // --- 3. FAQ SECTION ---
   Widget _buildFaqSection(bool isDesktop, bool isTablet) {
     return Column(
@@ -403,6 +686,13 @@ class _CustomerServicesPageState extends State<CustomerServicesPage> {
       ],
     );
   }
+}
+
+class _CoatPriceGroup {
+  final String tag;
+  final String pricesText;
+
+  const _CoatPriceGroup({required this.tag, required this.pricesText});
 }
 
 class _CoatTypeCard extends StatelessWidget {
