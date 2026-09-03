@@ -29,10 +29,10 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
 });
 
-router.post('/register', registerMerchantWorkspace);
-router.post('/login', loginMerchantWorkspace);
-router.post('/forgot-password', forgotPassword);
-router.post('/reset-password', resetPassword);
+router.post('/register', requestLogger as any,registerMerchantWorkspace);
+router.post('/login', requestLogger as any, loginMerchantWorkspace);
+router.post('/forgot-password', requestLogger as any, forgotPassword);
+router.post('/reset-password', requestLogger as any, resetPassword);
 
 router.get('/:merchantId/dashboard', getMerchantDashboard);
 
@@ -56,16 +56,16 @@ router.post(
   requestLogger as any, // Cast to any to cleanly bypass the Express route-handler chain checks
   createStaffProfile as any
 );
-router.delete('/merchant/staff/:staffId', requireAdmin as any, deleteStaffProfile);
+router.delete('/merchant/staff/:staffId', requireAdmin as any, requestLogger as any, deleteStaffProfile);
 
 router.get('/merchant/:merchantId/hours', fetchMerchantHours as any);
-router.put('/merchant/:merchantId/hours', requireAdmin as any, updateMerchantHoursDay as any);
+router.put('/merchant/:merchantId/hours', requireAdmin as any, requestLogger as any, updateMerchantHoursDay as any);
 
 // =========================================================================
 // 🔥 ROSTER SCHEDULING MANAGEMENT ENDPOINTS
 // =========================================================================
 // router.get('/merchant/:merchantId/active-staff', requireAdmin as any, getActiveStaffDirectory as any);
-router.post('/merchant/:merchantId/shifts/batch', requireAdmin as any, batchSyncShifts as any);
+router.post('/merchant/:merchantId/shifts/batch', requireAdmin as any, requestLogger as any, batchSyncShifts as any);
 // router.post('/merchant/:merchantId/shifts/initialize', requireAdmin as any, initializeDefaultShifts as any);
 // 🟢 NEW: Route to retrieve existing schedule assignments
 router.get('/merchant/:merchantId/shifts', requireAdmin as any, getScheduledShifts as any);
@@ -73,6 +73,7 @@ router.get('/merchant/:merchantId/shifts', requireAdmin as any, getScheduledShif
 router.post(
   '/merchant/:merchantId/logo',
   requireAdmin as any,
+  requestLogger as any,
   upload.single('logo'),
   uploadMerchantLogo
 );

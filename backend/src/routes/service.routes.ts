@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { ServiceController } from '../controllers/service.controller';
 import { MerchantService } from '../services/merchant.service';
+import { requestLogger } from '../middlewares/activity-log.middleware';
 
 const router = Router();
 const controller = new ServiceController();
@@ -10,14 +11,14 @@ const merchantService = new MerchantService();
 router.get('/merchant/:merchantId', controller.getMerchantServices);
 
 // Orchestration / Provisioning Write Blocks
-router.post('/matrix', controller.createPricingMatrix);
-router.put('/matrix/:id', controller.updatePricingMatrix);
-router.delete('/matrix/:id', controller.deletePricingMatrix);
+router.post('/matrix', requestLogger as any, controller.createPricingMatrix);
+router.put('/matrix/:id', requestLogger as any, controller.updatePricingMatrix);
+router.delete('/matrix/:id', requestLogger as any, controller.deletePricingMatrix);
 
 // Add-On Service Endpoints
 router.get('/services/addons/:merchantId', controller.getMerchantAddOns);
 router.get('/addons', controller.getMerchantAddOns);
-router.post('/addons', controller.createAddOn);
+router.post('/addons', requestLogger as any, controller.createAddOn);
 
 // GET /api/v1/matrix?merchantId=XYZ
 router.get('/matrix', async (req: Request, res: Response) => {

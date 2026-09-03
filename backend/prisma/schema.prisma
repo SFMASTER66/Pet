@@ -58,8 +58,8 @@ model Appointment {
   notes                  String?
   servicePricingMatrixId Int
   paymentIntentId        String?
-  createdAt              DateTime             @default(now())
   updatedAt              DateTime             @updatedAt
+  createdAt              DateTime             @default(now())
   bookedBy               User                 @relation("CreatedAppointments", fields: [bookedById], references: [id])
   groomer                Employee?            @relation(fields: [groomerId], references: [id])
   merchant               Merchant             @relation(fields: [merchantId], references: [id])
@@ -107,12 +107,12 @@ model AddOn {
 }
 
 model AppointmentAddOn {
-  id              String      @id @default(uuid())
   appointmentId   String
   addOnId         String
+  id              String      @id @default(uuid())
   quantity        Int         @default(1)
-  unitPriceCents  Int
   totalPriceCents Int
+  unitPriceCents  Int
   addOn           AddOn       @relation(fields: [addOnId], references: [id])
   appointment     Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
 
