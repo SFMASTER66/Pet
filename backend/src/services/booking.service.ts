@@ -328,7 +328,8 @@ export const BookingService = {
         groomerId: true,
         status: true,
         createdAt: true,
-        bookedById: true
+        bookedById: true,
+        depositPaid: true
       }
     });
 
@@ -370,26 +371,29 @@ export const BookingService = {
     let assignedGroomerId = input.groomerId || undefined;
 
     if (!assignedGroomerId) {
-      // 1. Gather ALL staff members who currently have ANY valid overlapping booking
-      // (regardless of how many bookings they have)
+      // 1. Gather ALL staff members who currently have an active overlapping booking
       const occupiedGroomerIds = new Set(
         overlappingBookings
           .filter((b) => {
-            // Ignore expired unpaid bookings (>30 mins)
-            if (
-              isUnpaidStatus(b.status) &&
-              b.createdAt &&
-              new Date(b.createdAt).getTime() < thirtyMinutesAgo.getTime()
-            ) {
-              return true;
+            // If deposit is NOT paid, check if the booking has expired (>30 mins old)
+            if (!b.depositPaid) {
+              const isExpired =
+                b.createdAt &&
+                new Date(b.createdAt).getTime() < thirtyMinutesAgo.getTime();
+                
+              // Keep active temporary locks (created within last 30 mins)
+              // Ignore expired locks (older than 30 mins)
+              return !isExpired;
             }
-            return false;
+
+            // Deposit is paid: treat groomer as definitely occupied
+            return true;
           })
           .map((b) => b.groomerId)
           .filter((id): id is string => Boolean(id))
       );
 
-      // 2. Find a staff member from eligibleStaffIds who has ZERO bookings in this slot
+      // 2. Find a staff member from eligibleStaffIds who has ZERO active bookings in this slot
       const strictlyAvailableStaffId = eligibleStaffIds.find(
         (staffId) => !occupiedGroomerIds.has(staffId)
       );
