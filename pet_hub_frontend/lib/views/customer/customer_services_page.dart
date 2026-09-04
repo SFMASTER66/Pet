@@ -72,6 +72,12 @@ class _CustomerServicesPageState extends State<CustomerServicesPage> {
     },
   ];
 
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   void _scrollToSection(int index) {
     setState(() => _selectedSubTabIndex = index);
     final context = _sectionKeys[index].currentContext;
@@ -171,7 +177,7 @@ class _CustomerServicesPageState extends State<CustomerServicesPage> {
     );
   }
 
-  // --- 1. NEW PRICING SECTION ---
+  // --- 1. PRICING SECTION ---
   Widget _buildPricingSection(bool isDesktop, bool isTablet) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -227,7 +233,7 @@ class _CustomerServicesPageState extends State<CustomerServicesPage> {
               pricesText: "XS \$85, S \$90, M \$100\nL \$125, XL \$165, XXL \$200",
             ),
           ],
-          imagePlaceholderIcon: Icons.bathtub,
+          assetPath: 'assets/images/folder/35.png',
         ),
         const SizedBox(height: 24),
 
@@ -254,7 +260,7 @@ class _CustomerServicesPageState extends State<CustomerServicesPage> {
               pricesText: "XS \$100, S \$110, M \$135\nL \$165, XL \$215, XXL \$255",
             ),
           ],
-          imagePlaceholderIcon: Icons.content_cut,
+          assetPath: 'assets/images/folder/36.png',
         ),
         const SizedBox(height: 24),
 
@@ -278,7 +284,7 @@ class _CustomerServicesPageState extends State<CustomerServicesPage> {
             ),
           ],
           extraNote: "For double-coated dogs, this service is essential—not optional. Their dense undercoat traps dead hair and dander, leading to matting, skin irritation, and overheating if neglected. Regular sessions reduce shedding by up to 90% and protect your dog's natural insulation—cool in summer, warm in winter.",
-          imagePlaceholderIcon: Icons.pets,
+          assetPath: 'assets/images/folder/37.png',
         ),
         const SizedBox(height: 24),
 
@@ -301,7 +307,7 @@ class _CustomerServicesPageState extends State<CustomerServicesPage> {
               pricesText: "XS \$125, S \$135, M \$170\nL \$210, XL \$245, XXL \$300",
             ),
           ],
-          imagePlaceholderIcon: Icons.content_cut_outlined,
+          assetPath: 'assets/images/folder/38.png',
         ),
         const SizedBox(height: 24),
 
@@ -324,7 +330,7 @@ class _CustomerServicesPageState extends State<CustomerServicesPage> {
               pricesText: "XS from \$165, S from \$175, M from \$195\nL from \$245, XL from \$300, XXL ASQ",
             ),
           ],
-          imagePlaceholderIcon: Icons.style,
+          assetPath: 'assets/images/folder/15.png',
         ),
         const SizedBox(height: 36),
 
@@ -349,8 +355,8 @@ class _CustomerServicesPageState extends State<CustomerServicesPage> {
                 errorBuilder: (context, error, stackTrace) => Container(
                   padding: const EdgeInsets.all(40),
                   color: const Color(0xFFF1F5F9),
-                  child: Column(
-                    children: const [
+                  child: const Column(
+                    children: [
                       Icon(Icons.table_chart_outlined, size: 48, color: Colors.grey),
                       SizedBox(height: 12),
                       Text("Price Chart Image ('dog_grooming_price_table.png')", style: TextStyle(fontWeight: FontWeight.bold)),
@@ -372,9 +378,9 @@ class _CustomerServicesPageState extends State<CustomerServicesPage> {
         color: const Color(0xFF9EBA97),
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Column(
+      child: const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: const [
+        children: [
           Text(
             "Dog Size:",
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
@@ -414,7 +420,7 @@ class _CustomerServicesPageState extends State<CustomerServicesPage> {
     required String description,
     required List<_CoatPriceGroup> prices,
     String? extraNote,
-    required IconData imagePlaceholderIcon,
+    required String assetPath,
   }) {
     return Container(
       padding: const EdgeInsets.all(24),
@@ -456,15 +462,32 @@ class _CustomerServicesPageState extends State<CustomerServicesPage> {
                 ],
               );
 
-              final imageBox = Container(
-                width: isDesktop ? 280 : double.infinity,
-                height: 180,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE2E8F0),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Center(
-                  child: Icon(imagePlaceholderIcon, size: 48, color: const Color(0xFF94A3B8)),
+              final imageBox = ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(
+                  width: isDesktop ? 280 : double.infinity,
+                  height: 180,
+                  child: Image.asset(
+                    assetPath,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      color: const Color(0xFFE2E8F0),
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.image_not_supported_outlined, size: 36, color: Color(0xFF94A3B8)),
+                          const SizedBox(height: 8),
+                          Text(
+                            assetPath,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               );
 
@@ -591,9 +614,9 @@ class _CustomerServicesPageState extends State<CustomerServicesPage> {
         color: const Color(0xFFC2D3BD),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Column(
+      child: const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: const [
+        children: [
           Text(
             "Welcome to\nPawparazzi Pet",
             style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF2D3748)),
@@ -668,9 +691,9 @@ class _CustomerServicesPageState extends State<CustomerServicesPage> {
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
-          child: Column(
+          child: const Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
+            children: [
               Text(
                 "Still Have Questions?",
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF2D3748)),
