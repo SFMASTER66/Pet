@@ -21,17 +21,21 @@ interface CareerApplicationInput {
 
 // Reusable transporter generation utility
 const createTransporter = () => {
+  const host = process.env.SMTP_HOST || 'smtp.resend.com';
+  const port = Number(process.env.SMTP_PORT) || 465;
+
   return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: Number(process.env.SMTP_PORT) || 465,
-    secure: Number(process.env.SMTP_PORT) === 465,
+    host: host,
+    port: port,
+    secure: port === 465, // true for port 465, false for 587
     auth: {
-      user: process.env.SMTP_USER || '',
-      pass: process.env.SMTP_PASS || '',
+      user: process.env.SMTP_USER || 'resend', // For Resend, username is literally 'resend'
+      pass: process.env.SMTP_PASS,            // Your API key (re_123456789...)
     },
-    tls: {
-      rejectUnauthorized: false,
-    },
+    // Cloud host timeout safeguards
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
   });
 };
 
