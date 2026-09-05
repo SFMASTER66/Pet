@@ -515,7 +515,12 @@ export const BookingService = {
       // 🔥 CAPACITY GUARD RUNS ONLY ON TIME CHANGE
       // ==========================================
       if (input.startTime) {
-        const parsedStartTime = new Date(input.startTime);
+        const merchantTimezone = 'Australia/Sydney'; // Replace with merchant timezone
+
+        // Converts 2026-09-29T09:00:00.000 (Local) -> UTC Date object
+        const parsedStartTime = typeof input.startTime === 'string' && !input.startTime.endsWith('Z') && !input.startTime.includes('+')
+          ? fromZonedTime(input.startTime, merchantTimezone)
+          : new Date(input.startTime);
         
         // Only run capacity validation if the start time is actually changing
         const isTimeChanging = existingAppointment.startTime.getTime() !== parsedStartTime.getTime();
