@@ -348,18 +348,18 @@ export const BookingService = {
 
     // Check if the exact same user has an active unpaid reservation for this timeframe
     const existingUserPendingBooking = overlappingBookings.find(
-      (b) => b.bookedById === userProfile.id && isUnpaidStatus(b.status)
+      (b) => b.bookedById === userProfile.id && !b.depositPaid
     );
 
     // Filter out active, valid conflicting bookings
     const validConflictingBookings = overlappingBookings.filter((b) => {
       // Ignore the user's own existing draft (we will update it instead)
-      if (b.bookedById === userProfile.id && isUnpaidStatus(b.status)) {
+      if (b.bookedById === userProfile.id && !b.depositPaid) {
         return false;
       }
       // Unpaid bookings older than 30 mins are treated as released
       if (
-        isUnpaidStatus(b.status) &&
+        !b.depositPaid &&
         b.createdAt &&
         new Date(b.createdAt).getTime() < thirtyMinutesAgo.getTime()
       ) {
