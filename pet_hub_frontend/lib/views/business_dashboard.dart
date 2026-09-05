@@ -1623,25 +1623,60 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
   Widget _buildDailyTimelineGrid(Color col) {
     final targetDate = _selectedDay ?? DateTime.now();
 
-    // Safely parse timestamps into local shop time without offset conversion shifts
-    DateTime? parseDateTime(dynamic value) {
+    // Custom parser to prevent DateTime from applying UTC/Local timezone offsets
+    DateTime? parseWallClockTime(dynamic value) {
       if (value == null) return null;
-      if (value is DateTime) {
-        return DateTime(value.year, value.month, value.day, value.hour, value.minute, value.second);
-      }
+
       if (value is String) {
-        final cleanStr = value.replaceAll('Z', '').split('+')[0];
-        return DateTime.tryParse(cleanStr);
+        final clean = value.replaceAll('Z', '').replaceFirst('T', ' ');
+        final parts = clean.split(' ');
+        if (parts.isNotEmpty) {
+          final dateParts = parts[0].split('-');
+          if (dateParts.length == 3) {
+            final year = int.tryParse(dateParts[0]) ?? targetDate.year;
+            final month = int.tryParse(dateParts[1]) ?? targetDate.month;
+            final day = int.tryParse(dateParts[2]) ?? targetDate.day;
+
+            int hour = 0;
+            int minute = 0;
+            int second = 0;
+
+            if (parts.length > 1) {
+              final timeParts = parts[1].split(':');
+              if (timeParts.isNotEmpty) hour = int.tryParse(timeParts[0]) ?? 0;
+              if (timeParts.length > 1) minute = int.tryParse(timeParts[1]) ?? 0;
+              if (timeParts.length > 2) second = int.tryParse(timeParts[2]) ?? 0;
+            }
+
+            return DateTime(year, month, day, hour, minute, second);
+          }
+        }
       }
+
+      if (value is DateTime) {
+        return DateTime(
+          value.year,
+          value.month,
+          value.day,
+          value.hour,
+          value.minute,
+          value.second,
+        );
+      }
+
       return null;
     }
 
-    // Filter daily appointments based on date match
+    // Filter appointments using pure wall-clock values
     final dailyFilteredApps = mockAppointments.where((app) {
-      final start = parseDateTime(app['rawStartTime']);
-      return start != null && isSameDay(start, targetDate);
+      final start = parseWallClockTime(app['rawStartTime']);
+      if (start == null) return false;
+      return start.year == targetDate.year &&
+          start.month == targetDate.month &&
+          start.day == targetDate.day;
     }).toList();
 
+    // Create a staff lookup map for efficient ID-to-Name mapping
     final Map<String, String> staffLookup = {};
     if (_invitedStaff != null) {
       for (var staff in _invitedStaff!) {
@@ -1664,17 +1699,9 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
       isClosed = false;
       final String startStr = dayRecord['openTime'] ?? '09:00';
       final String endStr = dayRecord['closeTime'] ?? '17:00';
-      
+
       startHour = int.tryParse(startStr.split(':')[0]) ?? 9;
       endHour = int.tryParse(endStr.split(':')[0]) ?? 17;
-    }
-
-    // Adjust business end hours if appointments extend beyond close time
-    for (var app in dailyFilteredApps) {
-      final end = parseDateTime(app['rawEndTime']);
-      if (end != null && end.hour >= endHour) {
-        endHour = end.hour + (end.minute > 0 ? 1 : 0);
-      }
     }
 
     if (isClosed) {
@@ -1686,7 +1713,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
     }
 
     const double slotHeight = 70.0;
-    final int totalHours = (endHour - startHour + 1).clamp(1, 24);
+    final int totalHours = endHour - startHour + 1;
 
     return Container(
       decoration: BoxDecoration(
@@ -1733,21 +1760,21 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                       
                       final sortedApps = List.from(dailyFilteredApps)
                         ..sort((a, b) {
-                          final startA = parseDateTime(a['rawStartTime']) ?? DateTime.now();
-                          final startB = parseDateTime(b['rawStartTime']) ?? DateTime.now();
+                          final startA = parseWallClockTime(a['rawStartTime']) ?? DateTime.now();
+                          final startB = parseWallClockTime(b['rawStartTime']) ?? DateTime.now();
                           return startA.compareTo(startB);
                         });
 
                       List<List<Map<String, dynamic>>> columns = [];
                       for (var app in sortedApps) {
                         bool placed = false;
-                        final appStart = parseDateTime(app['rawStartTime']);
+                        final appStart = parseWallClockTime(app['rawStartTime']);
                         if (appStart == null) continue;
 
                         for (var column in columns) {
                           final lastApp = column.last;
-                          final lastStart = parseDateTime(lastApp['rawStartTime']) ?? appStart;
-                          final lastEnd = parseDateTime(lastApp['rawEndTime']) ?? lastStart.add(const Duration(hours: 1));
+                          final lastStart = parseWallClockTime(lastApp['rawStartTime']) ?? appStart;
+                          final lastEnd = parseWallClockTime(lastApp['rawEndTime']) ?? lastStart.add(const Duration(hours: 1));
 
                           if (appStart.isAfter(lastEnd) || appStart.isAtSameMomentAs(lastEnd)) {
                             column.add(app);
@@ -1782,8 +1809,8 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                           ...List.generate(columns.length, (colIndex) {
                             final currentColumnApps = columns[colIndex];
                             return currentColumnApps.map((app) {
-                              final start = parseDateTime(app['rawStartTime']) ?? DateTime.now();
-                              final end = parseDateTime(app['rawEndTime']) ?? start.add(const Duration(hours: 2));
+                              final start = parseWallClockTime(app['rawStartTime']) ?? DateTime.now();
+                              final end = parseWallClockTime(app['rawEndTime']) ?? start.add(const Duration(hours: 2));
 
                               final double startMinutes = (start.hour - startHour) * 60.0 + start.minute;
                               final double endMinutes = (end.hour - startHour) * 60.0 + end.minute;
@@ -1792,6 +1819,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                               final double blockHeight = ((endMinutes - startMinutes) / 60.0) * slotHeight;
                               
                               final cardColor = _getPastelColor(app['breed'] ?? '');
+
                               final String currentGroomerId = app['groomerId']?.toString() ?? '';
                               final String staffName = staffLookup[currentGroomerId] ?? 'No Staff Assigned';
 
