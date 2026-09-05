@@ -758,8 +758,7 @@ export const BookingService = {
         // An appointment is treated as an unpaid draft only if depositPaid is false 
         // AND status is PENDING or DEPOSIT_NOT_PAID
         const isUnpaidStatus = 
-          !appt.depositPaid && 
-          (appt.status === AppointmentStatus.PENDING || appt.status === AppointmentStatus.DEPOSIT_NOT_PAID);
+          !appt.depositPaid;
 
         // 1. If it's an unpaid draft created by staff, ignore it (keep slot available)
         if (isUnpaidStatus && appt.bookedBy?.role === UserRole.MERCHANT_STAFF) {
