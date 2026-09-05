@@ -69,7 +69,7 @@ export const handleStripeWebhook = async (req: Request, res: Response): Promise<
       if (appointmentId) {
         await prisma.appointment.update({
           where: { id: appointmentId },
-          data: { status: 'PAID' },
+          data: { status: 'PENDING' },
         });
       }
       break;
