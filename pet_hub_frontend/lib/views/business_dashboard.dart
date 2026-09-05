@@ -1621,316 +1621,259 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
   }
 
   Widget _buildDailyTimelineGrid(Color col) {
-    final targetDate = _selectedDay ?? DateTime.now();
+  final targetDate = _selectedDay ?? DateTime.now();
+  final dailyFilteredApps = mockAppointments.where((app) => isSameDay(app['rawStartTime'], targetDate)).toList();
 
-    // Custom parser to prevent DateTime from applying UTC/Local timezone offsets
-    DateTime? parseWallClockTime(dynamic value) {
-      if (value == null) return null;
-
-      if (value is String) {
-        final clean = value.replaceAll('Z', '').replaceFirst('T', ' ');
-        final parts = clean.split(' ');
-        if (parts.isNotEmpty) {
-          final dateParts = parts[0].split('-');
-          if (dateParts.length == 3) {
-            final year = int.tryParse(dateParts[0]) ?? targetDate.year;
-            final month = int.tryParse(dateParts[1]) ?? targetDate.month;
-            final day = int.tryParse(dateParts[2]) ?? targetDate.day;
-
-            int hour = 0;
-            int minute = 0;
-            int second = 0;
-
-            if (parts.length > 1) {
-              final timeParts = parts[1].split(':');
-              if (timeParts.isNotEmpty) hour = int.tryParse(timeParts[0]) ?? 0;
-              if (timeParts.length > 1) minute = int.tryParse(timeParts[1]) ?? 0;
-              if (timeParts.length > 2) second = int.tryParse(timeParts[2]) ?? 0;
-            }
-
-            return DateTime(year, month, day, hour, minute, second);
-          }
-        }
-      }
-
-      if (value is DateTime) {
-        return DateTime(
-          value.year,
-          value.month,
-          value.day,
-          value.hour,
-          value.minute,
-          value.second,
-        );
-      }
-
-      return null;
-    }
-
-    // Filter appointments using pure wall-clock values
-    final dailyFilteredApps = mockAppointments.where((app) {
-      final start = parseWallClockTime(app['rawStartTime']);
-      if (start == null) return false;
-      return start.year == targetDate.year &&
-          start.month == targetDate.month &&
-          start.day == targetDate.day;
-    }).toList();
-
-    // Create a staff lookup map for efficient ID-to-Name mapping
-    final Map<String, String> staffLookup = {};
-    if (_invitedStaff != null) {
-      for (var staff in _invitedStaff!) {
-        if (staff['id'] != null && staff['name'] != null) {
-          staffLookup[staff['id'].toString()] = staff['name'].toString();
-        }
+  // Create a staff lookup map for efficient ID-to-Name mapping
+  final Map<String, String> staffLookup = {};
+  if (_invitedStaff != null) {
+    for (var staff in _invitedStaff!) {
+      if (staff['id'] != null && staff['name'] != null) {
+        staffLookup[staff['id'].toString()] = staff['name'].toString();
       }
     }
+  }
 
-    final dayRecord = _businessHoursConfig.firstWhere(
-      (element) => element['dayOfWeek'] == targetDate.weekday,
-      orElse: () => null,
-    );
+  final dayRecord = _businessHoursConfig.firstWhere(
+    (element) => element['dayOfWeek'] == targetDate.weekday,
+    orElse: () => null,
+  );
 
-    bool isClosed = true;
-    int startHour = 9;
-    int endHour = 17;
+  bool isClosed = true;
+  int startHour = 9;
+  int endHour = 17;
 
-    if (dayRecord != null && dayRecord['isClosed'] != true) {
-      isClosed = false;
-      final String startStr = dayRecord['openTime'] ?? '09:00';
-      final String endStr = dayRecord['closeTime'] ?? '17:00';
+  if (dayRecord != null && dayRecord['isClosed'] != true) {
+    isClosed = false;
+    final String startStr = dayRecord['openTime'] ?? '09:00';
+    final String endStr = dayRecord['closeTime'] ?? '17:00';
+    
+    startHour = int.tryParse(startStr.split(':')[0]) ?? 9;
+    endHour = int.tryParse(endStr.split(':')[0]) ?? 17;
+  }
 
-      startHour = int.tryParse(startStr.split(':')[0]) ?? 9;
-      endHour = int.tryParse(endStr.split(':')[0]) ?? 17;
-    }
-
-    if (isClosed) {
-      return Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-        child: const Center(child: Text('Closed Today', style: TextStyle(color: Colors.grey))),
-      );
-    }
-
-    const double slotHeight = 70.0;
-    final int totalHours = endHour - startHour + 1;
-
+  if (isClosed) {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white, 
-        borderRadius: BorderRadius.circular(12), 
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
       padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Timeline Lane Distribution Tracker', 
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-          ),
-          const SizedBox(height: 16),
-          
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Column(
-                children: List.generate(totalHours, (index) {
-                  final hour = startHour + index;
-                  final displayHour = hour > 12 
-                      ? '${hour - 12} PM' 
-                      : hour == 12 ? '12 PM' : '$hour AM';
-                  return SizedBox(
-                    height: slotHeight,
-                    width: 65,
-                    child: Text(
-                      displayHour, 
-                      style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.blueGrey, fontSize: 13),
-                    ),
-                  );
-                }),
-              ),
-              
-              Expanded(
-                child: SizedBox(
-                  height: totalHours * slotHeight,
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final totalWidth = constraints.maxWidth;
-                      
-                      final sortedApps = List.from(dailyFilteredApps)
-                        ..sort((a, b) {
-                          final startA = parseWallClockTime(a['rawStartTime']) ?? DateTime.now();
-                          final startB = parseWallClockTime(b['rawStartTime']) ?? DateTime.now();
-                          return startA.compareTo(startB);
-                        });
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+      child: const Center(child: Text('Closed Today', style: TextStyle(color: Colors.grey))),
+    );
+  }
 
-                      List<List<Map<String, dynamic>>> columns = [];
-                      for (var app in sortedApps) {
-                        bool placed = false;
-                        final appStart = parseWallClockTime(app['rawStartTime']);
-                        if (appStart == null) continue;
+  const double slotHeight = 70.0;
+  final int totalHours = endHour - startHour + 1;
 
-                        for (var column in columns) {
-                          final lastApp = column.last;
-                          final lastStart = parseWallClockTime(lastApp['rawStartTime']) ?? appStart;
-                          final lastEnd = parseWallClockTime(lastApp['rawEndTime']) ?? lastStart.add(const Duration(hours: 1));
+  return Container(
+    decoration: BoxDecoration(
+      color: Colors.white, 
+      borderRadius: BorderRadius.circular(12), 
+      border: Border.all(color: const Color(0xFFE2E8F0)),
+    ),
+    padding: const EdgeInsets.all(20),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Timeline Lane Distribution Tracker', 
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+        ),
+        const SizedBox(height: 16),
+        
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Column(
+              children: List.generate(totalHours, (index) {
+                final hour = startHour + index;
+                final displayHour = hour > 12 
+                    ? '${hour - 12} PM' 
+                    : hour == 12 ? '12 PM' : '$hour AM';
+                return SizedBox(
+                  height: slotHeight,
+                  width: 65,
+                  child: Text(
+                    displayHour, 
+                    style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.blueGrey, fontSize: 13),
+                  ),
+                );
+              }),
+            ),
+            
+            Expanded(
+              child: SizedBox(
+                height: totalHours * slotHeight,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final totalWidth = constraints.maxWidth;
+                    
+                    final sortedApps = List.from(dailyFilteredApps)
+                      ..sort((a, b) => a['rawStartTime'].compareTo(b['rawStartTime']));
 
-                          if (appStart.isAfter(lastEnd) || appStart.isAtSameMomentAs(lastEnd)) {
-                            column.add(app);
-                            placed = true;
-                            break;
-                          }
-                        }
-                        if (!placed) {
-                          columns.add([app]);
+                    List<List<Map<String, dynamic>>> columns = [];
+                    for (var app in sortedApps) {
+                      bool placed = false;
+                      for (var column in columns) {
+                        final lastApp = column.last;
+                        final lastStart = lastApp['rawStartTime'] as DateTime;
+                        final lastEnd = lastApp['rawEndTime'] as DateTime? ?? lastStart.add(const Duration(hours: 1));
+                        final appStart = app['rawStartTime'] as DateTime;
+
+                        if (appStart.isAfter(lastEnd) || appStart.isAtSameMomentAs(lastEnd)) {
+                          column.add(app);
+                          placed = true;
+                          break;
                         }
                       }
+                      if (!placed) {
+                        columns.add([app]);
+                      }
+                    }
 
-                      final int totalCols = columns.isEmpty ? 1 : columns.length;
-                      final double itemWidth = totalWidth / totalCols;
+                    final int totalCols = columns.isEmpty ? 1 : columns.length;
+                    final double itemWidth = totalWidth / totalCols;
 
-                      return Stack(
-                        children: [
-                          ...List.generate(totalHours, (index) {
-                            return Positioned(
-                              top: index * slotHeight,
-                              left: 0,
-                              right: 0,
-                              child: Container(
-                                height: slotHeight,
-                                decoration: BoxDecoration(
-                                  border: Border(top: BorderSide(color: Colors.grey.shade100, width: 1)),
-                                ),
+                    return Stack(
+                      children: [
+                        ...List.generate(totalHours, (index) {
+                          return Positioned(
+                            top: index * slotHeight,
+                            left: 0,
+                            right: 0,
+                            child: Container(
+                              height: slotHeight,
+                              decoration: BoxDecoration(
+                                border: Border(top: BorderSide(color: Colors.grey.shade100, width: 1)),
                               ),
-                            );
-                          }),
+                            ),
+                          );
+                        }),
 
-                          ...List.generate(columns.length, (colIndex) {
-                            final currentColumnApps = columns[colIndex];
-                            return currentColumnApps.map((app) {
-                              final start = parseWallClockTime(app['rawStartTime']) ?? DateTime.now();
-                              final end = parseWallClockTime(app['rawEndTime']) ?? start.add(const Duration(hours: 2));
+                        ...List.generate(columns.length, (colIndex) {
+                          final currentColumnApps = columns[colIndex];
+                          return currentColumnApps.map((app) {
+                            final start = app['rawStartTime'] as DateTime;
+                            final end = app['rawEndTime'] as DateTime? ?? start.add(const Duration(hours: 2));
 
-                              final double startMinutes = (start.hour - startHour) * 60.0 + start.minute;
-                              final double endMinutes = (end.hour - startHour) * 60.0 + end.minute;
+                            final double startMinutes = (start.hour - startHour) * 60.0 + start.minute;
+                            final double endMinutes = (end.hour - startHour) * 60.0 + end.minute;
 
-                              final double topPosition = (startMinutes / 60.0) * slotHeight;
-                              final double blockHeight = ((endMinutes - startMinutes) / 60.0) * slotHeight;
-                              
-                              final cardColor = _getPastelColor(app['breed'] ?? '');
+                            final double topPosition = (startMinutes / 60.0) * slotHeight;
+                            final double blockHeight = ((endMinutes - startMinutes) / 60.0) * slotHeight;
+                            
+                            final cardColor = _getPastelColor(app['breed'] ?? '');
 
-                              final String currentGroomerId = app['groomerId']?.toString() ?? '';
-                              final String staffName = staffLookup[currentGroomerId] ?? 'No Staff Assigned';
+                            // Lookup the staff name based on the groomerId
+                            final String currentGroomerId = app['groomerId']?.toString() ?? '';
+                            final String staffName = staffLookup[currentGroomerId] ?? 'No Staff Assigned';
 
-                              return Positioned(
-                                top: topPosition,
-                                left: colIndex * itemWidth,
-                                width: itemWidth - 4,
-                                height: blockHeight - 2, 
-                                child: Tooltip(
-                                  richMessage: TextSpan(
-                                    style: const TextStyle(color: Colors.white, fontSize: 12, height: 1.4),
-                                    children: [
-                                      TextSpan(text: '🐾 Dog: ${app['petName']} (${app['breed']})\n', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                      TextSpan(text: '👤 Owner: ${app['ownerName'] ?? 'Unknown Owner'}\n'),
-                                      TextSpan(text: '📞 Phone: ${app['ownerPhone'] ?? 'No Phone'}\n'),
-                                      TextSpan(text: '✉️ Email: ${app['ownerEmail'] ?? 'No Email'}\n'),
-                                      TextSpan(text: '✂️ Staff: $staffName'),
-                                    ],
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade900.withOpacity(0.95),
-                                    borderRadius: BorderRadius.circular(8),
-                                    boxShadow: [
-                                      BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 6, offset: const Offset(0, 3))
-                                    ],
-                                  ),
-                                  padding: const EdgeInsets.all(12),
-                                  preferBelow: true,
-                                  waitDuration: const Duration(milliseconds: 200),
-                                  child: GestureDetector(
-                                    onTap: () => _showUpdateBookingOptionsDialog(app),
-                                    child: Container(
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        color: cardColor.withOpacity(0.25),
-                                        borderRadius: BorderRadius.circular(6),
-                                        border: Border.all(color: cardColor, width: 1.5),
-                                      ),
-                                      child: SingleChildScrollView(
-                                        physics: const NeverScrollableScrollPhysics(),
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text(
-                                              '🐾 ${app['petName']} (${app['breed']})',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 12,
-                                                color: cardColor.withRed(30).withGreen(30),
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
+                            return Positioned(
+                              top: topPosition,
+                              left: colIndex * itemWidth,
+                              width: itemWidth - 4,
+                              height: blockHeight - 2, 
+                              child: Tooltip(
+                                richMessage: TextSpan(
+                                  style: const TextStyle(color: Colors.white, fontSize: 12, height: 1.4),
+                                  children: [
+                                    TextSpan(text: '🐾 Dog: ${app['petName']} (${app['breed']})\n', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    TextSpan(text: '👤 Owner: ${app['ownerName'] ?? 'Unknown Owner'}\n'),
+                                    TextSpan(text: '📞 Phone: ${app['ownerPhone'] ?? 'No Phone'}\n'),
+                                    TextSpan(text: '✉️ Email: ${app['ownerEmail'] ?? 'No Email'}\n'),
+                                    TextSpan(text: '✂️ Staff: $staffName'),
+                                  ],
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade900.withOpacity(0.95),
+                                  borderRadius: BorderRadius.circular(8),
+                                  boxShadow: [
+                                    BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 6, offset: const Offset(0, 3))
+                                  ],
+                                ),
+                                padding: const EdgeInsets.all(12),
+                                preferBelow: true,
+                                waitDuration: const Duration(milliseconds: 200),
+                                child: GestureDetector(
+                                  onTap: () => _showUpdateBookingOptionsDialog(app),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: cardColor.withOpacity(0.25),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: cardColor, width: 1.5),
+                                    ),
+                                    child: SingleChildScrollView(
+                                      physics: const NeverScrollableScrollPhysics(),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            '🐾 ${app['petName']} (${app['breed']})',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                              color: cardColor.withRed(30).withGreen(30),
                                             ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              '👤 ${app['ownerName'] ?? 'Unknown Owner'}',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.w600,
-                                                fontSize: 11,
-                                                color: Colors.grey.shade800,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            '👤 ${app['ownerName'] ?? 'Unknown Owner'}',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 11,
+                                              color: Colors.grey.shade800,
                                             ),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              '📞 ${app['ownerPhone'] ?? 'No Phone'}',
-                                              style: TextStyle(
-                                                fontSize: 10,
-                                                color: Colors.grey.shade700,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            '📞 ${app['ownerPhone'] ?? 'No Phone'}',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              color: Colors.grey.shade700,
                                             ),
-                                            Text(
-                                              '✉️ ${app['ownerEmail'] ?? 'No Email'}',
-                                              style: TextStyle(
-                                                fontSize: 10,
-                                                color: Colors.grey.shade600,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          Text(
+                                            '✉️ ${app['ownerEmail'] ?? 'No Email'}',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              color: Colors.grey.shade600,
                                             ),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              '✂️ Staff: $staffName',
-                                              style: TextStyle(
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w500,
-                                                color: Colors.grey.shade800,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            '✂️ Staff: $staffName',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w500,
+                                              color: Colors.grey.shade800,
                                             ),
-                                          ],
-                                        ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ),
                                 ),
-                              );
-                            }).toList();
-                          }).expand((element) => element).toList(),
-                        ],
-                      );
-                    },
-                  ),
+                              ),
+                            );
+                          }).toList();
+                        }).expand((element) => element).toList(),
+                      ],
+                    );
+                  },
                 ),
               ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
 
   Color _getPastelColor(String seed) {
     final int hash = seed.hashCode;
