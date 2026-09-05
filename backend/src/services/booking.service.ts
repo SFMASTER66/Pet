@@ -6,6 +6,7 @@ import {
   getCustomerBookingEmailOptions, 
   BookingEmailData 
 } from '../email-templates/booking-email';
+import { fromZonedTime } from 'date-fns-tz';
 
 // Strict Type Definitions for Operational Validation Inputs
 interface CreatePetInput {
@@ -265,8 +266,12 @@ export const BookingService = {
       throw new Error(`❌ Pricing matrix target key row configuration [${input.servicePricingMatrixId}] was not found.`);
     }
 
-    // 4. Calculate snapshot scheduling durations
-    const parsedStartTime = new Date(input.serviceTime);
+    const merchantTimezone = 'Australia/Sydney'; // Replace with merchant timezone
+
+    // Converts 2026-09-29T09:00:00.000 (Local) -> UTC Date object
+    const parsedStartTime = typeof input.serviceTime === 'string' && !input.serviceTime.endsWith('Z') && !input.serviceTime.includes('+')
+      ? fromZonedTime(input.serviceTime, merchantTimezone)
+      : new Date(input.serviceTime);
     const calculatedEndTime = new Date(parsedStartTime.getTime() + (matrixRow.durationMinutes * 60000));
 
     const startOfDay = new Date(parsedStartTime);
