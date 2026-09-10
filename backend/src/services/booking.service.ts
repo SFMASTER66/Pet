@@ -114,14 +114,11 @@ export const BookingService = {
      */
    async portalBooking(input: AdminCreateBookingInput) {
     try { 
-      // 1. Resolve customer profile record details safely by phone OR email
       let userProfile = await prisma.user.findFirst({
         where: { 
           merchantId: input.merchantId,
-          OR: [
-            { phoneNumber: input.ownerPhone.trim() },
-            { email: input.ownerEmail.trim().toLowerCase() }
-          ]
+          email: input.ownerEmail.trim().toLowerCase(),
+          phoneNumber: input.ownerPhone.trim(),
         }
       });
 
