@@ -552,233 +552,289 @@ export const BookingService = {
   },
 
   async getAvailableSlots(
-    merchantId: string, 
-    dateStr: string, 
-    duration: number,
-    userId?: string
-  ): Promise<string[]> {
-      const targetDate = new Date(`${dateStr}T00:00:00`);
-      if (isNaN(targetDate.getTime())) {
-        throw new Error('Invalid date format provided.');
+  merchantId: string, 
+  dateStr: string, 
+  duration: number,
+  userId?: string
+): Promise<string[]> {
+  const merchantTimezone = 'Australia/Sydney';
+
+  // Helper: Convert local naive ISO string ("2026-09-30T09:00:00") to true UTC Date
+  const parseLocalIsoToUtc = (isoString: string, timeZone = merchantTimezone): Date => {
+    if (isoString.endsWith('Z') || isoString.includes('+')) return new Date(isoString);
+
+    const cleanIso = isoString.replace(' ', 'T');
+    const targetDate = new Date(cleanIso);
+
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+
+    const parts = formatter.formatToParts(targetDate);
+    const map: Record<string, string> = {};
+    parts.forEach((p) => {
+      if (p.type !== 'literal') map[p.type] = p.value;
+    });
+
+    const targetUtcTime = Date.UTC(
+      parseInt(map.year),
+      parseInt(map.month) - 1,
+      parseInt(map.day),
+      parseInt(map.hour === '24' ? '0' : map.hour),
+      parseInt(map.minute),
+      parseInt(map.second)
+    );
+
+    const localUtcTime = Date.UTC(
+      targetDate.getUTCFullYear(),
+      targetDate.getUTCMonth(),
+      targetDate.getUTCDate(),
+      targetDate.getUTCHours(),
+      targetDate.getUTCMinutes(),
+      targetDate.getUTCSeconds()
+    );
+
+    const offsetMs = targetUtcTime - localUtcTime;
+    return new Date(targetDate.getTime() - offsetMs);
+  };
+
+  // Convert target date string into UTC Start of Day
+  const startOfDay = parseLocalIsoToUtc(`${dateStr}T00:00:00`);
+  if (isNaN(startOfDay.getTime())) {
+    throw new Error('Invalid date format provided.');
+  }
+
+  // 1. DYNAMIC BUSINESS HOURS FETCHING & SEEDING LOGIC
+  let businessHours = await prisma.businessHours.findMany({
+    where: { merchantId },
+    orderBy: { dayOfWeek: 'asc' },
+  });
+
+  if (businessHours.length === 0) {
+    const defaults = Array.from({ length: 7 }, (_, i) => ({
+      merchantId,
+      dayOfWeek: i + 1,
+      openTime: '09:00',
+      closeTime: '17:00',
+      isClosed: (i + 1) > 5, // Sat & Sun closed by default
+    }));
+
+    await prisma.businessHours.createMany({ data: defaults });
+    
+    businessHours = await prisma.businessHours.findMany({
+      where: { merchantId },
+      orderBy: { dayOfWeek: 'asc' },
+    });
+  }
+
+  // Get day of week relative to merchant's local date
+  const targetDateLocal = new Date(`${dateStr}T00:00:00`);
+  const currentDayOfWeek = targetDateLocal.getDay() === 0 ? 7 : targetDateLocal.getDay();
+  const todayHours = businessHours.find(bh => bh.dayOfWeek === currentDayOfWeek);
+
+  if (!todayHours || todayHours.isClosed) {
+    return [];
+  }
+
+  // 2. Read Shift records to find active capacity for slot lookup
+  const endOfDay = parseLocalIsoToUtc(`${dateStr}T23:59:59.999`);
+
+  const shiftsOnDay = await prisma.shift.findMany({
+    where: {
+      date: {
+        gte: startOfDay,
+        lte: endOfDay
+      },
+      employee: {
+        merchantId: merchantId,
+        isActive: true,
+        user: {
+          role: UserRole.MERCHANT_STAFF
+        }
       }
-
-      // 1. DYNAMIC BUSINESS HOURS FETCHING & SEEDING LOGIC
-      let businessHours = await prisma.businessHours.findMany({
-        where: { merchantId },
-        orderBy: { dayOfWeek: 'asc' },
-      });
-
-      if (businessHours.length === 0) {
-        const defaults = Array.from({ length: 7 }, (_, i) => ({
-          merchantId,
-          dayOfWeek: i + 1,
-          openTime: '09:00',
-          closeTime: '17:00',
-          isClosed: (i + 1) > 5, // Sat & Sun closed by default
-        }));
-
-        await prisma.businessHours.createMany({ data: defaults });
-        
-        businessHours = await prisma.businessHours.findMany({
-          where: { merchantId },
-          orderBy: { dayOfWeek: 'asc' },
-        });
-      }
-
-      const currentDayOfWeek = targetDate.getDay() === 0 ? 7 : targetDate.getDay();
-      const todayHours = businessHours.find(bh => bh.dayOfWeek === currentDayOfWeek);
-
-      if (!todayHours || todayHours.isClosed) {
-        return [];
-      }
-
-      // 2. Read Shift records to find active capacity for slot lookup
-      const startOfDay = new Date(`${dateStr}T00:00:00.000Z`);
-      const endOfDay = new Date(`${dateStr}T23:59:59.999Z`);
-
-      const shiftsOnDay = await prisma.shift.findMany({
-        where: {
-          date: {
-            gte: startOfDay,
-            lte: endOfDay
-          },
-          employee: {
-            merchantId: merchantId,
-            isActive: true,
-            user: {
-              role: UserRole.MERCHANT_STAFF
-            }
-          }
-        },
-        select: { employeeId: true }
-      });
-
-      let totalStaff = 0;
-
-      if (shiftsOnDay.length > 0) {
-        const uniqueEmployeeIds = new Set(shiftsOnDay.map((s) => s.employeeId));
-        totalStaff = uniqueEmployeeIds.size;
-      } else {
-        totalStaff = await prisma.employee.count({
-          where: { 
-            merchantId: merchantId, 
-            isActive: true,
-            user: {
-              role: UserRole.MERCHANT_STAFF 
-            }
-          }
-        });
-      }
-
-      if (totalStaff === 0) {
-        return [];
-      }
-
-      const businessStart = new Date(`${dateStr}T${todayHours.openTime}:00`);
-      const businessEnd = new Date(`${dateStr}T${todayHours.closeTime}:00`);
-      const durationMs = duration * 60000;
-      const stepMs = 60 * 60000; // Step forward by 1 hour
-
-      // 3. BULK FETCH BOOKINGS WITH 30-MIN TIMEOUT LOGIC
-      const fetchedBookings = await prisma.appointment.findMany({
-        where: {
-          merchantId,
-          status: { 
-            in: [
-              AppointmentStatus.PENDING, 
-              AppointmentStatus.DEPOSIT_NOT_PAID,
-              AppointmentStatus.PAID, 
-              AppointmentStatus.COMPLETED
-            ] 
-          },
-          startTime: { lt: businessEnd },
-          endTime: { gt: businessStart }
-        },
-        select: {
-          id: true,
-          startTime: true,
-          endTime: true,
-          groomerId: true,
-          status: true,
-          depositPaid: true, // 👈 Added depositPaid check
-          createdAt: true,
-          bookedById: true,
-          bookedBy: {
-            select: {
-              role: true
-            }
-          }
-        }
-      });
-
-      // ===================================================================
-      // ⏱️ 30-MINUTE TIMEOUT & SAME-USER RE-BOOKING FILTER
-      // ===================================================================
-      const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
-
-      const activeBookings = fetchedBookings.filter(appt => {
-        // An appointment is treated as an unpaid draft only if depositPaid is false 
-        // AND status is PENDING or DEPOSIT_NOT_PAID
-        const isUnpaidStatus = 
-          !appt.depositPaid;
-
-        // 1. If it's an unpaid draft created by staff, ignore it (keep slot available)
-        if (isUnpaidStatus && appt.bookedBy?.role === UserRole.MERCHANT_STAFF) {
-          return false;
-        }
-
-        // 2. Ignore current user's unpaid draft so they aren't blocked by their own pending reservation
-        if (userId && appt.bookedById === userId && isUnpaidStatus) {
-          return false;
-        }
-
-        // 3. Ignore customer unpaid appointments created over 30 mins ago
-        if (
-          isUnpaidStatus &&
-          appt.createdAt &&
-          new Date(appt.createdAt).getTime() < thirtyMinutesAgo.getTime()
-        ) {
-          return false;
-        }
-
-        return true;
-      });
-
-      const availableSlots: string[] = [];
-      let currentSlotStart = new Date(businessStart.getTime());
-
-      // 4. TIMELINE CONCURRENCY ENGINE
-      while (currentSlotStart.getTime() + durationMs <= businessEnd.getTime()) {
-        const slotStartTime = new Date(currentSlotStart.getTime());
-        const slotEndTime = new Date(currentSlotStart.getTime() + durationMs);
-
-        // Filter appointments overlapping this specific hourly window
-        const overlappingBookings = activeBookings.filter(appt => {
-          const apptStart = new Date(appt.startTime);
-          const apptEnd = new Date(appt.endTime);
-          return apptStart < slotEndTime && apptEnd > slotStartTime;
-        });
-
-        // Break down the window into sub-intervals based on overlap transitions
-        const timePointsSet = new Set<number>();
-        timePointsSet.add(slotStartTime.getTime());
-        timePointsSet.add(slotEndTime.getTime());
-
-        for (const appt of overlappingBookings) {
-          const apptStartMs = new Date(appt.startTime).getTime();
-          const apptEndMs = new Date(appt.endTime).getTime();
-          
-          if (apptStartMs > slotStartTime.getTime() && apptStartMs < slotEndTime.getTime()) {
-            timePointsSet.add(apptStartMs);
-          }
-          if (apptEndMs > slotStartTime.getTime() && apptEndMs < slotEndTime.getTime()) {
-            timePointsSet.add(apptEndMs);
-          }
-        }
-
-        const sortedTimePoints = Array.from(timePointsSet).sort((a, b) => a - b);
-        let isSlotAvailable = true;
-
-        // Validate capacity inside every sub-interval segment
-        for (let i = 0; i < sortedTimePoints.length - 1; i++) {
-          const t1 = sortedTimePoints[i];
-          const t2 = sortedTimePoints[i + 1];
-          const midpoint = (t1 + t2) / 2;
-
-          const busyStaffSet = new Set<string>();
-          let unassignedBookingsCount = 0;
-
-          for (const appt of overlappingBookings) {
-            const apptStartMs = new Date(appt.startTime).getTime();
-            const apptEndMs = new Date(appt.endTime).getTime();
-            if (apptStartMs <= midpoint && apptEndMs >= midpoint) {
-              if (appt.groomerId) {
-                busyStaffSet.add(appt.groomerId);
-              } else {
-                unassignedBookingsCount++;
-              }
-            }
-          }
-
-          const occupiedStaffCapacity = busyStaffSet.size + unassignedBookingsCount;
-
-          if (occupiedStaffCapacity >= totalStaff) {
-            isSlotAvailable = false;
-            break;
-          }
-        }
-
-        if (isSlotAvailable) {
-          const hoursStr = String(slotStartTime.getHours()).padStart(2, '0');
-          const minsStr = String(slotStartTime.getMinutes()).padStart(2, '0');
-          availableSlots.push(`${hoursStr}:${minsStr}`);
-        }
-
-        currentSlotStart = new Date(currentSlotStart.getTime() + stepMs);
-      }
-
-      return availableSlots;
     },
+    select: { employeeId: true }
+  });
+
+  let totalStaff = 0;
+
+  if (shiftsOnDay.length > 0) {
+    const uniqueEmployeeIds = new Set(shiftsOnDay.map((s) => s.employeeId));
+    totalStaff = uniqueEmployeeIds.size;
+  } else {
+    totalStaff = await prisma.employee.count({
+      where: { 
+        merchantId: merchantId, 
+        isActive: true,
+        user: {
+          role: UserRole.MERCHANT_STAFF 
+        }
+      }
+    });
+  }
+
+  if (totalStaff === 0) {
+    return [];
+  }
+
+  // Calculate business operating bounds explicitly in UTC
+  const businessStart = parseLocalIsoToUtc(`${dateStr}T${todayHours.openTime}:00`);
+  const businessEnd = parseLocalIsoToUtc(`${dateStr}T${todayHours.closeTime}:00`);
+  const durationMs = duration * 60000;
+  const stepMs = 60 * 60000; // Step forward by 1 hour
+
+  // 3. BULK FETCH BOOKINGS WITH 30-MIN TIMEOUT LOGIC
+  const fetchedBookings = await prisma.appointment.findMany({
+    where: {
+      merchantId,
+      status: { 
+        in: [
+          AppointmentStatus.PENDING, 
+          AppointmentStatus.DEPOSIT_NOT_PAID,
+          AppointmentStatus.PAID, 
+          AppointmentStatus.COMPLETED
+        ] 
+      },
+      startTime: { lt: businessEnd },
+      endTime: { gt: businessStart }
+    },
+    select: {
+      id: true,
+      startTime: true,
+      endTime: true,
+      groomerId: true,
+      status: true,
+      depositPaid: true,
+      createdAt: true,
+      bookedById: true,
+      bookedBy: {
+        select: {
+          role: true
+        }
+      }
+    }
+  });
+
+  // ===================================================================
+  // ⏱️ 30-MINUTE TIMEOUT & SAME-USER RE-BOOKING FILTER
+  // ===================================================================
+  const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+
+  const activeBookings = fetchedBookings.filter(appt => {
+    const isUnpaidStatus = !appt.depositPaid;
+
+    // 1. If it's an unpaid draft created by staff, ignore it
+    if (isUnpaidStatus && appt.bookedBy?.role === UserRole.MERCHANT_STAFF) {
+      return false;
+    }
+
+    // 2. Ignore current user's unpaid draft
+    if (userId && appt.bookedById === userId && isUnpaidStatus) {
+      return false;
+    }
+
+    // 3. Ignore customer unpaid appointments created over 30 mins ago
+    if (
+      isUnpaidStatus &&
+      appt.createdAt &&
+      new Date(appt.createdAt).getTime() < thirtyMinutesAgo.getTime()
+    ) {
+      return false;
+    }
+
+    return true;
+  });
+
+  const availableSlots: string[] = [];
+  let currentSlotStart = new Date(businessStart.getTime());
+
+  // Helper to extract HH:mm local time string from UTC Date
+  const formatLocalTimeSlot = (utcDate: Date, timeZone = merchantTimezone): string => {
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).format(utcDate);
+  };
+
+  // 4. TIMELINE CONCURRENCY ENGINE
+  while (currentSlotStart.getTime() + durationMs <= businessEnd.getTime()) {
+    const slotStartTime = new Date(currentSlotStart.getTime());
+    const slotEndTime = new Date(currentSlotStart.getTime() + durationMs);
+
+    // Filter appointments overlapping this specific hourly window
+    const overlappingBookings = activeBookings.filter(appt => {
+      const apptStart = new Date(appt.startTime);
+      const apptEnd = new Date(appt.endTime);
+      return apptStart < slotEndTime && apptEnd > slotStartTime;
+    });
+
+    // Break down the window into sub-intervals based on overlap transitions
+    const timePointsSet = new Set<number>();
+    timePointsSet.add(slotStartTime.getTime());
+    timePointsSet.add(slotEndTime.getTime());
+
+    for (const appt of overlappingBookings) {
+      const apptStartMs = new Date(appt.startTime).getTime();
+      const apptEndMs = new Date(appt.endTime).getTime();
+      
+      if (apptStartMs > slotStartTime.getTime() && apptStartMs < slotEndTime.getTime()) {
+        timePointsSet.add(apptStartMs);
+      }
+      if (apptEndMs > slotStartTime.getTime() && apptEndMs < slotEndTime.getTime()) {
+        timePointsSet.add(apptEndMs);
+      }
+    }
+
+    const sortedTimePoints = Array.from(timePointsSet).sort((a, b) => a - b);
+    let isSlotAvailable = true;
+
+    // Validate capacity inside every sub-interval segment
+    for (let i = 0; i < sortedTimePoints.length - 1; i++) {
+      const t1 = sortedTimePoints[i];
+      const t2 = sortedTimePoints[i + 1];
+      const midpoint = (t1 + t2) / 2;
+
+      const busyStaffSet = new Set<string>();
+      let unassignedBookingsCount = 0;
+
+      for (const appt of overlappingBookings) {
+        const apptStartMs = new Date(appt.startTime).getTime();
+        const apptEndMs = new Date(appt.endTime).getTime();
+        if (apptStartMs <= midpoint && apptEndMs >= midpoint) {
+          if (appt.groomerId) {
+            busyStaffSet.add(appt.groomerId);
+          } else {
+            unassignedBookingsCount++;
+          }
+        }
+      }
+
+      const occupiedStaffCapacity = busyStaffSet.size + unassignedBookingsCount;
+
+      if (occupiedStaffCapacity >= totalStaff) {
+        isSlotAvailable = false;
+        break;
+      }
+    }
+
+    if (isSlotAvailable) {
+      availableSlots.push(formatLocalTimeSlot(slotStartTime));
+    }
+
+    currentSlotStart = new Date(currentSlotStart.getTime() + stepMs);
+  }
+
+  return availableSlots;
+},
 
   async getAdminBusinessSlots(merchantId: string, dateStr: string): Promise<string[]> {
     const targetDate = new Date(`${dateStr}T00:00:00`);
