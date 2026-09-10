@@ -150,7 +150,7 @@ export const updateBooking = async (req: Request, res: Response): Promise<void> 
       // Asynchronously trigger emails without blocking HTTP response
       BookingService.sendBookingConfirmationEmails({
         ownerName: owner.name,
-        ownerEmail: owner.email,
+        ownerEmail: owner.email || '',
         ownerPhone: owner.phoneNumber || 'N/A',
         dogName: pet.name,
         dogBreed: pet.breed,
