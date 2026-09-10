@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import { 
-  registerBooking, 
   portalBooking, 
   fetchDropdownServices ,
   updateBooking,
@@ -12,9 +11,6 @@ import {
 import { requestLogger } from '../middlewares/activity-log.middleware';
 
 const router = Router();
-
-// Public Customer Facing Booking Entry Point
-router.post('/bookings', requestLogger as any, registerBooking);
 
 // Admin Portal Booking Entry Points
 router.get('/bookings/services', fetchDropdownServices);

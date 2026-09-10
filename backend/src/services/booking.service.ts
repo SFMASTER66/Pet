@@ -109,395 +109,307 @@ export const BookingService = {
     });
   },
 
-  /**
-   * 🏗️ Original public customer facing workflow handler
-   */
-  async createAppointment(input: CreatePetInput) {
-      const {
-        ownerId,
-        speciesId,
-        breed,
-        name,
-        microchipNumber,
-        gender,
-        isDesexed,
-        dob,
-        behaviorTags = [],
-        behaviorNotes,
-        merchantId,
-      } = input;
-
-      // 🔒 Business Safety Verification Guard
-      if (microchipNumber) {
-        const existingPet = await prisma.pet.findUnique({
-          where: { microchipNumber: microchipNumber.trim() },
-        });
-        if (existingPet) {
-          throw new Error(`❌ Microchip number [${microchipNumber}] is already registered to another pet profile.`);
-        }
-      }
-
-      const ownerExists = await prisma.user.findUnique({
-        where: { id: ownerId },
-        include: {
-          employee: true, // 👈 This fetches the related employee data along with the user
-        },
-      });
-      if (!ownerExists) {
-        throw new Error(`❌ Target owner record ID [${ownerId}] cannot be located.`);
-      }
-
-      const parsedDob = dob ? new Date(dob) : null;
-
-      const newPet = await prisma.pet.create({
-        data: {
-          ownerId,
-          speciesId,
-          breed: breed.trim(),
-          name: name.trim(),
-          microchipNumber: microchipNumber ? microchipNumber.trim() : null,
-          status: PetStatus.ACTIVE,
-          gender,
-          isDesexed,
-          dob: parsedDob,
-          behaviorTags,
-          behaviorNotes,
-          merchantId,
-        },
-        include: {
-          species: true,
-          owner: {
-            select: { name: true, email: true, phoneNumber: true },
-          },
-        },
-      });
-
-      let ageText = 'Unknown Age';
-      if (parsedDob) {
-        const now = new Date();
-        let years = now.getFullYear() - parsedDob.getFullYear();
-        let months = now.getMonth() - parsedDob.getMonth();
-        if (months < 0) {
-          years--;
-          months += 12;
-        }
-        ageText = `${years} yrs ${months} mos`;
-      }
-
-      return {
-        success: true,
-        message: 'Pet registered successfully for tracking parameters.',
-        pet: {
-          id: newPet.id,
-          name: newPet.name,
-          breed: newPet.breed,
-          ageText,
-          ownerName: newPet.owner.name
-        }
-      };
-    },
-
     /**
      * 🚀 Dynamic Administrative Manual Booking Engine Core
      */
    async portalBooking(input: AdminCreateBookingInput) {
-  try { 
-    // 1. Resolve customer profile record details safely by phone OR email
-    let userProfile = await prisma.user.findFirst({
-      where: { 
-        merchantId: input.merchantId,
-        OR: [
-          { phoneNumber: input.ownerPhone.trim() },
-          { email: input.ownerEmail.trim().toLowerCase() }
-        ]
-      }
-    });
-
-    if (!userProfile) {
-      userProfile = await prisma.user.create({
-        data: {
+    try { 
+      // 1. Resolve customer profile record details safely by phone OR email
+      let userProfile = await prisma.user.findFirst({
+        where: { 
           merchantId: input.merchantId,
-          name: input.ownerName.trim(),
-          email: input.ownerEmail.trim().toLowerCase(),
-          phoneNumber: input.ownerPhone.trim(),
-          passwordHash: '$2b$10$UnusableFallbackHashValuePlaceholderEngineToken', 
-          role: 'CUSTOMER'
+          OR: [
+            { phoneNumber: input.ownerPhone.trim() },
+            { email: input.ownerEmail.trim().toLowerCase() }
+          ]
         }
       });
-    }
 
-    // 2. Resolve or dynamically bundle target pet profile records
-    let petProfile = await prisma.pet.findFirst({
-      where: {
-        merchantId: input.merchantId,
-        ownerId: userProfile.id,
-        name: { equals: input.dogName.trim(), mode: 'insensitive' }
-      }
-    });
-
-    if (!petProfile) {
-      const defaultSpecies = await prisma.species.findFirst({ where: { name: 'Dog' } });
-      if (!defaultSpecies) {
-        throw new Error("System fault: Master core database record configurations for 'Dog' options are missing.");
+      if (!userProfile) {
+        userProfile = await prisma.user.create({
+          data: {
+            merchantId: input.merchantId,
+            name: input.ownerName.trim(),
+            email: input.ownerEmail.trim().toLowerCase(),
+            phoneNumber: input.ownerPhone.trim(),
+            passwordHash: '$2b$10$UnusableFallbackHashValuePlaceholderEngineToken', 
+            role: 'CUSTOMER'
+          }
+        });
       }
 
-      petProfile = await prisma.pet.create({
-        data: {
+      // 2. Resolve or dynamically bundle target pet profile records
+      let petProfile = await prisma.pet.findFirst({
+        where: {
           merchantId: input.merchantId,
           ownerId: userProfile.id,
-          speciesId: defaultSpecies.id,
-          name: input.dogName.trim(),
-          breed: input.dogBreed.trim(),
-          dob: input.dogDob,
-          weight: input.dogWeight,
-          gender: input.dogGender,
-          isDesexed: input.isDesexed,
-          status: 'ACTIVE'
+          name: { equals: input.dogName.trim(), mode: 'insensitive' }
         }
       });
-    }
 
-    // 3. Resolve master base duration matrix parameters
-    const matrixRow = await prisma.servicePricingMatrix.findUnique({
-      where: { id: input.servicePricingMatrixId }
-    });
+      if (!petProfile) {
+        const defaultSpecies = await prisma.species.findFirst({ where: { name: 'Dog' } });
+        if (!defaultSpecies) {
+          throw new Error("System fault: Master core database record configurations for 'Dog' options are missing.");
+        }
 
-    if (!matrixRow) {
-      throw new Error(`❌ Pricing matrix target key row configuration [${input.servicePricingMatrixId}] was not found.`);
-    }
+        petProfile = await prisma.pet.create({
+          data: {
+            merchantId: input.merchantId,
+            ownerId: userProfile.id,
+            speciesId: defaultSpecies.id,
+            name: input.dogName.trim(),
+            breed: input.dogBreed.trim(),
+            dob: input.dogDob,
+            weight: input.dogWeight,
+            gender: input.dogGender,
+            isDesexed: input.isDesexed,
+            status: 'ACTIVE'
+          }
+        });
+      }
 
-    const merchantTimezone = 'Australia/Sydney'; // Replace with merchant timezone
+      // 3. Resolve master base duration matrix parameters
+      const matrixRow = await prisma.servicePricingMatrix.findUnique({
+        where: { id: input.servicePricingMatrixId }
+      });
 
-    // Converts 2026-09-29T09:00:00.000 (Local) -> UTC Date object
-    const parsedStartTime = typeof input.serviceTime === 'string' && !input.serviceTime.endsWith('Z') && !input.serviceTime.includes('+')
-      ? fromZonedTime(input.serviceTime, merchantTimezone)
-      : new Date(input.serviceTime);
-    const calculatedEndTime = new Date(parsedStartTime.getTime() + (matrixRow.durationMinutes * 60000));
+      if (!matrixRow) {
+        throw new Error(`❌ Pricing matrix target key row configuration [${input.servicePricingMatrixId}] was not found.`);
+      }
 
-    const startOfDay = new Date(parsedStartTime);
-    startOfDay.setHours(0, 0, 0, 0);
+      const merchantTimezone = 'Australia/Sydney'; // Replace with merchant timezone
 
-    const endOfDay = new Date(parsedStartTime);
-    endOfDay.setHours(23, 59, 59, 999);
+      // Converts 2026-09-29T09:00:00.000 (Local) -> UTC Date object
+      const parsedStartTime = typeof input.serviceTime === 'string' && !input.serviceTime.endsWith('Z') && !input.serviceTime.includes('+')
+        ? fromZonedTime(input.serviceTime, merchantTimezone)
+        : new Date(input.serviceTime);
+      const calculatedEndTime = new Date(parsedStartTime.getTime() + (matrixRow.durationMinutes * 60000));
 
-    const shiftsOnDay = await prisma.shift.findMany({
-      where: {
-        date: { gte: startOfDay, lte: endOfDay },
-        employee: {
+      const startOfDay = new Date(parsedStartTime);
+      startOfDay.setUTCHours(0, 0, 0, 0);
+
+      const endOfDay = new Date(parsedStartTime);
+      endOfDay.setUTCHours(23, 59, 59, 999);
+
+      const shiftsOnDay = await prisma.shift.findMany({
+        where: {
+          date: { gte: startOfDay, lte: endOfDay },
+          employee: {
+            merchantId: input.merchantId,
+            isActive: true,
+            user: { role: UserRole.MERCHANT_STAFF }
+          }
+        },
+        select: { employeeId: true }
+      });
+
+      // 5. Build eligible active staff pool
+      let eligibleStaffIds: string[] = [];
+      if (shiftsOnDay.length > 0) {
+        eligibleStaffIds = Array.from(new Set(shiftsOnDay.map((s) => s.employeeId)));
+      } else {
+        const fallbackStaff = await prisma.employee.findMany({
+          where: { 
+            merchantId: input.merchantId, 
+            isActive: true,
+            user: { role: UserRole.MERCHANT_STAFF }
+          },
+          select: { id: true }
+        });
+        eligibleStaffIds = fallbackStaff.map((s) => s.id);
+      }
+
+      const totalStaffCount = eligibleStaffIds.length;
+
+      // ===================================================================
+      // ⏱️ 30-MINUTE TIMEOUT & SAME-USER RE-BOOKING LOGIC
+      // ===================================================================
+      const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+
+      // Fetch overlapping bookings (including DEPOSIT_NOT_PAID)
+      const overlappingBookings = await prisma.appointment.findMany({
+        where: {
           merchantId: input.merchantId,
-          isActive: true,
-          user: { role: UserRole.MERCHANT_STAFF }
+          status: { 
+            in: [
+              AppointmentStatus.PENDING, 
+              AppointmentStatus.DEPOSIT_NOT_PAID, 
+              AppointmentStatus.PAID, 
+              AppointmentStatus.COMPLETED
+            ] 
+          },
+          OR: [
+            { startTime: { lte: parsedStartTime }, endTime: { gt: parsedStartTime } },
+            { startTime: { lt: calculatedEndTime }, endTime: { gte: calculatedEndTime } }
+          ]
+        },
+        select: {
+          id: true,
+          groomerId: true,
+          status: true,
+          createdAt: true,
+          bookedById: true,
+          depositPaid: true
         }
-      },
-      select: { employeeId: true }
-    });
-
-    // 5. Build eligible active staff pool
-    let eligibleStaffIds: string[] = [];
-    if (shiftsOnDay.length > 0) {
-      eligibleStaffIds = Array.from(new Set(shiftsOnDay.map((s) => s.employeeId)));
-    } else {
-      const fallbackStaff = await prisma.employee.findMany({
-        where: { 
-          merchantId: input.merchantId, 
-          isActive: true,
-          user: { role: UserRole.MERCHANT_STAFF }
-        },
-        select: { id: true }
       });
-      eligibleStaffIds = fallbackStaff.map((s) => s.id);
-    }
 
-    const totalStaffCount = eligibleStaffIds.length;
+      // Helper flag for unpaid statuses
+      const isUnpaidStatus = (status: AppointmentStatus) => 
+        status === AppointmentStatus.PENDING || status === AppointmentStatus.DEPOSIT_NOT_PAID;
 
-    // ===================================================================
-    // ⏱️ 30-MINUTE TIMEOUT & SAME-USER RE-BOOKING LOGIC
-    // ===================================================================
-    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
-
-    // Fetch overlapping bookings (including DEPOSIT_NOT_PAID)
-    const overlappingBookings = await prisma.appointment.findMany({
-      where: {
-        merchantId: input.merchantId,
-        status: { 
-          in: [
-            AppointmentStatus.PENDING, 
-            AppointmentStatus.DEPOSIT_NOT_PAID, 
-            AppointmentStatus.PAID, 
-            AppointmentStatus.COMPLETED
-          ] 
-        },
-        OR: [
-          { startTime: { lte: parsedStartTime }, endTime: { gt: parsedStartTime } },
-          { startTime: { lt: calculatedEndTime }, endTime: { gte: calculatedEndTime } }
-        ]
-      },
-      select: {
-        id: true,
-        groomerId: true,
-        status: true,
-        createdAt: true,
-        bookedById: true,
-        depositPaid: true
-      }
-    });
-
-    // Helper flag for unpaid statuses
-    const isUnpaidStatus = (status: AppointmentStatus) => 
-      status === AppointmentStatus.PENDING || status === AppointmentStatus.DEPOSIT_NOT_PAID;
-
-    // Check if the exact same user has an active unpaid reservation for this timeframe
-    const existingUserPendingBooking = overlappingBookings.find(
-      (b) => b.bookedById === userProfile.id && !b.depositPaid
-    );
-
-    // Filter out active, valid conflicting bookings
-    const validConflictingBookings = overlappingBookings.filter((b) => {
-      // Ignore the user's own existing draft (we will update it instead)
-      if (b.bookedById === userProfile.id && !b.depositPaid) {
-        return false;
-      }
-      // Unpaid bookings older than 30 mins are treated as released
-      if (
-        !b.depositPaid &&
-        b.createdAt &&
-        new Date(b.createdAt).getTime() < thirtyMinutesAgo.getTime()
-      ) {
-        return false;
-      }
-      return true;
-    });
-
-    // Capacity Check
-    const isAdminBooking = Boolean(input.bookedById && input.bookedById.trim() !== "");
-    if (!isAdminBooking) {
-      if (validConflictingBookings.length >= totalStaffCount) {
-        throw new Error(`❌ Slot fully booked. Capacity reached for the selected time window.`);
-      }
-    }
-
-    // Groomer Auto-Assignment
-    let assignedGroomerId = input.groomerId || undefined;
-
-    if (!assignedGroomerId) {
-      // 1. Gather ALL staff members who currently have an active overlapping booking
-      const occupiedGroomerIds = new Set(
-        overlappingBookings
-          .filter((b) => {
-            // If deposit is NOT paid, check if the booking has expired (>30 mins old)
-            if (!b.depositPaid) {
-              const isExpired =
-                b.createdAt &&
-                new Date(b.createdAt).getTime() < thirtyMinutesAgo.getTime();
-                
-              // Keep active temporary locks (created within last 30 mins)
-              // Ignore expired locks (older than 30 mins)
-              return !isExpired;
-            }
-
-            // Deposit is paid: treat groomer as definitely occupied
-            return true;
-          })
-          .map((b) => b.groomerId)
-          .filter((id): id is string => Boolean(id))
+      // Check if the exact same user has an active unpaid reservation for this timeframe
+      const existingUserPendingBooking = overlappingBookings.find(
+        (b) => b.bookedById === userProfile.id && !b.depositPaid
       );
 
-      // 2. Find a staff member from eligibleStaffIds who has ZERO active bookings in this slot
-      const strictlyAvailableStaffId = eligibleStaffIds.find(
-        (staffId) => !occupiedGroomerIds.has(staffId)
-      );
+      // Filter out active, valid conflicting bookings
+      const validConflictingBookings = overlappingBookings.filter((b) => {
+        // Ignore the user's own existing draft (we will update it instead)
+        if (b.bookedById === userProfile.id && !b.depositPaid) {
+          return false;
+        }
+        // Unpaid bookings older than 30 mins are treated as released
+        if (
+          !b.depositPaid &&
+          b.createdAt &&
+          new Date(b.createdAt).getTime() < thirtyMinutesAgo.getTime()
+        ) {
+          return false;
+        }
+        return true;
+      });
 
-      // 3. Assign the completely free staff member
-      assignedGroomerId = strictlyAvailableStaffId;
-    }
+      // Capacity Check
+      const isAdminBooking = Boolean(input.bookedById && input.bookedById.trim() !== "");
+      if (!isAdminBooking) {
+        if (validConflictingBookings.length >= totalStaffCount) {
+          throw new Error(`❌ Slot fully booked. Capacity reached for the selected time window.`);
+        }
+      }
 
-    // ===================================================================
-    // 6. Write or Update Database Record
-    // ===================================================================
-    const formattedAddOns = (input.addOns || []).map((addon) => ({
-      addOnId: addon.addOnId,
-      quantity: addon.quantity,
-      unitPriceCents: addon.unitPriceCents,
-      totalPriceCents: addon.quantity * addon.unitPriceCents,
-    }));
+      // Groomer Auto-Assignment
+      let assignedGroomerId = input.groomerId || undefined;
 
-    let appointment;
+      if (!assignedGroomerId) {
+        // 1. Gather ALL staff members who currently have an active overlapping booking
+        const occupiedGroomerIds = new Set(
+          overlappingBookings
+            .filter((b) => {
+              // If deposit is NOT paid, check if the booking has expired (>30 mins old)
+              if (!b.depositPaid) {
+                const isExpired =
+                  b.createdAt &&
+                  new Date(b.createdAt).getTime() < thirtyMinutesAgo.getTime();
+                  
+                // Keep active temporary locks (created within last 30 mins)
+                // Ignore expired locks (older than 30 mins)
+                return !isExpired;
+              }
 
-    if (existingUserPendingBooking) {
-      // 🔄 SAME USER RE-BOOKING / REFRESH: Update existing draft appointment
-      appointment = await prisma.appointment.update({
-        where: { id: existingUserPendingBooking.id },
-        data: {
-          petId: petProfile.id,
-          servicePricingMatrixId: matrixRow.id,
-          groomerId: assignedGroomerId ?? null,
-          startTime: parsedStartTime,
-          endTime: calculatedEndTime,
-          status: isAdminBooking ? AppointmentStatus.PENDING : AppointmentStatus.DEPOSIT_NOT_PAID,
-          priceCentsAud: matrixRow.priceCentsAud,
-          durationMinutes: matrixRow.durationMinutes,
-          notes: input.note ?? null,
-          // 🟢 Delete old add-ons and recreate fresh ones for updated appointment
-          addOns: {
-            deleteMany: {},
-            createMany: {
-              data: formattedAddOns,
+              // Deposit is paid: treat groomer as definitely occupied
+              return true;
+            })
+            .map((b) => b.groomerId)
+            .filter((id): id is string => Boolean(id))
+        );
+
+        // 2. Find a staff member from eligibleStaffIds who has ZERO active bookings in this slot
+        const strictlyAvailableStaffId = eligibleStaffIds.find(
+          (staffId) => !occupiedGroomerIds.has(staffId)
+        );
+
+        // 3. Assign the completely free staff member
+        assignedGroomerId = strictlyAvailableStaffId;
+      }
+
+      // ===================================================================
+      // 6. Write or Update Database Record
+      // ===================================================================
+      const formattedAddOns = (input.addOns || []).map((addon) => ({
+        addOnId: addon.addOnId,
+        quantity: addon.quantity,
+        unitPriceCents: addon.unitPriceCents,
+        totalPriceCents: addon.quantity * addon.unitPriceCents,
+      }));
+
+      let appointment;
+
+      if (existingUserPendingBooking) {
+        // 🔄 SAME USER RE-BOOKING / REFRESH: Update existing draft appointment
+        appointment = await prisma.appointment.update({
+          where: { id: existingUserPendingBooking.id },
+          data: {
+            petId: petProfile.id,
+            servicePricingMatrixId: matrixRow.id,
+            groomerId: assignedGroomerId ?? null,
+            startTime: parsedStartTime,
+            endTime: calculatedEndTime,
+            status: isAdminBooking ? AppointmentStatus.PENDING : AppointmentStatus.DEPOSIT_NOT_PAID,
+            priceCentsAud: matrixRow.priceCentsAud,
+            durationMinutes: matrixRow.durationMinutes,
+            notes: input.note ?? null,
+            // 🟢 Delete old add-ons and recreate fresh ones for updated appointment
+            addOns: {
+              deleteMany: {},
+              createMany: {
+                data: formattedAddOns,
+              },
             },
           },
-        },
-        include: {
-          pet: true,
-          servicePricingMatrix: true,
-          addOns: {
-            include: { addOn: true },
-          },
-        },
-      });
-    } else {
-      // 🆕 NEW BOOKING: Create fresh appointment row
-      appointment = await prisma.appointment.create({
-        data: {
-          pet: { connect: { id: petProfile.id } },
-          merchant: { connect: { id: input.merchantId } },
-          bookedBy: {
-            connect: { id: isAdminBooking ? input.bookedById! : userProfile.id },
-          },
-          servicePricingMatrix: { connect: { id: matrixRow.id } },
-          groomer: assignedGroomerId ? { connect: { id: assignedGroomerId } } : undefined,
-          startTime: parsedStartTime,
-          endTime: calculatedEndTime,
-          status: isAdminBooking ? AppointmentStatus.PENDING : AppointmentStatus.DEPOSIT_NOT_PAID,
-          priceCentsAud: matrixRow.priceCentsAud,
-          durationMinutes: matrixRow.durationMinutes,
-          notes: input.note ?? null,
-          // 🟢 Create nested add-ons records during creation
-          addOns: {
-            createMany: {
-              data: formattedAddOns,
+          include: {
+            pet: true,
+            servicePricingMatrix: true,
+            addOns: {
+              include: { addOn: true },
             },
           },
-        },
-        include: {
-          pet: true,
-          servicePricingMatrix: true,
-          addOns: {
-            include: { addOn: true },
+        });
+      } else {
+        // 🆕 NEW BOOKING: Create fresh appointment row
+        appointment = await prisma.appointment.create({
+          data: {
+            pet: { connect: { id: petProfile.id } },
+            merchant: { connect: { id: input.merchantId } },
+            bookedBy: {
+              connect: { id: isAdminBooking ? input.bookedById! : userProfile.id },
+            },
+            servicePricingMatrix: { connect: { id: matrixRow.id } },
+            groomer: assignedGroomerId ? { connect: { id: assignedGroomerId } } : undefined,
+            startTime: parsedStartTime,
+            endTime: calculatedEndTime,
+            status: isAdminBooking ? AppointmentStatus.PENDING : AppointmentStatus.DEPOSIT_NOT_PAID,
+            priceCentsAud: matrixRow.priceCentsAud,
+            durationMinutes: matrixRow.durationMinutes,
+            notes: input.note ?? null,
+            // 🟢 Create nested add-ons records during creation
+            addOns: {
+              createMany: {
+                data: formattedAddOns,
+              },
+            },
           },
-        },
-      });
-    }
+          include: {
+            pet: true,
+            servicePricingMatrix: true,
+            addOns: {
+              include: { addOn: true },
+            },
+          },
+        });
+      }
 
-    return {
-      success: true,
-      message: existingUserPendingBooking
-        ? 'Pending reservation updated successfully.'
-        : 'Administrative booking saved and snapshot values written successfully.',
-      data: appointment
-    };
-  } catch (error: any) {
-    throw new Error(error.message);
-  }
-},
+      return {
+        success: true,
+        message: existingUserPendingBooking
+          ? 'Pending reservation updated successfully.'
+          : 'Administrative booking saved and snapshot values written successfully.',
+        data: appointment
+      };
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  },
 
   /**
    * 🔄 Modifies an existing booking state matrix parameter layout row
@@ -533,10 +445,10 @@ export const BookingService = {
           // 🟢 HIGHLIGHTED CHANGE: Check Shift records for capacity on update
           // ///////////////////////////////////////////////////////////////////////////
           const startOfDay = new Date(parsedStartTime);
-          startOfDay.setHours(0, 0, 0, 0);
+          startOfDay.setUTCHours(0, 0, 0, 0);
 
           const endOfDay = new Date(parsedStartTime);
-          endOfDay.setHours(23, 59, 59, 999);
+          endOfDay.setUTCHours(23, 59, 59, 999);
 
           const shiftsOnDay = await prisma.shift.findMany({
             where: {

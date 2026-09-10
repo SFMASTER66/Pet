@@ -494,13 +494,16 @@ export class MerchantService {
 
     // Safely transform dates into standardized JS ISO midnight values for the DB engine
     const parsedShifts = shiftsPayload.map(shift => {
-      const parsedDate = new Date(shift.date);
-      const normalizedDate = new Date(Date.UTC(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate()));
+      // Extract year, month, and day directly from the string to avoid timezone parsing shifts
+      const [year, month, day] = shift.date.split('T')[0].split('-').map(Number);
       
+      // Construct UTC midnight cleanly
+      const normalizedDate = new Date(Date.UTC(year, month - 1, day));
+
       return {
         merchantId,
         employeeId: shift.employeeId,
-        date: normalizedDate, // Safely maps to 'timestamp without time zone'
+        date: normalizedDate,
         startTime: shift.startTime || "09:00",
         endTime: shift.endTime || "17:00"
       };
