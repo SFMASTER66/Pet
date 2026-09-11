@@ -2192,7 +2192,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Owner Account: ${app['clientName']} (${app['clientPhone']})',
+                    'Owner Account: ${app['ownerName']} (${app['ownerPhone']} ${app['ownerEmail']})',
                     style: const TextStyle(color: Colors.grey, fontSize: 13),
                   ),
                   const SizedBox(height: 4),
