@@ -207,6 +207,7 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
               'staffTags': item['internalTags'] != null ? List<String>.from(item['internalTags']) : [],
               'groomerId': item['groomerId'] ?? '',
               'addOns': item['addOns'] != null ? List<Map<String, dynamic>>.from(item['addOns']) : [],
+              'note': item['note'] ?? '',
             });
           }
 
@@ -2212,6 +2213,27 @@ class _UnifiedMerchantDashboardState extends State<UnifiedMerchantDashboard> wit
                       ),
                     ],
                   ),
+                  if (app['note'] != null && app['note'].toString().trim().isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.note_alt_outlined, size: 14, color: Colors.grey.shade600),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            'Note: ${app['note']}',
+                            style: TextStyle(
+                              color: Colors.grey.shade700,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w400,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                  ],
 
                   // 🟢 --- ADD-ONS DISPLAY SECTION ---
                   if (addOnsList.isNotEmpty) ...[

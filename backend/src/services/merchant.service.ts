@@ -137,7 +137,8 @@ export class MerchantService {
       depositPaid: app.depositPaid ?? false,
       isReadyToPickup: app.isReadyToPickup ?? false,
       internalTags: app.internalTags || [],
-      groomerId: app.groomerId || ''
+      groomerId: app.groomerId || '',
+      note: app.notes || ''
     };
   });
 
