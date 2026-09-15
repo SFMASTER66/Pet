@@ -47,6 +47,9 @@ const calculateAge = (dobInput?: Date | string | null): string => {
   return `${years} yrs ${months} mos`;
 };
 
+// Default sender address depending on whether domain is verified in Resend
+const defaultSender = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+
 export const getOwnerBookingEmailOptions = (data: BookingEmailData) => {
   const cleanEmail = data.ownerEmail.trim().toLowerCase();
   const totalPrice = (data.priceCentsAud / 100).toFixed(2);
@@ -58,7 +61,7 @@ export const getOwnerBookingEmailOptions = (data: BookingEmailData) => {
     : 'None';
 
   return {
-    from: `"Pawparazzi Salon System" <no-reply@pawparazzipet.com.au>`,
+    from: `"Pawparazzi Salon System" <${defaultSender}>`,
     to: process.env.BUSINESS_CONTACT_EMAIL || 'contact@pawparazzipet.com.au',
     replyTo: cleanEmail,
     subject: `📅 New Booking Notification: ${data.dogName} (${data.serviceName})`,
@@ -107,8 +110,9 @@ export const getCustomerBookingEmailOptions = (data: BookingEmailData) => {
   const formattedDate = formatDate(data.serviceTime);
 
   return {
-    from: `"Pawparazzi Pet Grooming" <no-reply@pawparazzipet.com.au>`,
+    from: `"Pawparazzi Pet Grooming" <${defaultSender}>`,
     to: cleanEmail,
+    replyTo: process.env.BUSINESS_CONTACT_EMAIL || 'contact@pawparazzipet.com.au',
     subject: `🐾 Booking Confirmation - Pawparazzi Pet Grooming`,
     html: `
       <div style="font-family: Arial, sans-serif; color: #2C352E; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-top: 6px solid #5E6D55; padding: 24px; background-color: #ffffff;">
