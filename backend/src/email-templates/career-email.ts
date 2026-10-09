@@ -9,12 +9,12 @@ export interface CareerEmailData {
   message: string;
 }
 
-export const sendCareerEmail = async (data: CareerEmailData) => {
+export const getCareerEmailOptions = (data: CareerEmailData) => {
   const cleanEmail = data.email.trim().toLowerCase();
   
-  return await resend.emails.send({
+  return {
     from: `Pawparazzi Salon System <${defaultSender}>`,
-    to: [process.env.BUSINESS_CONTACT_EMAIL || 'contact@pawparazzipet.com.au'],
+    to: process.env.BUSINESS_CONTACT_EMAIL || 'contact@pawparazzipet.com.au',
     replyTo: cleanEmail,
     subject: `💼 New Job Application: Pet Groomer Extraordinaire - ${data.fullName}`,
     text: `
@@ -42,5 +42,17 @@ export const sendCareerEmail = async (data: CareerEmailData) => {
         </div>
       </div>
     `,
+  };
+};
+
+export const sendCareerEmail = async (data: CareerEmailData) => {
+  const options = getCareerEmailOptions(data);
+  return await resend.emails.send({
+    from: options.from,
+    to: [options.to],
+    replyTo: options.replyTo,
+    subject: options.subject,
+    text: options.text,
+    html: options.html,
   });
 };

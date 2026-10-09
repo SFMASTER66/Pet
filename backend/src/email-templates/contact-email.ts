@@ -9,12 +9,12 @@ export interface ContactEmailData {
   message: string;
 }
 
-export const sendContactEmail = async (data: ContactEmailData) => {
+export const getContactEmailOptions = (data: ContactEmailData) => {
   const cleanEmail = data.email.trim().toLowerCase();
   
-  return await resend.emails.send({
+  return {
     from: `Pawparazzi Salon System <${defaultSender}>`,
-    to: [process.env.BUSINESS_CONTACT_EMAIL || 'contact@pawparazzipet.com.au'],
+    to: process.env.BUSINESS_CONTACT_EMAIL || 'contact@pawparazzipet.com.au',
     replyTo: cleanEmail,
     subject: `🚨 New Customer Inquiry from ${data.fullName}`,
     text: `
@@ -38,5 +38,17 @@ export const sendContactEmail = async (data: ContactEmailData) => {
         ${data.message.trim().replace(/\n/g, '<br/>')}
       </div>
     `,
+  };
+};
+
+export const sendContactEmail = async (data: ContactEmailData) => {
+  const options = getContactEmailOptions(data);
+  return await resend.emails.send({
+    from: options.from,
+    to: [options.to],
+    replyTo: options.replyTo,
+    subject: options.subject,
+    text: options.text,
+    html: options.html,
   });
 };

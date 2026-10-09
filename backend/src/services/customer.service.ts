@@ -1,6 +1,9 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import { getCareerEmailOptions } from '../email-templates/career-email';
 import { getContactEmailOptions } from '../email-templates/contact-email';
+
+// Initialize Resend Client
+const resend = new Resend(process.env.RESEND_API_KEY || process.env.SMTP_PASS);
 
 // Strict Type Definitions
 interface CustomerContactInput {
@@ -19,29 +22,9 @@ interface CareerApplicationInput {
   message: string;
 }
 
-// Reusable transporter generation utility
-const createTransporter = () => {
-  const host = process.env.SMTP_HOST || 'smtp.resend.com';
-  const port = Number(process.env.SMTP_PORT) || 465;
-
-  return nodemailer.createTransport({
-    host: host,
-    port: port,
-    secure: port === 465, // true for port 465, false for 587
-    auth: {
-      user: process.env.SMTP_USER || 'resend', // For Resend, username is literally 'resend'
-      pass: process.env.SMTP_PASS,            // Your API key (re_123456789...)
-    },
-    // Cloud host timeout safeguards
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 10000,
-  });
-};
-
 export const CustomerService = {
   /**
-   * ✉️ Processes incoming contact inquiries and dispatches email notifications
+   * ✉️ Processes incoming contact inquiries and dispatches email notifications via Resend SDK
    */
   async processContactInquiry(input: CustomerContactInput) {
     const { firstName, lastName, email, message } = input;
@@ -50,17 +33,29 @@ export const CustomerService = {
       throw new Error('❌ Missing operational parameters: all mandatory form fields must be populated.');
     }
 
-    const transporter = createTransporter();
     const fullName = `${firstName.trim()} ${lastName.trim()}`;
 
-    // Resolves email parameters utilizing the newly extracted external template file
+    // Resolves email parameters utilizing the external template generator
     const mailOptions = getContactEmailOptions({
       fullName,
       email,
       message,
     });
 
-    await transporter.sendMail(mailOptions);
+    // Send using Resend HTTPS API SDK
+    const { error } = await resend.emails.send({
+      from: mailOptions.from,
+      to: [mailOptions.to],
+      replyTo: mailOptions.replyTo,
+      subject: mailOptions.subject,
+      text: mailOptions.text,
+      html: mailOptions.html,
+    });
+
+    if (error) {
+      console.error('❌ Resend API Error (Contact Inquiry):', error);
+      throw new Error(`Failed to send contact inquiry: ${error.message}`);
+    }
 
     return {
       success: true,
@@ -69,7 +64,7 @@ export const CustomerService = {
   },
 
   /**
-   * 💼 Processes incoming career application forms and handles the unique template content structure
+   * 💼 Processes incoming career application forms via Resend SDK
    */
   async processCareerApplication(input: CareerApplicationInput) {
     const { firstName, lastName, email, message } = input;
@@ -78,7 +73,6 @@ export const CustomerService = {
       throw new Error('❌ Operational Failure: Application details are missing required inputs.');
     }
 
-    const transporter = createTransporter();
     const fullName = `${firstName.trim()} ${lastName.trim()}`;
 
     // Resolves email parameters utilizing the external dedicated template
@@ -88,7 +82,20 @@ export const CustomerService = {
       message,
     });
 
-    await transporter.sendMail(mailOptions);
+    // Send using Resend HTTPS API SDK
+    const { error } = await resend.emails.send({
+      from: mailOptions.from,
+      to: [mailOptions.to],
+      replyTo: mailOptions.replyTo,
+      subject: mailOptions.subject,
+      text: mailOptions.text,
+      html: mailOptions.html,
+    });
+
+    if (error) {
+      console.error('❌ Resend API Error (Career Application):', error);
+      throw new Error(`Failed to send career application: ${error.message}`);
+    }
 
     return {
       success: true,
