@@ -1,15 +1,20 @@
+import { Resend } from 'resend';
+
+const resend = new Resend(process.env.RESEND_API_KEY || process.env.SMTP_PASS);
+const defaultSender = process.env.RESEND_FROM_EMAIL || 'contact@pawparazzipet.com.au';
+
 export interface CareerEmailData {
   fullName: string;
   email: string;
   message: string;
 }
 
-export const getCareerEmailOptions = (data: CareerEmailData) => {
+export const sendCareerEmail = async (data: CareerEmailData) => {
   const cleanEmail = data.email.trim().toLowerCase();
   
-  return {
-    from: `"Pawparazzi Salon System" <no-reply@pawparazzipet.com.au>`,
-    to: process.env.BUSINESS_CONTACT_EMAIL || 'contact@pawparazzipet.com.au',
+  return await resend.emails.send({
+    from: `Pawparazzi Salon System <${defaultSender}>`,
+    to: [process.env.BUSINESS_CONTACT_EMAIL || 'contact@pawparazzipet.com.au'],
     replyTo: cleanEmail,
     subject: `💼 New Job Application: Pet Groomer Extraordinaire - ${data.fullName}`,
     text: `
@@ -37,5 +42,5 @@ export const getCareerEmailOptions = (data: CareerEmailData) => {
         </div>
       </div>
     `,
-  };
+  });
 };

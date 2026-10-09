@@ -1,3 +1,8 @@
+import { Resend } from 'resend';
+
+// Initialize Resend with API key (falls back to process.env.RESEND_API_KEY or process.env.SMTP_PASS)
+const resend = new Resend(process.env.RESEND_API_KEY || process.env.SMTP_PASS);
+
 export interface BookingEmailData {
   ownerName: string;
   ownerEmail: string;
@@ -47,10 +52,13 @@ const calculateAge = (dobInput?: Date | string | null): string => {
   return `${years} yrs ${months} mos`;
 };
 
-// Default sender address depending on whether domain is verified in Resend
-const defaultSender = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+// Standardized sender address using your verified domain
+const defaultSender = process.env.RESEND_FROM_EMAIL || 'contact@pawparazzipet.com.au';
 
-export const getOwnerBookingEmailOptions = (data: BookingEmailData) => {
+/**
+ * Send notification email to salon owner/business
+ */
+export const sendOwnerBookingEmail = async (data: BookingEmailData) => {
   const cleanEmail = data.ownerEmail.trim().toLowerCase();
   const totalPrice = (data.priceCentsAud / 100).toFixed(2);
   const formattedDate = formatDate(data.serviceTime);
@@ -60,9 +68,9 @@ export const getOwnerBookingEmailOptions = (data: BookingEmailData) => {
     ? data.addOns.map(a => `${a.name || 'Add-on'} ($${((a.priceCents || 0) / 100).toFixed(2)})`).join(', ')
     : 'None';
 
-  return {
-    from: `"Pawparazzi Salon System" <${defaultSender}>`,
-    to: process.env.BUSINESS_CONTACT_EMAIL || 'contact@pawparazzipet.com.au',
+  return await resend.emails.send({
+    from: `Pawparazzi Salon System <${defaultSender}>`,
+    to: [process.env.BUSINESS_CONTACT_EMAIL || 'contact@pawparazzipet.com.au'],
     replyTo: cleanEmail,
     subject: `📅 New Booking Notification: ${data.dogName} (${data.serviceName})`,
     html: `
@@ -101,17 +109,20 @@ export const getOwnerBookingEmailOptions = (data: BookingEmailData) => {
         <p style="margin: 12px 0 4px 0;"><strong>Service Type:</strong><br/>${data.serviceName} ($${totalPrice} AUD)</p>
       </div>
     `,
-  };
+  });
 };
 
-export const getCustomerBookingEmailOptions = (data: BookingEmailData) => {
+/**
+ * Send confirmation email to customer
+ */
+export const sendCustomerBookingEmail = async (data: BookingEmailData) => {
   const cleanEmail = data.ownerEmail.trim().toLowerCase();
   const totalPrice = (data.priceCentsAud / 100).toFixed(2);
   const formattedDate = formatDate(data.serviceTime);
 
-  return {
-    from: `"Pawparazzi Pet Grooming" <${defaultSender}>`,
-    to: cleanEmail,
+  return await resend.emails.send({
+    from: `Pawparazzi Pet Grooming <${defaultSender}>`,
+    to: [cleanEmail],
     replyTo: process.env.BUSINESS_CONTACT_EMAIL || 'contact@pawparazzipet.com.au',
     subject: `🐾 Booking Confirmation - Pawparazzi Pet Grooming`,
     html: `
@@ -132,5 +143,5 @@ export const getCustomerBookingEmailOptions = (data: BookingEmailData) => {
         <p style="font-size: 13px; color: #777777;">If you need to reschedule, please contact us at least 24 hours prior to your scheduled time.</p>
       </div>
     `,
-  };
+  });
 };
