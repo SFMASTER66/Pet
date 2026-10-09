@@ -2,8 +2,8 @@ import { Gender, PetStatus, AppointmentStatus, UserRole } from '@prisma/client';
 import prisma from './db';
 import nodemailer from 'nodemailer';
 import { 
-  getOwnerBookingEmailOptions, 
-  getCustomerBookingEmailOptions, 
+  sendOwnerBookingEmail, 
+  sendCustomerBookingEmail, 
   BookingEmailData 
 } from '../email-templates/booking-email';
 import { fromZonedTime } from 'date-fns-tz';
@@ -906,14 +906,10 @@ export const BookingService = {
     try {
       const transporter = createTransporter();
 
-      const ownerMailOptions = getOwnerBookingEmailOptions(data);
-      const customerMailOptions = getCustomerBookingEmailOptions(data);
-
-      // Send both emails concurrently
-      await Promise.all([
-        transporter.sendMail(ownerMailOptions),
-        transporter.sendMail(customerMailOptions),
-      ]);
+      // 1. Send internal notification to salon inbox
+      await sendOwnerBookingEmail(data);
+      // 2. Send confirmation to customer
+      await sendCustomerBookingEmail(data);
 
       return {
         success: true,
